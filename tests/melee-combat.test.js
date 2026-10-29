@@ -29,19 +29,19 @@ function contact(combat, player, npcs) {
   return combat.update(MELEE_ATTACK.impact, player, npcs);
 }
 
-test('el golpe anticipa, conecta a los 0,22 s y solo entrega un contacto durante la recuperacion', () => {
+test('el golpe anticipa, conecta al terminar windup y solo entrega un contacto durante la recuperacion', () => {
   const player = attacker(), npc = target(), combat = new MeleeCombat();
   assert.equal(combat.start(player), true);
   assert.equal(player.audio.swings, 1);
   assert.equal(npc.hits, 0);
   assert.equal(combat.phase, 'windup');
-  assert.equal(combat.update(.17, player, [npc]), null);
-  assert.equal(combat.update(.04, player, [npc]), null);
-  assert.equal(combat.phase, 'strike');
+  assert.equal(combat.update(MELEE_ATTACK.impact - .02, player, [npc]), null);
+  assert.equal(combat.update(.01, player, [npc]), null);
+  assert.equal(combat.phase, 'windup');
   assert.equal(npc.hits, 0, 'no hay daño antes de extender el brazo');
   const result = combat.update(.01, player, [npc]);
-  assert.deepEqual(result, { target: npc, reward: 300 });
-  assert.equal(combat.phase, 'recovery');
+  assert.deepEqual(result, { target: npc, reward: 300, hits: [{ target: npc, reward: 300 }] });
+  assert.equal(combat.phase, 'active');
   assert.equal(player.audio.hits, 1);
   assert.equal(player.stats.dinero, 1000, 'el controlador devuelve la recompensa y Player la acredita');
   for (let i = 0; i < 40; i++) assert.equal(combat.update(.01, player, [npc]), null);
@@ -56,6 +56,7 @@ test('el enfriamiento bloquea spam incluso tras terminar o cancelar el movimient
   assert.equal(combat.start(player), false);
   combat.update(MELEE_ATTACK.duration, player);
   assert.equal(combat.active, false);
+  combat.cancel(); // cancelar también borra la ventana legítima de continuación
   assert.equal(combat.start(player), false);
   combat.update(MELEE_ATTACK.cooldown - MELEE_ATTACK.duration, player);
   assert.equal(combat.start(player), true);
@@ -138,7 +139,7 @@ test('el peaton muestra recibirGolpe antes de huir, sin teletransportarse ni atr
   });
   await npc.preload();
   const player = attacker(), initial = npc.position.clone();
-  const reward = npc.takePunch(player);
+  const reward = npc.takeHit({ attacker: player, damage: 12, knockback: 0, attackId: 1 });
   assert.ok(reward >= 200 && reward < 600);
   assert.equal(npc.action, 'recibirGolpe');
   assert.equal(npc.state, 'recibirGolpe');
@@ -148,8 +149,9 @@ test('el peaton muestra recibirGolpe antes de huir, sin teletransportarse ni atr
   assert.equal(npc.character.frames.at(-1).action, 'recibirGolpe');
   assert.ok(Math.abs(npc.character.frames.at(-1).actionProgress - .25) < 1e-8);
   assert.deepEqual(npc.position, initial);
-  npc.update(NPC_HIT_REACTION_DURATION, { player: player.position });
-  assert.equal(npc.actionProgress, 1);
+  npc.update(NPC_HIT_REACTION_DURATION - .12, { player: player.position });
+  assert.equal(npc.actionProgress, 0);
+  assert.equal(npc.action, null);
   assert.deepEqual(npc.position, initial, 'termina la pose antes de empezar a huir');
   npc.update(.1, { player: player.position });
   assert.equal(npc.action, null);
@@ -165,18 +167,21 @@ test('el peaton muestra recibirGolpe antes de huir, sin teletransportarse ni atr
   npc.dispose();
 });
 
-test('golpear repetidamente al mismo peaton no repite botin ni reinicia la reaccion en cada cuadro', async () => {
+test('un ID de golpe no repite daño ni botín, pero el siguiente golpe del combo sí conecta', async () => {
   const npc = new Npc(new THREE.Scene(), new THREE.Vector3(0, 0, 1), { look: {} });
   await npc.ready;
   const player = attacker();
-  assert.ok(npc.takePunch(player) >= 200);
-  assert.equal(npc.takePunch(player), false);
-  npc.update(.3);
+  const hit = { attacker: player, attackId: 10, damage: 12, knockback: 0 };
+  assert.ok(npc.takeHit(hit) >= 200);
+  const hp = npc.health;
+  assert.equal(npc.takeHit(hit), false);
+  npc.update(.2);
   const progress = npc.actionProgress;
-  assert.equal(npc.takePunch(player), false);
+  assert.equal(npc.takeHit(hit), false);
   assert.equal(npc.actionProgress, progress);
-  npc.update(.4);
-  assert.equal(npc.takePunch(player), 0, 'solo la primera reaccion entrega monedas');
+  assert.equal(npc.health, hp);
+  assert.equal(npc.takeHit({ ...hit, attackId: 11 }), 0, 'otro golpe del combo conecta sin fabricar monedas');
+  assert.equal(npc.health, hp - 12);
   npc.dispose();
 });
 

@@ -123,3 +123,53 @@ test('la estatura corta personalizada mantiene cabeza fuera del agua sin elevar 
   for (let frame = 0; frame < 60; frame++) character.update(1 / 60, { speed: 0, movement: { grounded: true } });
   assert.ok(Math.abs(character.ragdollRig.hips.position.y - .52) < .01, 'al salir no queda elevación de la pelvis');
 });
+
+test('ambos modelos muestran armas y ocultan objetos ocupados al nadar', async () => {
+  for (const character of [createCharacter(), await createRealisticCharacter()]) {
+    character.setWeapon('cuchillo'); character.setSmoking(true); character.setBasuco(true);
+    const knife = character.group.getObjectByName('weapon-cuchillo');
+    const cigarette = character.group.getObjectByName('prop-cigarrillo');
+    const pipe = character.group.getObjectByName('prop-pipa');
+    assert.ok(knife && cigarette && pipe);
+    character.update(.1, { action: 'basuco', basuco: 2 });
+    assert.equal(pipe.visible, true); assert.equal(knife.visible, false); assert.equal(cigarette.visible, false);
+    character.update(.1, { speed: 2, movement: { swimming: true, surfaceY: 1.05 }, basuco: 2, smoke: { puff: 1 } });
+    for (const object of [knife, cigarette, pipe]) assert.equal(object.visible, false);
+    character.update(.1, { speed: 0, movement: { grounded: true } });
+    assert.equal(knife.visible, true);
+    character.dispose();
+  }
+});
+
+test('cambiar de ropa sosteniendo la pipa libera su geometría propia y conserva la compartida', async () => {
+  const character = await createRealisticCharacter();
+  character.setWeapon('cuchillo'); character.setSmoking(true); character.setBasuco(true);
+  const own = new Set(), shared = new Set();
+  for (const name of ['prop-pipa', 'prop-encendedor']) character.group.getObjectByName(name).traverse(object => { if (object.geometry) own.add(object.geometry); });
+  for (const name of ['weapon-cuchillo', 'prop-cigarrillo']) character.group.getObjectByName(name).traverse(object => { if (object.geometry) shared.add(object.geometry); });
+  let freed = 0, sharedFreed = 0;
+  for (const geometry of own) geometry.addEventListener('dispose', () => freed++);
+  for (const geometry of shared) geometry.addEventListener('dispose', () => sharedFreed++);
+  await character.setLook({ piel: 3 });
+  assert.equal(freed, own.size);
+  assert.equal(sharedFreed, 0);
+  assert.ok(character.group.getObjectByName('prop-pipa'), 'se vuelve a equipar sobre el cuerpo nuevo');
+  character.dispose(); character.dispose();
+  assert.equal(freed, own.size);
+  assert.equal(sharedFreed, 0);
+});
+
+test('NPC LOD conserva arma y gesto de señalar; el golpe por fases llega al impacto', async () => {
+  const npc = await createRealisticCharacter({}, { lod: true });
+  npc.setWeapon('pistola');
+  const arm = joint(npc.group, 'LeftArm');
+  npc.update(0, {}); const original = arm.quaternion.clone();
+  for (let frame = 0; frame < 30; frame++) npc.update(1 / 60, { point: 1 });
+  assert.ok(arm.quaternion.angleTo(original) > .7);
+  assert.ok(npc.group.getObjectByName('weapon-pistola'));
+  npc.update(1 / 60, { action: 'golpear', actionProgress: .1, attack: { weapon: 'punos', step: 1, phase: 'active', progress: 0 } });
+  const hand = joint(npc.group, 'RightHand').getWorldPosition(new THREE.Vector3());
+  const shoulder = joint(npc.group, 'RightArm').getWorldPosition(new THREE.Vector3());
+  assert.ok(hand.z - shoulder.z > .3, 'el impacto no espera el filtro de suavizado');
+  npc.dispose();
+});

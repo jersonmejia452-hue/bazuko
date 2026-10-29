@@ -2,11 +2,29 @@ import * as THREE from 'three';
 import { PALETTES, DEFAULT_LOOK, normalizeLook } from './look.js';
 import { animationDamping } from './SecondaryMotion.js';
 import { ActionPose } from './ActionPose.js';
+import { createWeapon } from './props.js';
+import { createCigarette, puffReach, emberGlow } from './smoking.js';
+import { createPipe, createLighter, basucoReach, isLit, BASUCO } from './pipe.js';
 
 export { DEFAULT_LOOK };
 
 const lerp = THREE.MathUtils.lerp;
 const lam = (color) => new THREE.MeshLambertMaterial({ color });
+
+// Calada del personaje liviano: brazo izquierdo con la mano en la boca y el cigarrillo
+// en el antebrazo (posición y giro en sus ejes).
+export const PUFF_POSE = {
+  elbL: -0.97, armLx: -1.45, armLz: -0.67, headX: 0.12,
+  cigarette: [-0.01, -0.25, 0.05], cigaretteRotation: [1.21, 0.14, -1.02]
+};
+
+// Basuco del personaje liviano: agachado, pipa en la izquierda y encendedor en la derecha.
+export const BASUCO_POSE_LIVIANO = {
+  pose: { lean: 0.35, headX: 0.12, kneeL: 0.7, kneeR: 0.7, legL: -0.35, legR: -0.35,
+    armLx: -1.45, armLz: -0.67, elbL: -0.97, armRx: -1.3, armRz: 0.55, elbR: -1.2 },
+  pipe: [-0.01, -0.25, 0.05], pipeRotation: [1.21, 0.14, -1.02],
+  lighter: [0.0, -0.25, 0.05], lighterRotation: [0, 0, 0]
+};
 
 function capsule(r, len, m) {
   const g = new THREE.CapsuleGeometry(r, len, 4, 12);
@@ -338,11 +356,67 @@ export function createCharacter(initial = DEFAULT_LOOK) {
     leftUpLeg: legs[0].hip, leftLeg: legs[0].knee,
     rightUpLeg: legs[1].hip, rightLeg: legs[1].knee };
   const actionPose = new ActionPose(ragdollRig, { procedural: true });
+  let weapon = null, weaponId = null, disposed = false;
+  function setWeapon(id) {
+    if (weaponId === id) return;
+    weapon?.dispose();
+    weaponId = id || null;
+    weapon = createWeapon(weaponId);
+    if (!weapon) return;
+    weapon.object.position.set(0, -.2, 0);
+    weapon.object.rotation.z = Math.PI;
+    weapon.object.scale.setScalar(1.25);
+    arms[1].elbow.add(weapon.object);
+  }
 
-  function update(dt, { speed = 0, running = false, action = null, t = 0, load = 0, dirt = 0, wet = 0, look: lookAt = 0, movement = {}, actionProgress } = {}) {
+  // Cigarrillo en la mano izquierda (al final del antebrazo)
+  let cigarette = null;
+  function setSmoking(on, kind = 'cigarrillo') {
+    const want = on ? kind : null;
+    if ((cigarette?.kind ?? null) === want) return;
+    cigarette?.dispose();
+    cigarette = null;
+    if (!want) return;
+    cigarette = createCigarette(want);
+    cigarette.kind = want;
+    cigarette.object.position.fromArray(PUFF_POSE.cigarette);
+    cigarette.object.rotation.fromArray(PUFF_POSE.cigaretteRotation);
+    cigarette.object.scale.setScalar(1.4);
+    arms[0].elbow.add(cigarette.object);
+  }
+  const _mouthOffset = new THREE.Vector3();
+
+  // Pipa y encendedor del basuco en las manos
+  let basucoProps = null;
+  function setBasuco(on) {
+    if (!!basucoProps === !!on) return;
+    if (basucoProps) { basucoProps.pipe.dispose(); basucoProps.lighter.dispose(); basucoProps = null; return; }
+    const P = BASUCO_POSE_LIVIANO;
+    const pipe = createPipe(), lighter = createLighter();
+    pipe.object.position.fromArray(P.pipe); pipe.object.rotation.fromArray(P.pipeRotation);
+    lighter.object.position.fromArray(P.lighter); lighter.object.rotation.fromArray(P.lighterRotation);
+    for (const o of [pipe.object, lighter.object]) o.scale.setScalar(1.4);
+    arms[0].elbow.add(pipe.object);
+    arms[1].elbow.add(lighter.object);
+    basucoProps = { pipe, lighter };
+  }
+
+  function update(dt, { speed = 0, running = false, action = null, t = 0, load = 0, dirt = 0, wet = 0, look: lookAt = 0, movement = {}, actionProgress, attack = null, smoke = null, basuco: pipeT = null, point = 0 } = {}) {
+    if (disposed) return;
     actionPose.restore();
     idleTime += dt;
     const detached = movement.swimming || movement.grounded === false;
+    const handsBlocked = detached || movement.landing > 0 || action === 'recibirGolpe' || action === 'dormir';
+    const pipeAllowed = !handsBlocked && !attack && action !== 'golpear' && speed < .15 && pipeT != null;
+    if (handsBlocked || attack || action === 'golpear' || pipeAllowed || point) smoke = null;
+    if (!pipeAllowed) pipeT = null;
+    if (handsBlocked || attack || smoke || pipeAllowed) lookAt = 0;
+    if (cigarette) cigarette.object.visible = !handsBlocked && !attack && action !== 'golpear' && !pipeAllowed;
+    if (weapon) weapon.object.visible = !detached && !pipeAllowed;
+    if (basucoProps) {
+      basucoProps.pipe.object.visible = pipeAllowed;
+      basucoProps.lighter.object.visible = pipeAllowed;
+    }
     const gaitSpeed = detached ? 0 : speed;
     const target = { lean: 0, twist: 0, sway: 0, armLx: 0, armRx: 0, armLz: 0.12, armRz: -0.12, elbL: -0.2, elbR: -0.2, legL: 0, legR: 0, kneeL: 0, kneeR: 0, bob: 0, lie: 0, headX: 0, headY: lookAt };
     const amp = Math.min(1, gaitSpeed / 3.6) * (running ? 1.1 : 0.9);
@@ -421,6 +495,24 @@ export function createCharacter(initial = DEFAULT_LOOK) {
         break;
       default:
     }
+    if (smoke && action !== 'dormir') {
+      // sosteniéndolo con el codo algo doblado; en la calada, la mano sube a la boca
+      const r = puffReach(smoke.puff);
+      target.elbL = lerp(Math.min(target.elbL, -0.5), PUFF_POSE.elbL, r);
+      target.armLx = lerp(target.armLx, PUFF_POSE.armLx, r);
+      target.armLz = lerp(target.armLz, PUFF_POSE.armLz, r);
+      target.headX = lerp(target.headX, PUFF_POSE.headX, r);
+    }
+    cigarette?.setGlow(emberGlow(smoke?.puff));
+    if (pipeT != null) {
+      const r = basucoReach(pipeT);
+      for (const [key, value] of Object.entries(BASUCO_POSE_LIVIANO.pose)) target[key] = lerp(target[key], value, r);
+    }
+    if (basucoProps) {
+      const lit = isLit(pipeT);
+      basucoProps.lighter.setFlame(lit, pipeT ?? 0);
+      basucoProps.pipe.setGlow(lit ? 0.6 + 0.4 * Math.sin((pipeT ?? 0) * 9) ** 2 : Math.max(0, 1 - ((pipeT ?? 0) - BASUCO.bend - BASUCO.light)));
+    }
     const k = animationDamping(dt, 12);
     for (const key of Object.keys(pose)) pose[key] = lerp(pose[key], target[key], k);
 
@@ -436,11 +528,11 @@ export function createCharacter(initial = DEFAULT_LOOK) {
     lR.hip.rotation.x = pose.legR;
     lL.knee.rotation.x = pose.kneeL;
     lR.knee.rotation.x = pose.kneeR;
-    hips.position.y = 0.52 + pose.bob - (action === 'buscar' ? 0.08 : (action === 'cagar' ? 0.28 : 0));
+    hips.position.y = 0.52 + pose.bob - (action === 'buscar' ? 0.08 : (action === 'cagar' ? 0.28 : .035 * basucoReach(pipeT)));
     body.rotation.x = -pose.lie * Math.PI / 2;
     body.position.y = pose.lie * 0.3;
     body.position.z = -pose.lie * 0.55;
-    actionPose.apply(dt, { speed, running, action, actionProgress, movement });
+    actionPose.apply(dt, { speed, running, action, actionProgress, movement, attack, point });
 
     // parpadeo
     blink -= dt;
@@ -461,6 +553,29 @@ export function createCharacter(initial = DEFAULT_LOOK) {
     setLook(l) {
       look = normalizeLook(l);
       build();
+    },
+    setSmoking,
+    setBasuco,
+    setWeapon,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      actionPose.restore();
+      weapon?.dispose(); cigarette?.dispose();
+      basucoProps?.pipe.dispose(); basucoProps?.lighter.dispose();
+      const geometries = new Set(), materials = new Set();
+      root.traverse(object => {
+        if (object.geometry) geometries.add(object.geometry);
+        for (const material of [object.material].flat()) if (material) materials.add(material);
+      });
+      for (const geometry of geometries) geometry.dispose();
+      for (const material of materials) material.dispose();
+      root.removeFromParent();
+    },
+    pipeBowl(target) { return basucoProps ? basucoProps.pipe.top.getWorldPosition(target) : null; },
+    cigaretteTip(target) { return cigarette ? cigarette.tip.getWorldPosition(target) : null; },
+    mouth(target) {
+      return target.copy(head.localToWorld(_mouthOffset.set(0, -0.115, 0.26)));
     },
     update,
   };

@@ -109,6 +109,8 @@ export class Bogota {
     this._facadeTextures = new Map();
     this._facadeMaterials = new Map();
     this.npcs = [];
+    this.vendors = [];
+    this.fireBarrels = [];
     this.buildingVisibility = new BuildingVisibility();
     this.t = 0;
   }
@@ -881,9 +883,9 @@ export class Bogota {
     }
     // cerca de la estación: vendedor de tinto y una chaza
     this.vendors = [];
-    this._vendor(WX(21), WZ(18.5), Math.PI / 2, 'chaza', 'Chaza de don Efraín', ['cigarrillo', 'cafe', 'pan', 'agua']);
-    this._vendor(WX(28), WZ(29), 0, 'fritanga', 'Fritanga La Mona', ['lataComida', 'pan', 'refresco']);
-    this._vendor(WX(39), WZ(36), -Math.PI / 2, 'chaza', 'Dulces y minutos', ['cigarrillo', 'refresco', 'agua']);
+    this._vendor(WX(21), WZ(18.5), Math.PI / 2, 'chaza', 'Chaza de don Efraín', ['cigarrillo', 'cafe', 'pan', 'agua', 'empanada']);
+    this._vendor(WX(28), WZ(29), 0, 'fritanga', 'Fritanga La Mona', ['empanada', 'morcilla', 'papaCriolla', 'aguapanela', 'refresco']);
+    this._vendor(WX(39), WZ(36), -Math.PI / 2, 'chaza', 'Dulces y minutos', ['cigarrillo', 'refresco', 'agua', 'empanada']);
   }
 
   /** Vendedor ambulante: puesto + persona; se le puede comprar (lo atiende la tienda con otro catálogo) */
@@ -901,7 +903,12 @@ export class Bogota {
   _buildCartucho() {
     const cx = WX, cz = WZ;
     // canecas con fuego en la olla y el callejón
-    for (const [x, z] of [[13, 19], [16.5, 24.5], [10, 21.5], [19.5, 22]]) this._add(P.fireBarrel(), cx(x), cz(z));
+    // Las fogatas también sirven para calentarse en las noches frías.
+    this.fireBarrels = [];
+    for (const [x, z] of [[13, 19], [16.5, 24.5], [10, 21.5], [19.5, 22]]) {
+      this._add(P.fireBarrel(), cx(x), cz(z));
+      this.fireBarrels.push({ kind: 'fireBarrel', position: new THREE.Vector3(cx(x), 0, cz(z)), title: 'Fogata de caneca' });
+    }
     // zorras de reciclaje
     for (const [x, z, r] of [[9.5, 22.5, 0.3], [12.5, 24.5, 1.9], [18.5, 21, -0.8], [20.5, 15, 1.2]]) this._add(P.zorra(), cx(x), cz(z), r);
     // cambuches ajenos contra las paredes
@@ -950,8 +957,8 @@ export class Bogota {
       }
       this._add(P.streetSign([park.name, 'Bogotá']), W(park.x0), W(pathZ));
     }
-    this._vendor(W(CARRERAS[2][0]-1.5), W(55), Math.PI/2, 'chaza', 'Chaza de la Carrera 8', ['agua','pan','cafe']);
-    this._vendor(W(52), W(CALLES[2][0]-1.5), 0, 'fritanga', 'Fritanga del Sur', ['lataComida','pan','refresco']);
+    this._vendor(W(CARRERAS[2][0]-1.5), W(55), Math.PI/2, 'chaza', 'Chaza de la Carrera 8', ['agua','pan','cafe','empanada']);
+    this._vendor(W(52), W(CALLES[2][0]-1.5), 0, 'fritanga', 'Fritanga del Sur', ['empanada', 'morcilla', 'papaCriolla', 'aguapanela', 'refresco']);
   }
 
   _buildLakePark() {

@@ -61,14 +61,15 @@ test('caminar, correr, salto articulado y golpe con reacción ocurren en la part
     const npc = game.world.active.npcs.find(item => item.character && !item._disposed);
     npc.position.set(112.98, player.position.y, 96.6); npc.root.position.copy(npc.position);
     npc.root.rotation.y = 0; npc.walkSpeed = 0;
-    window.__combatCheck = { money: game.stats.dinero, npc, seenWindup: false, hit: false };
+    window.__combatCheck = { money: game.stats.dinero, npc, seenWindup: false, earlyReward: false, hit: false };
     const sample = () => {
       const probe = window.__combatCheck;
-      if (player.melee.active && player.melee.progress < .22 / .58) {
+      if (player.attack?.phase === 'windup') {
         probe.seenWindup = true;
-        if (game.stats.dinero !== probe.money) throw new Error('Recompensa anticipada');
+        probe.earlyReward ||= game.stats.dinero !== probe.money;
       }
-      if (npc.action === 'recibirGolpe' && npc.actionProgress > .06 && npc.actionProgress < .7) {
+      if (npc.health < npc.maxHealth && npc.staggerTimer > 0
+        && npc.action === 'recibirGolpe' && npc.actionProgress > .1) {
         probe.hit = true; game.photoMode.enter(); return;
       }
       requestAnimationFrame(sample);
@@ -78,10 +79,12 @@ test('caminar, correr, salto articulado y golpe con reacción ocurren en la part
   await page.keyboard.press('g');
   await expect(page.locator('#photo-mode')).toBeVisible();
   const combat = await page.evaluate(() => ({ windup: window.__combatCheck.seenWindup,
+    earlyReward: window.__combatCheck.earlyReward,
     hit: window.__combatCheck.hit, reward: window.__game.stats.dinero - window.__combatCheck.money,
-    action: window.__combatCheck.npc.action }));
+    health: window.__combatCheck.npc.health }));
   expect(combat.windup).toBe(true); expect(combat.hit).toBe(true);
-  expect(combat.reward).toBeGreaterThanOrEqual(200); expect(combat.action).toBe('recibirGolpe');
+  expect(combat.earlyReward).toBe(false);
+  expect(combat.reward).toBeGreaterThanOrEqual(200); expect(combat.health).toBeLessThan(100);
   await shot(page, testInfo, 'golpe');
   expect(errors).toEqual([]);
 });

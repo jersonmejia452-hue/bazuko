@@ -102,7 +102,7 @@ test('foto respeta carga, menús, sueño, caída y recuperación fatal', () => {
     game => { game.creator.isOpen = true; }, game => { game.inventoryUI.isOpen = true; },
     game => { game.isSleeping = true; }, game => { game._running = false; },
     game => { game.player.isRagdollActive = true; }, game => { game.stats.salud = 0; },
-    game => { game._deathPending = true; }];
+    game => { game._deathPending = true; }, game => { game._arrestPending = true; }];
   for (const change of changes) {
     const { game, photo } = fixture(); change(game);
     assert.equal(photo.enter(), false);
@@ -128,6 +128,24 @@ test('girar en foto revela NPC recién encuadrados sin avanzar su ruta, pose ni 
   assert.equal(npc.routeIndex, 2); assert.equal(npc.splatTimer, 5);
   photo.exit();
   assert.equal(npc.root.visible, false, 'la cámara restaurada recalcula el descarte antes de renderizar');
+});
+
+test('foto reencuadra agresores activos sin mostrar los que siguen dentro del vehículo', () => {
+  const { game, photo } = fixture();
+  const actor = active => ({ active, position: new THREE.Vector3(0, 0, 10), root: new THREE.Group(),
+    update() { assert.fail('foto no avanza los actores'); } });
+  const driver = actor(true), thug = actor(true), hidden = actor(false);
+  hidden.root.visible = false;
+  game.roadRage = { preloadables: [driver] };
+  game.limpieza = { preloadables: [thug, hidden] };
+  game.world = { active: { npcs: [] } };
+  game.player.position.set(0, 0, 0); game.cameraRig.yaw = 0;
+  photo.enter();
+  assert.equal(driver.root.visible, false); assert.equal(thug.root.visible, false);
+  game.cameraRig.yaw = Math.PI; photo.update(1 / 60);
+  assert.equal(driver.root.visible, true); assert.equal(thug.root.visible, true);
+  assert.equal(hidden.root.visible, false);
+  photo.exit();
 });
 
 test('entrar desde isométrica restaura edificios completos y salir recupera su representación', () => {

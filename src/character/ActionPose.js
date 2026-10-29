@@ -1,4 +1,8 @@
 import { Euler, Quaternion, Vector3 } from 'three';
+import { createMeleeOverlay, rotateInFrame } from './melee.js';
+import { createSmokeOverlay } from './smoking.js';
+import { createBasucoOverlay } from './pipe.js';
+import { createPointOverlay } from './pointing.js';
 
 const clamp = value => Math.min(1, Math.max(0, value));
 const smooth = (from, to, value) => {
@@ -9,6 +13,7 @@ const finite = (value, fallback = 0) => Number.isFinite(value) ? value : fallbac
 const normalizeName = name => name.replace(/[^a-z0-9]/gi, '').toLowerCase();
 const JOINTS = {
   hips: ['hips'], spine: ['spine2', 'spine1', 'spine'], head: ['head'],
+  lowerSpine: ['spine'], midSpine: ['spine1'], neck: ['neck'],
   leftArm: ['leftarm'], leftForeArm: ['leftforearm'], rightArm: ['rightarm'], rightForeArm: ['rightforearm'],
   leftUpLeg: ['leftupleg'], leftLeg: ['leftleg'], rightUpLeg: ['rightupleg'], rightLeg: ['rightleg'],
   leftFoot: ['leftfoot'], rightFoot: ['rightfoot']
@@ -23,7 +28,7 @@ const CHILD = { leftArm: 'leftForeArm', rightArm: 'rightForeArm', leftUpLeg: 'le
  * No cambia la raíz física, clips, materiales ni objetos de otros personajes.
  */
 export class ActionPose {
-  constructor(bones, { procedural = false, lod = false } = {}) {
+  constructor(bones, { procedural = false, lod = false, frame = null } = {}) {
     const values = bones instanceof Map ? [...bones.values()] : Object.values(bones ?? {});
     this.joints = {};
     for (const [key, aliases] of Object.entries(JOINTS)) {
@@ -31,7 +36,9 @@ export class ActionPose {
         ? aliases.map(alias => values.find(bone => normalizeName(bone.name ?? '').endsWith(alias))).find(Boolean)
         : bones?.[key];
     }
-    this.frame = this.joints.hips?.parent ?? this.joints.spine?.parent?.parent;
+    this.frame = frame ?? this.joints.hips?.parent ?? this.joints.spine?.parent?.parent;
+    this.overlayBones = bones instanceof Map ? bones : new Map(Object.entries(this.joints)
+      .filter(([, bone]) => bone).map(([key, bone]) => [key === 'spine' ? 'Spine2' : key[0].toUpperCase() + key.slice(1), bone]));
     this.slots = new Map();
     for (const [key, bone] of Object.entries(this.joints)) {
       if (!bone || key.endsWith('Foot')) continue;
@@ -46,6 +53,7 @@ export class ActionPose {
     this.swimWeight = 0;
     this.swimSpeed = 0;
     this.swimLift = 0;
+    this.glance = 0;
     this._frameQ = new Quaternion();
     this._worldQ = new Quaternion();
     this._parentQ = new Quaternion();
@@ -93,15 +101,43 @@ export class ActionPose {
     bone.updateMatrixWorld(true);
   }
 
-  apply(dt, { speed = 0, action = null, actionProgress = 0, movement = {} } = {}) {
+  mouth(target) {
+    this.smoke ??= createSmokeOverlay(this.overlayBones, this.frame);
+    return this.smoke.mouth(target);
+  }
+
+  apply(dt, { speed = 0, action = null, actionProgress = 0, movement = {}, attack = null, smoke = null, basuco = null, point = 0, look = 0 } = {}) {
     this.restore();
     const elapsed = Math.max(0, finite(dt));
     const swim = movement.swimming === true;
     const airborne = movement.grounded === false && !swim;
     const landing = clamp(finite(movement.landing));
     const punch = action === 'golpear', hit = action === 'recibirGolpe';
+    const handsBlocked = swim || airborne || landing > 0 || hit || (action && !['golpear', 'basuco'].includes(action));
+    // Un dueño de manos por vez. El agua, el vuelo y los impactos cancelan incluso
+    // los restos de una transición; no se suman un puñetazo y una calada al mismo brazo.
+    if (handsBlocked) {
+      attack = smoke = basuco = null; point = look = 0;
+      this.melee?.reset(); this.smoke?.reset(); this.pipe?.reset(); this.point?.reset();
+    } else if (attack || punch) {
+      smoke = basuco = null; point = look = 0;
+      this.smoke?.reset(); this.pipe?.reset(); this.point?.reset();
+    } else if (basuco != null && speed < .15) {
+      smoke = null; point = look = 0;
+      this.melee?.reset(); this.smoke?.reset(); this.point?.reset();
+    } else if (point > 0) {
+      smoke = basuco = null;
+      this.melee?.reset(); this.smoke?.reset(); this.pipe?.reset();
+    } else if (smoke) {
+      basuco = null; look = 0;
+      this.melee?.reset(); this.pipe?.reset(); this.point?.reset();
+    }
+    if (speed >= .15) { basuco = null; this.pipe?.reset(); }
+    this.glance += (finite(look) - this.glance) * -Math.expm1(-16 * elapsed);
+    if (handsBlocked) this.glance = 0;
+    const gestures = attack || smoke || basuco != null || point > 0 || this.melee?.active || this.smoke?.active || this.pipe?.active || this.point?.active || Math.abs(this.glance) > .002;
     // El LOD mantiene animación barata salvo una reacción de combate visible.
-    if (this.lod && !punch && !hit) return;
+    if (this.lod && !punch && !hit && !gestures) return;
     const swimTarget = swim ? Math.min(3, Math.max(0, finite(speed))) : 0;
     const speedBlend = -Math.expm1(-12 * elapsed);
     // Integrar la velocidad suavizada analíticamente conserva la fase a distintos FPS.
@@ -109,8 +145,8 @@ export class ActionPose {
     this.swimSpeed += (swimTarget - this.swimSpeed) * speedBlend;
     this.swimWeight += ((swim ? 1 : 0) - this.swimWeight) * -Math.expm1(-14 * elapsed);
     if (!swim && this.swimWeight < .001) this.swimWeight = this.swimLift = 0;
-    if (!swim && !this.swimWeight && !airborne && !landing && !punch && !hit) return;
-    if (action && !punch && !hit && !swim && action !== 'saltar' && action !== 'aterrizar') return;
+    if (!swim && !this.swimWeight && !airborne && !landing && !punch && !hit && !gestures) return;
+    if (action && !punch && !hit && !swim && !gestures && action !== 'saltar' && action !== 'aterrizar') return;
     this.time += swim || this.swimWeight ? .8 * elapsed + .25 * speedIntegral : elapsed;
     this.frame?.getWorldQuaternion(this._frameQ) ?? this._frameQ.identity();
     for (const slot of this.slots.values()) {
@@ -121,7 +157,20 @@ export class ActionPose {
 
     if (this.swimWeight) this._swim(this.swimSpeed, this.swimWeight, movement, elapsed);
     if (!swim && (airborne || landing)) this._jump(movement, airborne, landing);
-    if (punch) this._punch(clamp(finite(actionProgress)));
+    if (!handsBlocked) {
+      if (attack || this.melee?.active) (this.melee ??= createMeleeOverlay(this.overlayBones, this.frame)).apply(elapsed, attack);
+      else if (punch) this._punch(clamp(finite(actionProgress)));
+      if (smoke || this.smoke?.active) (this.smoke ??= createSmokeOverlay(this.overlayBones, this.frame)).apply(elapsed, smoke);
+      if (basuco != null || this.pipe?.active) {
+        (this.pipe ??= createBasucoOverlay(this.overlayBones, this.frame)).apply(elapsed, basuco);
+        this._raiseHips(-this.pipe.drop);
+      }
+      if (point || this.point?.active) (this.point ??= createPointOverlay(this.overlayBones, this.frame)).apply(elapsed, point);
+      if (Math.abs(this.glance) > .002) {
+        if (this.joints.neck) rotateInFrame(this.frame, this.joints.neck, 0, this.glance * .4, 0);
+        if (this.joints.head) rotateInFrame(this.frame, this.joints.head, 0, this.glance * (this.joints.neck ? .6 : 1), 0);
+      }
+    }
     if (hit) this._hit(clamp(finite(actionProgress)));
   }
 

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { ActionPose } from '../src/character/ActionPose.js';
+import { createMeleeOverlay } from '../src/character/melee.js';
 
 function bodyRig() {
   const json = JSON.parse(readFileSync(new URL('../public/models/personaje/hombre-adulto/cuerpo.gltf', import.meta.url)));
@@ -148,4 +149,48 @@ test('el nado mezcla entrada y salida sin saltar a una pose fija ni dejar altura
   for (let i = 0; i < 60; i++) pose.apply(1 / 60, { movement: { grounded: true } });
   assert.equal(pose.active, false);
   assert.deepEqual(snapshot(root), original);
+});
+
+test('el combo por fases tiene una sola capa aunque también llegue la acción legacy', () => {
+  const a = bodyRig(), b = bodyRig();
+  const pose = new ActionPose(a.bones, { frame: a.root });
+  const overlay = createMeleeOverlay(b.bones, b.root);
+  const attack = { weapon: 'cuchillo', step: 1, phase: 'active', progress: .1 };
+  pose.apply(1 / 60, { action: 'golpear', actionProgress: .22 / .58, attack });
+  overlay.apply(1 / 60, attack);
+  assert.deepEqual(snapshot(a.root), snapshot(b.root), 'ActionPose no añade otro puñetazo sobre el combo');
+});
+
+test('todas las superposiciones se restauran aun cuando el mixer no anima sus huesos', () => {
+  const { root, bones } = bodyRig(), pose = new ActionPose(bones, { frame: root });
+  const original = snapshot(root);
+  const inputs = [
+    { attack: { weapon: 'punos', step: 0, phase: 'active', progress: .5 } },
+    { smoke: { puff: 1.2 } }, { basuco: 2, action: 'basuco' }, { point: 1 }, { look: .8 }
+  ];
+  for (const input of inputs) {
+    for (let frame = 0; frame < 100; frame++) pose.apply(1 / 60, input);
+    assert.notDeepEqual(snapshot(root), original);
+    pose.restore();
+    assert.deepEqual(snapshot(root), original, JSON.stringify(input));
+  }
+});
+
+test('agua, vuelo e impacto anulan combos y gestos incluso durante su desvanecimiento', () => {
+  for (const state of [
+    { speed: 2, movement: { swimming: true, surfaceY: 1 } },
+    { action: 'saltar', movement: { grounded: false, verticalVelocity: 4, airTime: .3 } },
+    { action: 'recibirGolpe', actionProgress: .2 }
+  ]) {
+    const a = bodyRig(), b = bodyRig();
+    const pose = new ActionPose(a.bones, { frame: a.root }), clean = new ActionPose(b.bones, { frame: b.root });
+    pose.apply(.1, { attack: { weapon: 'botella_picada', step: 0, phase: 'active', progress: .3 } });
+    pose.apply(.1, { ...state, attack: { weapon: 'cuchillo', phase: 'active' }, smoke: { puff: 1 }, basuco: 2, point: 1, look: .6 });
+    clean.apply(.1, state);
+    // Ambas capas tienen el mismo tiempo de nado desde que empieza el estado.
+    if (!state.movement?.swimming) assert.deepEqual(snapshot(a.root), snapshot(b.root));
+    assert.equal(pose.melee.active, false);
+    assert.equal(pose.smoke?.active ?? false, false);
+    assert.equal(pose.pipe?.active ?? false, false);
+  }
 });

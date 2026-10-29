@@ -86,6 +86,8 @@ test('HUD a 375 px conserva radar, controles táctiles y necesidades accesibles 
   await page.evaluate(() => {
     const stats = window.__game.stats;
     for (const id of ['hambre', 'sed', 'energia', 'salud', 'higiene', 'animo', 'vicio']) stats[id] = 80;
+    // La integración añade frío nocturno: de día no quedan avisos climáticos.
+    window.__game.clock.hour = 12;
   });
   await expect(page.locator('#status')).toBeHidden();
   await expect(page.locator('#needs-summary')).not.toContainText(/sed|vicio/i);

@@ -108,7 +108,10 @@ export class PhotoMode {
     // La geometría recortada en isométrica debe cerrarse también sin simular.
     district.buildingVisibility?.update(0, this.game.player.position, camera);
     this._frustum.setFromProjectionMatrix(this._projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
-    for (const npc of district.npcs ?? []) {
+    const actors = [...(district.npcs ?? []),
+      ...(this.game.roadRage?.preloadables ?? []).filter(npc => npc.active),
+      ...(this.game.limpieza?.preloadables ?? []).filter(npc => npc.active)];
+    for (const npc of actors) {
       // Mismo volumen de Npc.update. No llamar update(0): puede consumir animAcc,
       // elegir una ruta o emitir una frase aun sin transcurrir tiempo de juego.
       this._npcBounds.center.set(npc.position.x, npc.position.y + .9, npc.position.z);
