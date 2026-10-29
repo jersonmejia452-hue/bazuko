@@ -23,7 +23,8 @@ async function startNewGame(page) {
 
 test('partida nueva, talentos, recetas y edición del personaje', async ({ page }) => {
   await startNewGame(page);
-  await expect(page.locator('#clock')).toHaveText(/Día 1 — \d{2}:\d{2}/);
+  await expect(page.locator('#clock')).toHaveText(/^\d{2}:\d{2}$/);
+  await expect(page.locator('#day-display')).toHaveText('Día 1');
   await page.keyboard.press('T');
   await expect(page.locator('#talent-panel')).toHaveClass(/open/);
   await expect(page.locator('#talent-panel')).toContainText('Árbol de Talentos');
