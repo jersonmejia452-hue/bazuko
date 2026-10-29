@@ -75,6 +75,7 @@ En PowerShell, si una política de ejecución impide usar `npm`, ejecuta los mis
 | Arrastrar con botón izquierdo/derecho o flechas | Girar la cámara sin fijar el ratón. |
 | Rueda del ratón | Ajustar la distancia de la cámara en tercera persona. |
 | `I` / `Tab` o botón Inventario | Abrir el inventario por casillas; el mundo queda en pausa. |
+| `C` o botón Fabricar | Abrir la mesa de crafteo. Los botones Inventario y Fabricar están bajo Pausa, con su tecla al lado. |
 | `1`–`5` | Asignar el objeto seleccionado a acceso rápido mientras el inventario está abierto; usarlo cuando está cerrado. |
 | `Enter`, `X`, `R` en el inventario | Usar, tirar una unidad (Mayús: todo), ordenar. |
 | `E` | Interactuar con el objetivo cercano. |
@@ -83,7 +84,6 @@ En PowerShell, si una política de ejecución impide usar `npm`, ejecuta los mis
 | `B` o `L` | Pedir limosna. |
 | `F` | Activar o desactivar el boost, que consume energía y salud. |
 | `T` | Abrir talentos. |
-| `C` | Abrir fabricación. |
 | `P` | Editar el personaje. |
 | `M` | Abrir el mapa para marcar un destino; en el mapa, cerrarlo. |
 | `K` | Alternar entre el personaje realista y el modelo liviano. |

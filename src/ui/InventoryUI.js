@@ -63,13 +63,7 @@ export class InventoryUI {
       </div>
       <div class="inv-tip"></div>`;
     document.body.appendChild(root);
-    this.root = root;
-    this.openButton = document.createElement('button');
-    this.openButton.id = 'inventory-open';
-    this.openButton.type = 'button';
-    this.openButton.textContent = '🎒 Inventario · I';
-    this.openButton.onclick = () => this.toggle();
-    document.body.appendChild(this.openButton);
+    this.root = root; // el acceso visible en el juego vive en PanelDock
 
     this.gridEl = root.querySelector('.inv-grid');
     this.capEl = root.querySelector('.inv-cap');
@@ -379,6 +373,5 @@ export class InventoryUI {
     this.quickEl.removeEventListener('click', this._onQuickClick);
     this.root.remove();
     this.quickEl.remove();
-    this.openButton.remove();
   }
 }

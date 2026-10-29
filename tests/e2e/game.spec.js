@@ -83,6 +83,16 @@ test('ayuda bajo demanda, inventario y pausa sin abrir dos paneles al pulsar Esc
 });
 
 test('mapa con M, destino por clic y por la lista, ruta en el radar y pestañas de la pausa', async ({ page }) => {
+
+  // Accesos visibles en el juego: hacen lo mismo que I y C.
+  await page.locator('#inventory-open').click();
+  await expect(page.locator('#inv-overlay')).toHaveClass(/open/);
+  await page.keyboard.press('Escape');
+  await page.locator('#craft-open').click();
+  await expect(page.locator('#craft-panel')).toHaveClass(/open/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#craft-panel')).not.toHaveClass(/open/);
+  await expect(page.locator('#menu')).toBeHidden();
   await startNewGame(page);
   await expect(page.locator('#minimap-canvas')).toBeVisible();
   await expect(page.locator('#minimap-info')).not.toBeEmpty();

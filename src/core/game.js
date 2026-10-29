@@ -47,6 +47,7 @@ import { openRadioModal } from '../ui/RadioModal.js';
 
 import { HUD } from '../ui/HUD.js';
 import { InventoryUI } from '../ui/InventoryUI.js';
+import { createPanelDock } from '../ui/PanelDock.js';
 import { PerformanceHUD } from '../ui/PerformanceHUD.js';
 import { LocalLights } from './LocalLights.js';
 import { GRAPHICS_PROFILES } from './GraphicsQuality.js';
@@ -127,6 +128,7 @@ export class Game {
     this.hud.setMuted(this.audio.isMuted());
     this.creator = createCreator({ audio: null });
     this.inventoryUI = new InventoryUI(this.inventory, this);
+    this.panelDock = createPanelDock(this);
     this.cameraRig.canControl = () => !this.paused && !this.isSleeping &&
       !this.hud._talentOpen && !this.hud._craftOpen && !this.hud._dealerOpen;
     this.hud.setCameraMode(this.cameraRig.mode);
