@@ -98,6 +98,8 @@ Los E2E `actions.spec.js` recorren caminar/correr, congelan un salto y un impact
 
 `tools/review-bogota-route.mjs` toma las mismas vistas de día y noche y registra renderer, resolución y tiempos de cuadro. Las capturas se inspeccionan visualmente; las cifras solo describen ese equipo y recorrido. El detalle y los límites están en [recorrido-bogota.md](recorrido-bogota.md).
 
+`building-details.test.js` comprueba límites de geometría, agrupación por pared, alineación de ventanas y brillo nocturno en las dos vistas. `urban-trees.test.js`, `urban-planting.test.js` y `park-vegetation.test.js` verifican semillas, materiales compartidos, viento, reservas, agua y presupuestos. `vegetation-lifecycle.test.js` construye y libera el arbolado integrado para detectar recursos huérfanos o liberaciones duplicadas, incluyendo los materiales de profundidad.
+
 ## Mezcla de audio
 
 `audio-mix-integration.test.js` recorre el grafo de Web Audio del golpe seco: fuente, filtro, ganancia local, canal Efectos y maestro. Comprueba Efectos en cero, silencio maestro, pausa de una reproducción ya iniciada y cambio de mezcla durante pausa. El golpe usa `_fx()` igual que las salpicaduras y otros efectos; la prueba comparte el contexto simulado de audio y no confirma la calidad audible en parlantes. Las suites de audio existentes conservan sus comprobaciones de tráfico, voces, consumo y efectos de sustancias.

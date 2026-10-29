@@ -59,25 +59,25 @@ test('la integración puede suministrar texturas y materiales de barrio sin reti
   assert.equal(shell.root.getObjectByName('Dintel').material, accent);
 });
 
-test('identidad conserva exactamente el plan y la geometría de los veinte solares anteriores', () => {
+test('los detalles conservan exactamente el plan físico de los veinte solares anteriores', () => {
   const city = new Bogota(), map = city._layout(), before = JSON.stringify(map);
   const plans = planUrbanBuildings(map);
   // Huellas, posiciones, alturas, diseños y semillas de la ciudad anterior.
   assert.equal(digest(plans), 'e6b140f023aecccc93ac7f996b5cd235bd08446cba2dd378be42437fc873a0e3');
-  const palette = makePalette(), geometry = [];
+  const palette = makePalette();
   for (const plan of plans) {
     const shell = buildUrbanBuilding(plan, palette);
     shell.root.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(shell.root);
+    assert.ok(Math.abs(bounds.max.y - plan.height) < 1e-5);
+    assert.ok(bounds.min.x >= plan.x - plan.width / 2 - .1 && bounds.max.x <= plan.x + plan.width / 2 + .1);
+    assert.ok(bounds.min.z >= plan.z - plan.depth / 2 - .1 && bounds.max.z <= plan.z + plan.depth / 2 + .1);
+    assert.deepEqual(shell.root.userData.urbanBuilding, plan);
     shell.root.traverse(object => {
       assert.ok(!object.isLight);
-      if (!object.isMesh) return;
-      geometry.push({ name: object.name, matrix: object.matrixWorld.elements,
-        position: Array.from(object.geometry.attributes.position.array),
-        normal: Array.from(object.geometry.attributes.normal.array),
-        uv: Array.from(object.geometry.attributes.uv.array), index: Array.from(object.geometry.index.array) });
+      if (object.isMesh) assert.ok(object.geometry.index, 'todos los lotes son compatibles con la fusión estática');
     });
+    for (const wall of shell.walls.values()) assert.ok(wall.children.filter(o => o.userData.buildingDetails).length <= 6);
   }
-  assert.equal(geometry.length, 898, 'no añade mallas ni ventanas individuales');
-  assert.equal(digest(geometry), 'e6028cdc6801320634e08fdfcf32eae713499c43108a9f865e281795021a3cfb');
   assert.equal(JSON.stringify(map), before, 'sin cambios de tiles para colisiones y GPS');
 });

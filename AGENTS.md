@@ -116,6 +116,12 @@ UrbanBuildings.js planifica sustituciones deterministas sobre tiles building exc
 
 ## Materiales e identidad por barrio
 
+`BuildingDetails.js` añade detalles a cada pared/techo antes de `BuildingVisibility.register`; usar geometrías indexadas con position/normal/uv y materiales compartidos. Conservar huellas y alturas físicas. `UrbanPlanting.js` distribuye árboles con reservas por coordenadas, y `ParkVegetation.js` devuelve mallas por sector: añadir sus hijos directamente al distrito para conservar culling. El callback `isReserved(x,z,padding)` ya incluye radios de cambuche, bancos y vendedores; el tercer argumento es margen adicional.
+
+`material.userData.windowGlow` contiene la intensidad nocturna de las ventanas físicas cálidas. Registrarlas en `facadeMats` junto a las fachadas con emissiveMap y actualizar también los clones de `closedMaterials`; de día su emissiveIntensity debe volver a cero. Las cortinas y los vidrios comparten materiales por barrio, sin luces por ventana.
+
+Las hojas de `UrbanTrees.js` usan alphaTest y un atlas común; el color y la sombra comparten el viento. `_mergeStatic` conserva color/treeWind y distingue firmas de atributos y materiales de profundidad. Ampliar bounds de viento después de cualquier recálculo o fusión. Liberar también los materiales de profundidad y sus mapas compartidos al cerrar el distrito.
+
 `NeighborhoodIdentity.js` comparte perfiles del recorrido cambuche, comercio y lago con fachadas y andenes. Color sRGB, relieve y rugosidad lineales son imágenes separadas. Mantener escalas métricas, cachés por variante y presupuestos de texturas. La partición de las casas y sus detalles usan azar local por coordenadas; crear un Texture/Material consume UUID y nunca debe alterar la arquitectura mediante `Math.random` global. Tiles, alturas físicas y navegación no dependen de estos perfiles. Ver `docs/recorrido-bogota.md`.
 
 `ContactShadows.js` dibuja un máximo compartido de 128 contactos con dos lotes instanciados, también en baja. Su consulta distingue calle y viaducto; el salto conserva la capa de apoyo y el agua oculta sombras sumergidas. Se actualiza al renderizar, incluso en foto, sin avanzar simulación. La ribera posee su textura de detalle y la libera desde su material; no volver a liberarla en el conjunto de mapas compartidos del distrito.

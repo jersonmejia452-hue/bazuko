@@ -17,9 +17,19 @@ Asfalto gris azulado, concreto tibio, ladrillo tolete, metal pintado y vegetaci�
 
 La humedad suaviza la rugosidad y oscurece ligeramente el suelo sin convertirlo en metal. En baja se conserva una respuesta más discreta a la lluvia. La ribera usa una sola malla, un material PBR y una textura de detalle pequeña, con mezcla por vértices; no modifica el fondo ni la profundidad física.
 
-`NeighborhoodIdentity.js` contiene perfiles y límites en coordenadas del mundo. `UrbanBuildings.js` aplica los perfiles a sus materiales conservando el plan, los vértices y los detalles existentes.
+`NeighborhoodIdentity.js` contiene perfiles y límites en coordenadas del mundo. `UrbanBuildings.js` aplica los perfiles a sus materiales conservando el plan físico y las alturas de los solares.
 
 Las casas genéricas usan ahora semillas locales por coordenadas. Su distribución y sus detalles permanecen estables aunque se creen más materiales. Antes dependían del azar global, por lo que no se reproduce necesariamente la misma fachada de una partida anterior; los tiles y las colisiones físicas sí conservan sus valores.
+
+## Edificios y vegetación
+
+`BuildingDetails.js` añade marcos, alféizares, rejas, bajantes y remates de azotea a las fachadas. El detalle cercano se concentra en los pisos bajos y se agrupa por material y pared; sigue la ocultación de edificios en vista isométrica. Los vidrios, las cortinas y algunas ventanas cálidas varían por edificio; el brillo de estas últimas se activa solo de noche, sin luces adicionales. Los locales conservan sus avisos y persianas. Las casas mantienen los balcones de madera y los tonos de ladrillo y revoque del centro.
+
+`UrbanTrees.js` sustituye las copas poliédricas por ramas y hojas recortadas con tres siluetas inspiradas en urapanes, eucaliptos y arrayanes. Son interpretaciones visuales, no modelos botánicos. Cada árbol usa dos mallas y comparte los materiales y dos texturas pequeñas con los demás; el viento mueve el follaje y su sombra con el mismo uniforme.
+
+`UrbanPlanting.js` distribuye el arbolado con semillas locales, separación y un máximo de 90 árboles. Respeta el césped, las reservas y la distancia entre copas y viaducto. `ParkVegetation.js` añade grupos de pastos, arbustos bajos, flores discretas y juncos en tierra firme junto al lago. Los jardines se agrupan por sectores de 32 metros y comparten un material sin texturas adicionales. Los paseos, el cambuche, las bancas y las salidas del agua quedan libres.
+
+Las plantas son decoración sin colisiones nuevas. El mapa transitable y las partidas guardadas mantienen sus coordenadas; el movimiento de hojas y pastos se detiene al pausar la simulación.
 
 ## Sombras de contacto
 
