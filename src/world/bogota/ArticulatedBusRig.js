@@ -189,6 +189,15 @@ export class ArticulatedBusRig {
       placement.premultiply(inverse);
       placement.decompose(section.position, section.quaternion, section.scale);
       section.updateMatrix();
+      if (i > 0) {
+        // las secciones se unen por la articulacion: el extremo de esta coincide con el de la anterior (sin esto, en las rampas y curvas
+        // los extremos se separan y el fuelle se desploma)
+        const joint = new THREE.Vector3(0, 0, this.pivotZ[i - 1]);
+        const previous = joint.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(this.sectionRoots[i - 1].matrix, this.flips[i - 1].matrix));
+        const current = joint.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(section.matrix, this.flips[i].matrix));
+        section.position.add(previous.sub(current));
+        section.updateMatrix();
+      }
     });
     // las ruedas del primer eje viran hacia donde va el eje del carril unos metros mas adelante
     const lookZ = bus.position.z + direction * (this.reference[0] - this.centerZ + 5);
