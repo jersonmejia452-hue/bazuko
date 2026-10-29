@@ -6,11 +6,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { ACTIONFORGE_CLIPS, buildCharacterClips } from './actionforge.js';
-import { locomotionBlend, measureLocomotion } from './locomotion.js';
+import { locomotionBlend, locomotionRate, measureLocomotion } from './locomotion.js';
 import { PALETTES } from './look.js';
 import { addGrime, addHairTone } from './weathering.js';
 import { attachAccessories } from './props.js';
 import { addHatClip, hatEdgeProfile } from './hatFit.js';
+import { animationDamping, SecondaryMotion } from './SecondaryMotion.js';
+import { ActionPose } from './ActionPose.js';
 
 const MODEL_BASE = `${import.meta.env?.BASE_URL ?? '/'}models/`;
 const BASE = `${MODEL_BASE}personaje/`;
@@ -26,8 +28,7 @@ const ACTIONFORGE_URL = `${MODEL_BASE}animaciones-actionforge.glb`;
 const LOCOMOTION = 'locomocion';
 // Acciones sin clip propio: clip sustituto y velocidad de reproducción.
 const ACTION_FALLBACKS = {
-  cagar: ['buscar'], lanzar: ['pedir'], saludo: ['pedir'],
-  golpear: ['lanzar', 2] // el brazo baja dentro de los 0,38 s del golpe
+  cagar: ['buscar'], lanzar: ['pedir'], saludo: ['pedir']
 };
 
 export const REAL_DEFAULT = {
@@ -269,13 +270,18 @@ async function buildInstance(catalog, look, lod = false) {
     actions[name].setEffectiveWeight(name === 'idle' ? 1 : 0);
   }
   if (useLod) root.traverse((o) => { if (o.isMesh) o.castShadow = false; }); // lejos: sin sombra propia
-  return { root, mixer, actions, real, accessories, phase: 0, runShare: 0, ownedGeometries: bodyMesh ? [bodyMesh.geometry] : [] };
+  // Los NPC lejanos conservan su ruta liviana, incluso si el catálogo carece de proxy.
+  const secondaryMotion = lod ? null : new SecondaryMotion(bones, seed);
+  const actionPose = new ActionPose(bones, { lod });
+  return { root, mixer, actions, real, accessories, secondaryMotion, actionPose, phase: 0, runShare: 0, ownedGeometries: bodyMesh ? [bodyMesh.geometry] : [] };
 }
 
 /** Solo recursos de instancia; los modelos y texturas del banco siguen compartidos. */
 export function disposeRealisticInstance(instance) {
   if (!instance || instance.disposed) return;
   instance.disposed = true;
+  instance.actionPose?.restore();
+  instance.secondaryMotion?.restore();
   instance.mixer.stopAllAction();
   instance.mixer.uncacheRoot(instance.root);
   const materials = new Set(), skeletons = new Set();
@@ -327,25 +333,28 @@ export async function createRealisticCharacter(look = {}, { lod = false } = {}) 
       disposeRealisticInstance(inst); inst = null;
       group.removeFromParent();
     },
-    update(dt, { speed = 0, running = false, action = null } = {}) {
+    update(dt, { speed = 0, running = false, action = null, load = 0, movement = {}, actionProgress } = {}) {
       if (!inst) return;
       const a = inst.actions;
+      const detached = movement.swimming || movement.grounded === false;
+      const poseAction = action === 'saltar' || action === 'golpear' || action === 'recibirGolpe';
+      const gaitSpeed = detached ? 0 : speed;
       // destino: acción especial si existe el clip (o su sustituto); si no, reposo o locomoción
-      let target = speed < 0.15 ? 'idle' : a.walk ? LOCOMOTION : 'idle';
+      let target = gaitSpeed < 0.15 ? 'idle' : a.walk ? LOCOMOTION : 'idle';
       let scale = 1;
-      if (action && speed < 0.15) {
+      if (action && !poseAction && !detached && speed < 0.15) {
         const [clip, clipScale = 1] = a[action] ? [action] : ACTION_FALLBACKS[action] ?? [];
         if (a[clip]) { target = clip; scale = clipScale; }
       }
       if (inst?.root) {
         const targetY = action === 'cagar' && !a.cagar ? -0.3 : 0;
-        inst.root.position.y += (targetY - inst.root.position.y) * Math.min(1, dt * 10);
+        inst.root.position.y += (targetY - inst.root.position.y) * animationDamping(dt, 10);
       }
       if (target !== inst.previousTarget) {
         if (target !== 'idle' && target !== LOCOMOTION) a[target].reset().setEffectiveTimeScale(scale).play();
         inst.previousTarget = target;
       }
-      const k = Math.min(1, dt * 8);
+      const k = animationDamping(dt, 8);
       for (const key of Object.keys(weights)) {
         weights[key] += ((key === target ? 1 : 0) - weights[key]) * k;
         if (key !== target && weights[key] < .001) weights[key] = 0;
@@ -353,15 +362,17 @@ export async function createRealisticCharacter(look = {}, { lod = false } = {}) 
       // Caminar y correr comparten fase; su mezcla depende de la velocidad para que los pies no deslicen.
       const locomotion = a.walk?.getClip().userData.locomotion;
       if (locomotion) {
-        const blend = locomotionBlend(speed, locomotion);
+        const blend = locomotionBlend(gaitSpeed, locomotion);
         inst.runShare += (blend.run - inst.runShare) * k;
-        inst.phase = (inst.phase + blend.rate * dt) % 1;
+        // La cadencia corresponde al reparto suavizado, no al reparto futuro: evita
+        // que el pie patine mientras se acelera de caminar a correr (o al frenar).
+        inst.phase = (inst.phase + locomotionRate(gaitSpeed, locomotion, inst.runShare) * dt) % 1;
         a.walk.time = inst.phase * locomotion.walkDuration;
         if (a.run) a.run.time = inst.phase * locomotion.runDuration;
       } else {
         inst.runShare += ((running && a.run ? 1 : 0) - inst.runShare) * k;
-        if (a.walk) a.walk.timeScale = THREE.MathUtils.clamp(speed / 1.4, 0.6, 1.6);
-        if (a.run) a.run.timeScale = THREE.MathUtils.clamp(speed / 3.5, 0.7, 1.4);
+        if (a.walk) a.walk.timeScale = THREE.MathUtils.clamp(gaitSpeed / 1.4, 0.6, 1.6);
+        if (a.run) a.run.timeScale = THREE.MathUtils.clamp(gaitSpeed / 3.5, 0.7, 1.4);
       }
       const share = { walk: 1 - inst.runShare, run: inst.runShare };
       for (const key of Object.keys(a)) {
@@ -369,7 +380,16 @@ export async function createRealisticCharacter(look = {}, { lod = false } = {}) 
         a[key].enabled = weight > 0 || key === target;
         a[key].setEffectiveWeight(weight);
       }
+      // Las capas se retiran en orden inverso al de composición; ningún frame deja
+      // offsets sobre la base que evaluará el mezclador o leerá un futuro ragdoll.
+      inst.actionPose.restore();
+      inst.secondaryMotion?.restore();
       inst.mixer.update(dt);
+      inst.secondaryMotion?.apply(dt, {
+        speed: gaitSpeed, load, phase: inst.phase,
+        action: detached || movement.landing > 0 ? 'movement' : action
+      });
+      inst.actionPose.apply(dt, { speed, running, action, actionProgress, movement });
       inst.accessories?.update();
     }
   };

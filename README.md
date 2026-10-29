@@ -69,7 +69,9 @@ En PowerShell, si una política de ejecución impide usar `npm`, ejecuta los mis
 | Tecla o acción | Función |
 | --- | --- |
 | `W`, `A`, `S`, `D` | Moverse. En tercera persona, el movimiento sigue el rumbo de la cámara. |
-| `Shift` | Correr. |
+| `Shift` | Correr; nadar más rápido si queda energía. |
+| `Espacio` | Saltar; también permite lanzarse al lago desde tierra. |
+| `G` / clic izquierdo | Golpear hacia delante, con anticipación, impacto y recuperación. |
 | `V` o botón de cámara | Alternar entre tercera persona e isométrica. |
 | Clic izquierdo en la calle | Fijar el ratón para girar la cámara en tercera persona. |
 | Arrastrar con botón izquierdo/derecho o flechas | Girar la cámara sin fijar el ratón. |
@@ -89,6 +91,8 @@ En PowerShell, si una política de ejecución impide usar `npm`, ejecuta los mis
 | `K` | Alternar entre el personaje realista y el modelo liviano. |
 | `Esc` o botón Pausa | Abrir la pausa en la pestaña Estado; cerrar primero el panel activo y liberar el cursor. |
 | `N` | Mostrar u ocultar el radar. |
+| `H` / Estado | Mostrar u ocultar las necesidades detalladas. |
+| `F2` | Modo foto: encuadrar, guardar PNG y volver con Esc. |
 | `+` / `−` | Acercar o alejar el radar. |
 | `F3` | Mostrar u ocultar el panel de rendimiento. |
 | `R` en la calle | Abrir o cerrar la radio AM/FM; permite sintonizar emisoras y cambiar pilas. |
@@ -113,7 +117,7 @@ Si la salud llega a cero, el juego se pausa y muestra una pantalla de recuperaci
 
 ## Radar, mapa, GPS y pausa
 
-La columna inferior izquierda reúne los avisos, las necesidades y el radar con el mismo ancho. Cada necesidad muestra su icono, nombre, barra y valor; bajo 30 el valor se resalta y bajo 15 la barra parpadea. Los colores son los mismos en la pestaña Estado. El radar tiene tres tamaños (Pequeño, Mediano y Grande, en **Ajustes**) que también ajustan el ancho de la columna y crecen con la pantalla. Muestra el plano de la ciudad (calles, andenes, manzanas, parques, lago y el viaducto en franja translúcida) y gira con la cámara en las dos vistas: arriba representa el frente de la pantalla. La **N** del borde indica el norte. Al correr se aleja para ver más lejos; **+** y **−**, con el teclado o con los botones de su esquina, cambian el alcance base, que se guarda, y la esquina inferior indica el alcance actual. Debajo aparece el destino marcado o, sin destino, el lugar más cercano, con su distancia y dirección en una segunda línea. Ocultarlo con **N** o con **✕** deja un botón **Radar** para recuperarlo.
+La columna inferior izquierda reúne radar, Salud y Energía con un ancho común. **H** o **Estado** despliega hambre, sed, higiene, ánimo y vicio; sus alertas siguen visibles aunque el detalle esté cerrado. Dinero y hora quedan arriba a la derecha. Cada necesidad conserva nombre, valor y barra accesible, también en la pestaña Estado. El radar tiene tres tamaños (Pequeño, Mediano y Grande, en **Ajustes**) y gira con la cámara: arriba representa el frente de la pantalla, mientras **N** indica el norte. Al correr se aleja; **+** y **−** cambian el alcance base guardado. Muestra el destino o el lugar cercano con distancia y dirección. Ocultarlo con **N** o **✕** deja un botón para recuperarlo.
 
 **M** abre el mapa grande con el norte arriba. Se puede arrastrar, acercar con la rueda o con los botones **+** y **−**, volver al jugador con **◎**, ver toda la ciudad con **⤢** y marcar un destino con un clic, sobre un lugar o en cualquier punto de la calle. Una leyenda identifica andenes, calles, parques, agua, edificios y la ruta. La lista **Ir a…** ordena los lugares de la ciudad del más cercano al más lejano. El clic derecho o **Quitar destino** lo borra. El GPS calcula la mejor ruta a pie: prefiere andenes, parques y cruces peatonales, evita caminar por la calzada y rodea edificios y el lago. Va por la calle inferior, no por el viaducto. La ruta amarilla aparece en el radar y en el mapa y se recalcula si el jugador se desvía más de 6 metros. Un haz amarillo marca el destino en la calle y desaparece al llegar. El destino se guarda con la partida.
 
@@ -200,11 +204,11 @@ Integra los cambios de `juanagogo/bazuko` hasta `77f66bd`: radio AM/FM sintetiza
 
 ### Animaciones del personaje
 
-El personaje realista usa nuevos movimientos de Quaternius exportados con ActionForge para caminar, correr, buscar, pedir, consumir, agacharse y lanzar. Se conserva la personalización de ropa, pelo y cuerpo, además del ragdoll. El banco optimizado contiene ocho clips sin duplicar las texturas. Consulta [procedencia, adaptación y controles](docs/animaciones-actionforge.md).
+El personaje realista usa movimientos de Quaternius exportados con ActionForge para caminar, correr, buscar, pedir, consumir, agacharse y lanzar. La mezcla caminar/correr mantiene una fase compartida y ajusta la cadencia a la zancada real, con movimiento secundario de torso y peso. Salto, aterrizaje, puñetazo, reacción y natación se articulan sobre cada esqueleto sin modificar los clips compartidos. El salto sigue el vuelo físico, incluso mientras se corre. El golpe conecta al extender el brazo a los 0,22 s; respeta distancia, orientación, altura y obstáculos, y el NPC reacciona antes de huir. Se conserva la personalización, el modelo liviano y el ragdoll. El banco optimizado contiene ocho clips sin duplicar texturas; consulta [procedencia y adaptación](docs/animaciones-actionforge.md).
 
 ### Parque del Lago y viaducto
 
-La ampliación al sur, desde Z 222, añade un lago de unos 100 × 52 metros, senderos, bancas y arbolado. El agua no es transitable y el parque aparece en el radar. Un único puente de asfalto cruza el lago y rodea la Torre Colpatria por el oriente, desde Z 15,43 hasta Z 318. Alcanza 7,82 metros de altura en Z 39 y conserva esa cota hasta Z 280, donde comienza la rampa sur.
+La ampliación al sur, desde Z 222, añade un lago de unos 100 × 52 metros, senderos, bancas y arbolado. Su orilla baja gradualmente hasta un fondo de 6 m. El jugador puede entrar andando, saltar al agua, nadar con **WASD** y regresar a tierra por cualquier orilla gradual; **Shift** acelera el nado y consume energía. Sin energía sigue siendo posible nadar normalmente. Las ondas, salpicaduras, brazadas y flotación se detienen en pausa y modo foto. Los peatones y el GPS conservan sus rutas terrestres. El fondo coincide con las consultas físicas y los pilares llegan hasta él. Un único puente de asfalto cruza el lago y rodea la Torre Colpatria por el oriente, desde Z 15,43 hasta Z 318. Alcanza 7,82 metros de altura en Z 39 y conserva esa cota hasta Z 280, donde comienza la rampa sur.
 
 El puente mantiene 14 metros de ancho real en todo el recorrido, medidos perpendicularmente a su eje. Sus curvas tienen un radio más amplio y bordes paralelos, sin ensanchamientos locales. La llegada norte está centrada en X 75. El concreto queda bajo el asfalto, sin superficies superpuestas. Los buses ajustan altura e inclinación al tablero y sus colisiones siguen la carrocería. El jugador puede caminar sobre el puente o por las calles inferiores.
 

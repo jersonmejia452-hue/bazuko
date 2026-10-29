@@ -100,7 +100,8 @@ export class CameraRig {
       e.preventDefault();
 
       // En clic izquierdo solicita Pointer Lock para control fluido estilo juego 3D
-      if (e.button === 0 && (typeof document === 'undefined' || document.pointerLockElement !== canvas) && canvas.requestPointerLock) {
+      if (e.button === 0 && this.allowPointerLock?.() !== false &&
+          (typeof document === 'undefined' || document.pointerLockElement !== canvas) && canvas.requestPointerLock) {
         try { canvas.requestPointerLock()?.catch?.(() => {}); } catch { /* sin permiso */ }
       }
 

@@ -616,6 +616,27 @@ export class AudioSystem {
     } catch {}
   }
 
+  /** Salpicadura breve reutilizable; sigue el canal de efectos, silencio y pausa. */
+  playWaterSplash(intensity = .5) {
+    const fx = this._fx();
+    if (!fx || !fx.ctx.createBuffer) return;
+    try {
+      const { ctx, out } = fx;
+      if (!this._splashBuffer || this._splashBuffer.sampleRate !== ctx.sampleRate) {
+        this._splashBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * .36), ctx.sampleRate);
+        const data = this._splashBuffer.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 1.6);
+      }
+      const source = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), gain = ctx.createGain();
+      source.buffer = this._splashBuffer;
+      filter.type = 'bandpass'; filter.frequency.value = 750; filter.Q.value = .5;
+      gain.gain.value = .08 + Math.max(0, Math.min(1, intensity)) * .25;
+      source.connect(filter); filter.connect(gain); gain.connect(out);
+      source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
+      source.start();
+    } catch { /* El audio opcional no bloquea la natación. */ }
+  }
+
   playLanding() {
     const fx = this._fx();
     if (!fx) return;

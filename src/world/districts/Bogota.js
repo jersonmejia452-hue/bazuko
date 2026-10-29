@@ -34,7 +34,9 @@ import { buildD69Store } from '../bogota/D69Store.js';
 import { buildColpatria, COLPATRIA, COLPATRIA_ANNEX, BUS_DETOUR, busPathX, southBusPathX } from '../bogota/Colpatria.js';
 import { VIADUCT, buildColpatriaViaduct, viaductHeight, viaductSurface } from '../bogota/ColpatriaViaduct.js';
 import { TERMINAL, inTerminal, terminalGroundHeight, buildTransitTerminal } from '../bogota/TransitTerminal.js';
-import { LAKE_PARK, onLakeBridge, bridgeHeight, buildLakeWater } from '../bogota/LakePark.js';
+import { LAKE_PARK, onLakeBridge, bridgeHeight, buildLakeWater, buildLakeTerrain,
+  inLakeTerrain, lakeTerrainHeight, lakeWaterInfo } from '../bogota/LakePark.js';
+import { createLakeWaterMaterial } from '../bogota/LakeWaterMaterial.js';
 import { PigeonFlock } from '../../entities/PigeonFlock.js';
 import { geometryChunk, mergeByChunk, freezeStaticTransforms, createRenderSectors, instanceStaticModels } from '../bogota/StaticGeometry.js';
 import { CITY_WIDTH, CITY_HEIGHT, CITY_AREA_MULTIPLIER, CITY_CARRERAS as CARRERAS,
@@ -46,7 +48,7 @@ import { ORIGINAL_SIZE as S, ORIGINAL_CARRERAS, ORIGINAL_CARACAS, ORIGINAL_CALLE
   migrateStreetPosition, WORLD_LAYOUT_VERSION, SIDEWALK_TILES } from '../bogota/StreetLayout.js';
 const T = TILE_SIZE;
 const WALKABLE = new Set(['road', 'busway', 'sidewalk', 'dirt', 'grass', 'plaza', 'floor']);
-const SOLID = new Set(['building', 'ruin', 'wall', 'water', 'storeD69', 'colpatria', 'colpatriaAnnex', 'smallBuilding']);
+const SOLID = new Set(['building', 'ruin', 'wall', 'storeD69', 'colpatria', 'colpatriaAnnex', 'smallBuilding']);
 const SIDEWALK_Y = 0.12;
 // La colocación de objetos debe usar las mismas cotas que la malla del terreno.
 const GROUND_HEIGHTS = Object.freeze({
@@ -167,7 +169,8 @@ export class Bogota {
     this._buildMarkings();
     this._buildBlocks(map);
     this._buildCollisions(map, collisions);
-    const viaduct = buildColpatriaViaduct(map, { pavement: this.groundMaterials.road });
+    const viaduct = buildColpatriaViaduct(map, { pavement: this.groundMaterials.road,
+      groundHeight: (x, z) => this.getWaterInfo(x, z)?.bottomY ?? 0 });
     this.group.add(viaduct);
     for (const box of viaduct.userData.colliders) collisions?.colliders.push({ box, mesh: new THREE.Object3D(), layered: true });
     this.stationGroup = buildTransitTerminal({ createSign: signTexture, asphalt: this.groundMaterials.road });
@@ -355,7 +358,7 @@ export class Bogota {
       dirt: new THREE.MeshStandardMaterial({ map: tex(dirt.map, 8), roughness: 1, color: '#8a7a64' }),
       grass: new THREE.MeshStandardMaterial({ map: dirt.map, roughness: 1, color: '#3e5a2c' }),
       plaza: new THREE.MeshStandardMaterial({ map: tex(walk.map, 6), roughness: 0.8, color: '#c9b9a0' }),
-      water: new THREE.MeshStandardMaterial({ color: '#267d8b', roughness: .24, metalness: .18 })
+      water: createLakeWaterMaterial()
     };
     const scaleOf = { road: 14, busway: 14, sidewalk: 6, floor: 6, dirt: 8, grass: 8, plaza: 6, water: 16 };
     const heightOf = GROUND_HEIGHTS;
@@ -363,7 +366,7 @@ export class Bogota {
     for (let z = 0; z < map.length; z++) {
       for (let x = 0; x < map[0].length; x++) {
         const t = map[z][x];
-        if (!mats[t] || t === 'water' || onLakeBridge(W(x), W(z))) continue;
+        if (!mats[t] || t === 'water' || onLakeBridge(W(x), W(z)) || inLakeTerrain(W(x), W(z))) continue;
         const g = new THREE.PlaneGeometry(T, T);
         g.rotateX(-Math.PI / 2);
         g.translate(W(x), heightOf[t], W(z));
@@ -394,7 +397,11 @@ export class Bogota {
       bumpScale: 0.12
     });
     this.groundMaterials = mats;
-    this.group.add(buildLakeWater(mats.water));
+    const landHeightAt = (x, z) => this._lakeLandHeight(x, z);
+    this.lakeTerrain = buildLakeTerrain(landHeightAt, { groundMap: mats.grass.map, plazaMap: mats.plaza.map });
+    this.lakeWater = buildLakeWater(mats.water, landHeightAt);
+    this.group.add(this.lakeTerrain, this.lakeWater);
+    this.animated.push(this.lakeWater);
     for (const [t, list] of Object.entries(quads)) {
       this.group.add(mergeByChunk(list, mats[t], { receiveShadow: true }));
     }
@@ -709,16 +716,15 @@ export class Bogota {
       let x = 0;
       while (x < map[0].length) {
         if (!SOLID.has(map[z][x]) || urbanTiles.has(`${x},${z}`)) { x++; continue; }
-        const water = map[z][x] === 'water';
         let x2 = x;
-        while (x2 + 1 < map[0].length && !urbanTiles.has(`${x2+1},${z}`) && SOLID.has(map[z][x2 + 1]) && (map[z][x2 + 1] === 'water') === water &&
+        while (x2 + 1 < map[0].length && !urbanTiles.has(`${x2+1},${z}`) && SOLID.has(map[z][x2 + 1]) &&
           (map[z][x2 + 1] === 'storeD69') === (map[z][x] === 'storeD69') &&
           (map[z][x2 + 1] === 'colpatria') === (map[z][x] === 'colpatria') &&
           (map[z][x2 + 1] === 'colpatriaAnnex') === (map[z][x] === 'colpatriaAnnex') &&
           (map[z][x2 + 1] === 'smallBuilding') === (map[z][x] === 'smallBuilding')) x2++;
         const o = new THREE.Object3D();
-        o.position.set((W(x) + W(x2)) / 2, water ? -.4 : 0, W(z));
-        collisions.add(o, new THREE.Vector3((x2 - x + 1) * T, water ? .4 : map[z][x] === 'smallBuilding' ? SMALL_BUILDING.height : map[z][x] === 'storeD69' ? 5 : map[z][x] === 'colpatria' ? COLPATRIA.height : map[z][x] === 'colpatriaAnnex' ? COLPATRIA_ANNEX.height : 8, T));
+        o.position.set((W(x) + W(x2)) / 2, 0, W(z));
+        collisions.add(o, new THREE.Vector3((x2 - x + 1) * T, map[z][x] === 'smallBuilding' ? SMALL_BUILDING.height : map[z][x] === 'storeD69' ? 5 : map[z][x] === 'colpatria' ? COLPATRIA.height : map[z][x] === 'colpatriaAnnex' ? COLPATRIA_ANNEX.height : 8, T));
         x = x2 + 1;
       }
     }
@@ -744,8 +750,24 @@ export class Bogota {
   getGroundHeight(x, z) {
     if (inTerminal(x,z)) return terminalGroundHeight(x,z);
     if (onLakeBridge(x, z)) return bridgeHeight(z);
+    const lakeGround = this._lakeGroundHeight(x, z);
+    if (lakeGround !== null) return lakeGround;
     const t = this.map[Math.round(z / T)]?.[Math.round(x / T)];
     return GROUND_HEIGHTS[t] ?? 0;
+  }
+
+  _lakeLandHeight(x, z) {
+    const type = this.map?.[Math.round(z / T)]?.[Math.round(x / T)];
+    return type === 'water' || (type === 'busway' && onLakeBridge(x, z)) ? .06 : GROUND_HEIGHTS[type] ?? .06;
+  }
+
+  _lakeGroundHeight(x, z) {
+    return lakeTerrainHeight(x, z, (sx, sz) => this._lakeLandHeight(sx, sz));
+  }
+
+  /** El agua existe también debajo del puente; el controlador decide si está sumergido. */
+  getWaterInfo(x, z) {
+    return lakeWaterInfo(x, z, (sx, sz) => this._lakeLandHeight(sx, sz));
   }
 
   getMovementGroundHeight(x, z, currentY) {
@@ -753,11 +775,34 @@ export class Bogota {
     const deck = viaductSurface(x, z);
     // Solo se entra por la rampa o desde el propio tablero; debajo se conserva la calle.
     if (deck !== null && Math.abs(deck - currentY) < .6) return deck;
+    const lakeGround = this._lakeGroundHeight(x, z);
+    if (lakeGround !== null) return lakeGround;
     if (onLakeBridge(x, z) && (deck === null || currentY < bridgeHeight(z) - .6)) {
       const type = this.map[Math.round(z / T)]?.[Math.round(x / T)];
       return GROUND_HEIGHTS[type] ?? 0;
     }
     return this.getGroundHeight(x, z);
+  }
+
+  /** Superficie de apoyo del jugador; el salto conserva la capa de despegue. */
+  getPlayerGroundSurface(x, z, { from, grounded = true, surface = null } = {}) {
+    const type = this.map[Math.round(z / T)]?.[Math.round(x / T)];
+    const ground = { height: inTerminal(x, z) ? terminalGroundHeight(x, z)
+      : this._lakeGroundHeight(x, z) ?? GROUND_HEIGHTS[type] ?? 0, layer: 'ground' };
+    const deck = viaductSurface(x, z);
+    const feetY = from?.y ?? surface?.height ?? ground.height;
+    if (deck !== null) {
+      // A pie se accede por una rampa cercana a los pies. En un salto desde
+      // el tablero, comprobar también el apoyo anterior: al correr cuesta
+      // arriba, la nueva pendiente puede superar los pies durante este paso.
+      const entersOnFoot = grounded && Math.abs(deck - feetY) < .6;
+      const previousDeck = from ? viaductSurface(from.x, from.z) : null;
+      const abovePreviousDeck = previousDeck !== null && feetY >= previousDeck - 1e-7;
+      const landsOnDeck = !grounded && surface?.layer === 'viaduct' &&
+        (deck <= feetY + 1e-7 || abovePreviousDeck);
+      if (entersOnFoot || landsOnDeck) return { height: deck, layer: 'viaduct' };
+    }
+    return ground;
   }
 
   /** Cota máxima bajo la base completa, incluida su rotación y los tiles vecinos. */

@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { PALETTES, DEFAULT_LOOK, normalizeLook } from './look.js';
+import { animationDamping } from './SecondaryMotion.js';
+import { ActionPose } from './ActionPose.js';
 
 export { DEFAULT_LOOK };
 
@@ -326,15 +328,26 @@ export function createCharacter(initial = DEFAULT_LOOK) {
   }
   build();
 
-  const pose = { lean: 0, armLx: 0, armRx: 0, armLz: 0, armRz: 0, elbL: 0, elbR: 0, legL: 0, legR: 0, kneeL: 0, kneeR: 0, bob: 0, lie: 0, headX: 0, headY: 0 };
+  const pose = { lean: 0, twist: 0, sway: 0, armLx: 0, armRx: 0, armLz: 0, armRz: 0, elbL: 0, elbR: 0, legL: 0, legR: 0, kneeL: 0, kneeR: 0, bob: 0, lie: 0, headX: 0, headY: 0 };
   let phase = 0;
+  let idleTime = Math.random() * 20;
   let blink = 2;
+  const ragdollRig = { hips, spine: torso, head,
+    leftArm: arms[0].shoulder, leftForeArm: arms[0].elbow,
+    rightArm: arms[1].shoulder, rightForeArm: arms[1].elbow,
+    leftUpLeg: legs[0].hip, leftLeg: legs[0].knee,
+    rightUpLeg: legs[1].hip, rightLeg: legs[1].knee };
+  const actionPose = new ActionPose(ragdollRig, { procedural: true });
 
-  function update(dt, { speed = 0, running = false, action = null, t = 0, load = 0, dirt = 0, wet = 0, look: lookAt = 0 }) {
-    const target = { lean: 0, armLx: 0, armRx: 0, armLz: 0.12, armRz: -0.12, elbL: -0.2, elbR: -0.2, legL: 0, legR: 0, kneeL: 0, kneeR: 0, bob: 0, lie: 0, headX: 0, headY: lookAt };
-    const amp = Math.min(1, speed / 3.6) * (running ? 1.1 : 0.9);
-    if (speed > 0.15) {
-      phase += dt * (5 + speed * 2.2);
+  function update(dt, { speed = 0, running = false, action = null, t = 0, load = 0, dirt = 0, wet = 0, look: lookAt = 0, movement = {}, actionProgress } = {}) {
+    actionPose.restore();
+    idleTime += dt;
+    const detached = movement.swimming || movement.grounded === false;
+    const gaitSpeed = detached ? 0 : speed;
+    const target = { lean: 0, twist: 0, sway: 0, armLx: 0, armRx: 0, armLz: 0.12, armRz: -0.12, elbL: -0.2, elbR: -0.2, legL: 0, legR: 0, kneeL: 0, kneeR: 0, bob: 0, lie: 0, headX: 0, headY: lookAt };
+    const amp = Math.min(1, gaitSpeed / 3.6) * (running ? 1.1 : 0.9);
+    if (gaitSpeed > 0.15) {
+      phase += dt * (5 + gaitSpeed * 2.2);
       const s = Math.sin(phase);
       target.legL = s * 0.8 * amp;
       target.legR = -s * 0.8 * amp;
@@ -343,15 +356,23 @@ export function createCharacter(initial = DEFAULT_LOOK) {
       target.armLx = -s * 0.8 * amp;
       target.armRx = s * 0.8 * amp;
       target.lean = 0.06 * amp + (running ? 0.1 : 0);
+      target.twist = s * .045 * amp;
+      target.sway = -s * .025 * amp;
       target.bob = Math.abs(Math.cos(phase)) * 0.05 * amp;
     } else {
-      target.bob = Math.sin(t * 2.8) * 0.012;
-      target.headX = Math.sin(t * 0.9) * 0.06;
-      target.headY = Math.cos(t * 0.7) * 0.08 + lookAt;
-      target.armLz = 0.14 + Math.sin(t * 2.8) * 0.015;
-      target.armRz = -0.14 - Math.sin(t * 2.8) * 0.015;
+      const breath = Math.sin(idleTime * 2.05);
+      target.bob = breath * .004;
+      target.lean = breath * .015;
+      target.twist = Math.sin(idleTime * .61) * .015;
+      target.sway = Math.sin(idleTime * .79) * .012;
+      target.headX = Math.sin(idleTime * 0.9) * 0.04;
+      target.headY = Math.cos(idleTime * 0.7) * 0.07 + lookAt;
+      target.armLz = 0.14 + breath * 0.015;
+      target.armRz = -0.14 - breath * 0.015;
     }
-    if (wet > 0.5 && speed < 0.15) {
+    if (!action) target.lean += Math.min(1, Math.max(0, load)) * .04;
+    else target.twist = target.sway = 0;
+    if (wet > 0.5 && gaitSpeed < 0.15 && !detached) {
       target.armLz = -0.3; target.armRz = 0.3; target.armLx = -0.6; target.armRx = -0.6; target.elbL = -1.5; target.elbR = -1.5;
     }
     switch (action) {
@@ -395,39 +416,17 @@ export function createCharacter(initial = DEFAULT_LOOK) {
         target.armRx = -2.7; target.armRz = -0.3 + Math.sin(t * 9) * 0.35; target.elbR = -0.4;
         break;
       }
-      case 'saltar': {
-        target.bob = 0.16;
-        target.legL = 0.45; target.legR = 0.35;
-        target.kneeL = 0.95; target.kneeR = 0.8;
-        target.armLx = -0.55; target.armRx = -0.55;
-        target.armLz = -0.55; target.armRz = 0.55;
-        target.lean = 0.12;
-        break;
-      }
-      case 'golpear': {
-        const punchCycle = Math.sin(t * 18);
-        target.lean = 0.18;
-        target.armRx = -1.65 + punchCycle * 0.15;
-        target.elbR = -0.05;
-        target.armRz = -0.15;
-        target.armLx = -1.25;
-        target.elbL = -1.8;
-        target.armLz = 0.35;
-        target.legR = -0.35;
-        target.legL = 0.3;
-        break;
-      }
       case 'dormir':
         target.lie = 1;
         break;
       default:
     }
-    const k = Math.min(1, dt * 12);
+    const k = animationDamping(dt, 12);
     for (const key of Object.keys(pose)) pose[key] = lerp(pose[key], target[key], k);
 
     const [aL, aR] = arms;
     const [lL, lR] = legs;
-    torso.rotation.x = pose.lean;
+    torso.rotation.set(pose.lean, pose.twist, pose.sway);
     head.rotation.set(pose.headX, pose.headY, 0);
     aL.shoulder.rotation.set(pose.armLx, 0, pose.armLz);
     aR.shoulder.rotation.set(pose.armRx, 0, pose.armRz);
@@ -441,6 +440,7 @@ export function createCharacter(initial = DEFAULT_LOOK) {
     body.rotation.x = -pose.lie * Math.PI / 2;
     body.position.y = pose.lie * 0.3;
     body.position.z = -pose.lie * 0.55;
+    actionPose.apply(dt, { speed, running, action, actionProgress, movement });
 
     // parpadeo
     blink -= dt;
@@ -456,11 +456,7 @@ export function createCharacter(initial = DEFAULT_LOOK) {
 
   return {
     group: root,
-    ragdollRig: { hips, spine: torso, head,
-      leftArm: arms[0].shoulder, leftForeArm: arms[0].elbow,
-      rightArm: arms[1].shoulder, rightForeArm: arms[1].elbow,
-      leftUpLeg: legs[0].hip, leftLeg: legs[0].knee,
-      rightUpLeg: legs[1].hip, rightLeg: legs[1].knee },
+    ragdollRig,
     get look() { return look; },
     setLook(l) {
       look = normalizeLook(l);

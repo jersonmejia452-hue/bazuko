@@ -9,6 +9,7 @@ import { NEED_META, needLevel } from './needsMeta.js';
 import { describeWeather } from '../world/Climate.js';
 
 const NEED_LABELS = { hambre: 'hambre', sed: 'sed', energia: 'energía', salud: 'salud', higiene: 'higiene', animo: 'ánimo', vicio: 'vicio' };
+const PRIMARY_NEEDS = new Set(['salud', 'energia']);
 
 export class HUD {
   constructor() {
@@ -17,6 +18,9 @@ export class HUD {
     this.bars = {};
     this.barValues = {};
     this._buildNeeds(document.getElementById('hud'));
+    this.movementEl = document.getElementById('movement-status');
+    this.movementLabel = document.getElementById('movement-label');
+    this.movementHelp = document.getElementById('movement-help');
 
     this.clockEl = document.getElementById('clock');
     this.moneyEl = document.getElementById('money');
@@ -83,6 +87,7 @@ export class HUD {
       if (e.code !== 'Escape' && window.__game?.paused) return;
       if (e.code === 'KeyT') this.toggleTalentPanel();
       if (e.code === 'KeyC') this.toggleCraftPanel();
+      if (e.code === 'KeyH' && !e.repeat) this.needsToggle?.click();
       if (e.code === 'Escape') {
         if (this._talentOpen || this._craftOpen || this._dealerOpen) e._panelHandled = true;
         this.talentPanel?.classList.remove('open');
@@ -105,9 +110,33 @@ export class HUD {
     });
   }
 
-  /** Una fila por necesidad: icono, nombre, barra y valor. */
+  /** Salud y energía siempre a la vista; el resto se consulta sin abrir una pausa. */
   _buildNeeds(container) {
     if (!container) return;
+    const vitals = document.createElement('div');
+    vitals.id = 'hud-vitals';
+    const details = document.createElement('div');
+    details.id = 'needs-details';
+    details.hidden = true;
+    const toggle = document.createElement('button');
+    toggle.id = 'needs-toggle';
+    toggle.type = 'button';
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-controls', details.id);
+    toggle.setAttribute('aria-keyshortcuts', 'H');
+    toggle.title = 'Estado y necesidades (H)';
+    toggle.innerHTML = '<span id="needs-summary">Estado</span><span class="needs-toggle__key" aria-hidden="true">H</span><span class="needs-toggle__chevron" aria-hidden="true">⌃</span>';
+    toggle.addEventListener('click', () => {
+      details.hidden = !details.hidden;
+      toggle.setAttribute('aria-expanded', String(!details.hidden));
+    });
+    // El control conserva la activación nativa con Espacio sin disparar un salto.
+    toggle.addEventListener('keydown', event => {
+      if (event.code === 'Space') event.stopPropagation();
+    });
+    container.append(vitals, toggle, details);
+    this.needsSummary = toggle.querySelector('#needs-summary');
+    this.needsToggle = toggle;
     for (const { id, icon, label, color } of NEED_META) {
       const row = document.createElement('div');
       row.className = 'stat-bar';
@@ -118,17 +147,35 @@ export class HUD {
         + `<span class="stat-bar__name">${label}</span>`
         + '<div class="bar"><div class="fill"></div></div>'
         + '<span class="stat-bar__value">100</span>';
-      container.appendChild(row);
+      const meter = row.querySelector('.bar');
+      meter.setAttribute('role', 'meter');
+      meter.setAttribute('aria-label', label);
+      meter.setAttribute('aria-valuemin', '0');
+      meter.setAttribute('aria-valuemax', '100');
+      meter.setAttribute('aria-valuenow', '100');
+      (PRIMARY_NEEDS.has(id) ? vitals : details).appendChild(row);
       this.bars[id] = row.querySelector('.fill');
       this.barValues[id] = row.querySelector('.stat-bar__value');
     }
   }
 
+  setMovementState(player) {
+    if (!this.movementEl) return;
+    const swimming = !!player?.isSwimming;
+    const inWater = swimming || (player?.waterDepth ?? 0) > .1;
+    this.movementEl.hidden = !inWater;
+    if (!inWater) return;
+    this.movementEl.dataset.movement = swimming ? 'swimming' : 'wading';
+    this._setText(this.movementLabel, swimming ? 'Nadando' : 'En el agua');
+    this._setText(this.movementHelp, swimming
+      ? 'WASD para moverte ∙ Shift para acelerar'
+      : 'Busca la orilla para salir');
+  }
+
   setCameraMode(mode) {
     const thirdPerson = mode === 'third-person';
     if (this.cameraButton) {
-      const action = thirdPerson ? 'Cambiar a vista isométrica' : 'Cambiar a tercera persona';
-      this.cameraButton.textContent = `⇄ ${action} · V`;
+      this.cameraButton.textContent = `${thirdPerson ? 'Vista isométrica' : 'Tercera persona'} ∙ V`;
       this.cameraButton.dataset.targetView = thirdPerson ? 'isometric' : 'third-person';
       this.cameraButton.title = `Vista actual: ${thirdPerson ? 'tercera persona' : 'isométrica'}. Haz clic o pulsa V para cambiar.`;
       this.cameraButton.setAttribute('aria-pressed', String(thirdPerson));
@@ -229,9 +276,25 @@ export class HUD {
       const value = Math.max(0, Math.min(100, stats[k] ?? 0));
       this._setWidth(el, value);
       this._setText(this.barValues[k], String(Math.round(value)));
+      const meter = el.parentElement;
+      const rounded = String(Math.round(value));
+      if (meter.getAttribute?.('aria-valuenow') !== rounded) meter.setAttribute?.('aria-valuenow', rounded);
       const level = needLevel(value);
       const row = el.parentElement.parentElement;
       if (row.dataset.level !== level) row.dataset.level = level;
+    }
+    if (this.needsSummary) {
+      const low = NEED_META.filter(({ id }) => !PRIMARY_NEEDS.has(id) && (stats[id] ?? 100) < 30);
+      this._setText(this.needsSummary, low.length ? low.map(({ label }) => label).join(', ') : 'Estado');
+      const level = low.some(({ id }) => (stats[id] ?? 100) < 15) ? 'critical' : low.length ? 'low' : 'ok';
+      if (this.needsToggle.dataset.level !== level) this.needsToggle.dataset.level = level;
+      const announcement = low.length
+        ? `Estado: niveles bajos de ${low.map(({ label }) => label).join(', ')}. Ver todas las necesidades`
+        : 'Ver estado y necesidades';
+      if (this._needsAnnouncement !== announcement) {
+        this._needsAnnouncement = announcement;
+        this.needsToggle.setAttribute('aria-label', announcement);
+      }
     }
     this.bars.vicio?.parentElement.parentElement.classList.toggle('critical', stats.inWithdrawal);
     this.bars.vicio?.parentElement.parentElement.classList.toggle('high-withdrawal', !!stats.isHighWithdrawal);

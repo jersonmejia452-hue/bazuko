@@ -19,6 +19,8 @@ export const NPC_LOD = {
   animStop: 40     // más allá: animación congelada
 };
 
+export const NPC_HIT_REACTION_DURATION = .48;
+
 
 const BOGOTA_PHRASES = [
   'Dios lo bendiga, vecino.',
@@ -105,6 +107,13 @@ export class Npc {
     this.umbrella = null;
     this.panicTimer = 0;
     this.panicDir = null;
+    this.state = 'idle';
+    this.action = null;
+    this.actionProgress = 0;
+    this._hitReactionRemaining = 0;
+    this._punchCooldown = 0;
+    this._punchLootDropped = false;
+    this._punchFacing = this.root.rotation.y;
 
     this.ready = (async () => {
       this.look = opts.look ?? await randomStreetLook({ gastada: opts.gastada });
@@ -215,7 +224,8 @@ export class Npc {
 
     // Si fue impactado por popó: huye despavorido a gran velocidad
     if (this.fleeTimer > 0) {
-      this.fleeTimer -= dt;
+      this.fleeTimer = Math.max(0, this.fleeTimer - dt);
+      this.panicTimer = Math.max(0, this.panicTimer - dt);
       const speed = this.walkSpeed * 2.4;
       const step = speed * dt;
       const next = this._nextPosition.copy(this.position).addScaledVector(this.fleeDir, step);
@@ -285,7 +295,22 @@ export class Npc {
    * @param {{ player?: THREE.Vector3, frustum?: THREE.Frustum }} ctx
    */
   update(dt, ctx = {}) {
-    this._walk(dt);
+    this._punchCooldown = Math.max(0, this._punchCooldown - dt);
+    if (this._hitReactionRemaining > 0) {
+      this._hitReactionRemaining = Math.max(0, this._hitReactionRemaining - dt);
+      this.action = this.state = 'recibirGolpe';
+      this.actionProgress = 1 - this._hitReactionRemaining / NPC_HIT_REACTION_DURATION;
+      this.moving = false;
+      let turn = this._punchFacing - this.root.rotation.y;
+      while (turn > Math.PI) turn -= Math.PI * 2;
+      while (turn < -Math.PI) turn += Math.PI * 2;
+      this.root.rotation.y += turn * Math.min(1, dt * 12);
+    } else {
+      this.action = null;
+      this.actionProgress = 0;
+      this._walk(dt);
+      this.state = this.moving ? (this.fleeTimer > 0 ? 'flee' : 'walk') : 'idle';
+    }
     this.root.position.copy(this.position);
 
     if (this.splatTimer > 0) {
@@ -334,13 +359,27 @@ export class Npc {
     const budget = ctx.animationBudget ?? this.animationBudget;
     const interval = dist > NPC_LOD.animEvery ? .1 * budget : budget > 1 ? budget / 60 : 0;
     if (interval && this.animAcc < interval) return;
-    this.character.update(Math.min(this.animAcc, 0.2), { speed: this.moving ? this.walkSpeed / REALISTIC_SCALE : 0 });
+    this.character.update(Math.min(this.animAcc, 0.2), {
+      speed: this.moving ? this.walkSpeed * (this.fleeTimer > 0 ? 2.4 : 1) / REALISTIC_SCALE : 0,
+      running: this.moving && this.fleeTimer > 0,
+      state: this.state, action: this.action, actionProgress: this.actionProgress
+    });
     this.animAcc = 0;
   }
 
 
 
   takePunch(attacker) {
+    if (this._disposed || this._punchCooldown > 0 || !attacker?.position) return false;
+    this._punchCooldown = .65;
+    this._hitReactionRemaining = NPC_HIT_REACTION_DURATION;
+    this.action = this.state = 'recibirGolpe';
+    this.actionProgress = 0;
+    this.moving = false;
+    this.target = null;
+    this.route = [];
+    this.routeIndex = 0;
+    this.wait = 0;
     const PUNCH_REACTIONS = [
       '¡Uy qué le pasa, ñero loco!',
       '¡Ayúdenme, me están atracando!',
@@ -351,18 +390,25 @@ export class Npc {
     const phrase = PUNCH_REACTIONS[Math.floor(Math.random() * PUNCH_REACTIONS.length)];
     this.say(phrase, 4.0);
 
-    if (attacker && attacker.position) {
-      const dx = this.position.x - attacker.position.x;
-      const dz = this.position.z - attacker.position.z;
-      const len = Math.hypot(dx, dz) || 1;
-      this.panicDir = { x: dx / len, z: dz / len };
-      this.panicTimer = 5.0; // 5 segundos de huida veloz
+    this.fleeDir.copy(this.position).sub(attacker.position).setY(0);
+    if (this.fleeDir.lengthSq() < .001) {
+      const heading = attacker.root?.rotation?.y ?? this.root.rotation.y;
+      this.fleeDir.set(Math.sin(heading), 0, Math.cos(heading));
     }
+    this.fleeDir.normalize();
+    this.panicDir = { x: this.fleeDir.x, z: this.fleeDir.z };
+    this._punchFacing = Math.atan2(-this.fleeDir.x, -this.fleeDir.z);
+    this.panicTimer = 5.0;
+    this.fleeTimer = Math.max(this.fleeTimer, this.panicTimer);
 
-    const dropMoney = 200 + Math.floor(Math.random() * 400);
+    // Conserva la recompensa del primer impacto; perseguir al mismo peaton no fabrica dinero.
+    const dropMoney = this._punchLootDropped ? 0 : 200 + Math.floor(Math.random() * 400);
+    this._punchLootDropped = true;
     if (typeof window !== 'undefined' && window.dispatchEvent) {
       window.dispatchEvent(new CustomEvent('toast', {
-        detail: { text: `💥 ¡Puñetazo! El transeúnte soltó ${dropMoney} y salió corriendo.`, kind: 'info' }
+        detail: { text: dropMoney > 0
+          ? `💥 ¡Puñetazo! El transeúnte soltó ${dropMoney} y salió corriendo.`
+          : '¡El transeúnte se protege y trata de huir!', kind: 'info' }
       }));
     }
     return dropMoney;
@@ -392,6 +438,7 @@ export class Npc {
     }
 
     if (!ctx.player) return;
+    if (this.action === 'recibirGolpe' || this.panicTimer > 0) return;
     const now = performance.now();
     const dist = Math.hypot(this.position.x - ctx.player.x, this.position.z - ctx.player.z);
 

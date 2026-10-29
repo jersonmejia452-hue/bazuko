@@ -140,6 +140,9 @@ test('Combate callejero GTA: puñetazo, impacto con transeúnte, reacción y bot
 
   assert.equal(player.action, 'golpear');
   assert.equal(audio.whoosh, true);
+  assert.equal(audio.punchHit, false, 'La anticipación no aplica daño antes de extender el brazo');
+  assert.equal(stats.dinero, 1000);
+  player.update(.13, null, null, null, [npc]);
   assert.equal(audio.punchHit, true, 'El golpe conecta con el peatón');
   assert.ok(npc.panicTimer > 0, 'El transeúnte entra en estado de pánico y huida');
   assert.ok(stats.dinero > 1000, 'El jugador recoge el botín arrojado por el peatón');

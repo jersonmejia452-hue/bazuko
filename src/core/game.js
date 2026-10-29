@@ -48,6 +48,8 @@ import { openRadioModal } from '../ui/RadioModal.js';
 import { HUD } from '../ui/HUD.js';
 import { InventoryUI } from '../ui/InventoryUI.js';
 import { PerformanceHUD } from '../ui/PerformanceHUD.js';
+import { PhotoMode } from '../ui/PhotoMode.js';
+import { WaterEffects } from '../systems/WaterEffects.js';
 import { LocalLights } from './LocalLights.js';
 import { GRAPHICS_PROFILES } from './GraphicsQuality.js';
 import { FrameProfiler } from './FrameProfiler.js';
@@ -94,6 +96,7 @@ export class Game {
     // Mundo + jugador
     this.world = new World(this.sceneMgr.scene);
     this.player = new Player(this.sceneMgr.scene, this.input, this.stats, this.audio);
+    this.waterEffects = new WaterEffects(this.sceneMgr.scene);
 
     // Sistemas de nuevas mecánicas: Popó y Psicosis por abstinencia
     this.poopSystem = new PoopSystem(
@@ -128,8 +131,9 @@ export class Game {
     if (this.hud.audioBtn) this.hud.audioBtn.textContent = this.audio.isMuted() ? '🔇' : '🔊';
     this.creator = createCreator({ audio: null });
     this.inventoryUI = new InventoryUI(this.inventory, this);
-    this.cameraRig.canControl = () => !this.paused && !this.isSleeping &&
-      !this.hud._talentOpen && !this.hud._craftOpen && !this.hud._dealerOpen;
+    this.cameraRig.canControl = () => this.photoMode?.active || (!this.paused && !this.isSleeping &&
+      !this.hud._talentOpen && !this.hud._craftOpen && !this.hud._dealerOpen);
+    this.cameraRig.allowPointerLock = () => !this.photoMode?.active;
     this.hud.setCameraMode(this.cameraRig.mode);
     window.addEventListener('open-pause-menu', () => openPauseMenu(this));
     window.addEventListener('audio-toggle', () => this.audio.toggleMute());
@@ -182,6 +186,8 @@ export class Game {
     this._lastTime = performance.now();
     this._running = false;
     this._loading = true;
+
+    this.photoMode = new PhotoMode(this);
 
     window.__game = this;
   }
@@ -382,7 +388,7 @@ export class Game {
 
   /** El mundo se congela mientras hay un menú o el creador abierto */
   get paused() {
-    return this._loading || this._deathPending || this.menu.isOpen || this.creator.isOpen || !!this.inventoryUI?.isOpen || !!this.hud?._talentOpen || !!this.hud?._craftOpen || !!this.hud?._dealerOpen;
+    return this._loading || this._deathPending || !!this.photoMode?.active || this.menu.isOpen || this.creator.isOpen || !!this.inventoryUI?.isOpen || !!this.hud?._talentOpen || !!this.hud?._craftOpen || !!this.hud?._dealerOpen;
   }
 
   _spawnEntities() {
@@ -747,6 +753,8 @@ export class Game {
     }
     this.player.root.position.copy(this.player.position);
     this.player.clearVehicleImpact?.();
+    this.player.resetGrounding?.();
+    this.waterEffects?.reset();
     if (this.dog?.isFriend) { this.dog.wake(); this.dog.resetNear(this.player.position); }
     this._vehicleImpactCooldown = 1.5;
     this._deathCause = null;
@@ -776,6 +784,16 @@ export class Game {
     this._lastTime = now;
 
     this.radio?.setPaused(!!(this.isSleeping || globalThis.document?.hidden || (this.paused && !this._radioModalOpen)));
+    if (this.photoMode?.active && !globalThis.document?.hidden) {
+      this.audio.setPaused(true);
+      this.audio.updateSteps(false, false);
+      this.performanceHUD.metrics.sample(now, false);
+      this.renderer.resolution.resetWindow();
+      this.photoMode.update(dt);
+      this._renderFrame(now, false);
+      this.input.endFrame();
+      return;
+    }
     if (this.isSleeping || this.paused || globalThis.document?.hidden) {
       this.cameraRig.releaseControls();
       this.audio.setPaused(true);
@@ -839,13 +857,13 @@ export class Game {
     this.cameraRig.prepareMovement();
     const previousX = this.player.position.x, previousZ = this.player.position.z;
     this._syncVehicleColliders?.();
-    this.player.update(dt, this.cameraRig.camera, this.collisions, (x, z) => this.world.active?.getGroundHeight?.(x, z) ?? 0, this.world.active?.npcs ?? []);
-    if (!this.player.isStunned) {
-      const district = this.world.active;
-      const ground = district?.getMovementGroundHeight?.(this.player.position.x, this.player.position.z, this.player.position.y)
-        ?? district?.getGroundHeight?.(this.player.position.x, this.player.position.z);
-      if (Number.isFinite(ground)) this.player.position.y = ground;
-      this.player.root.position.y = this.player.position.y;
+    this._updatePlayerMovement(dt);
+    this.waterEffects?.update(dt, this.player);
+    if (this.player.waterFrame?.entered) this.audio.playWaterSplash?.(this.player.waterFrame.entryIntensity);
+    this._swimSoundTimer = Math.max(0, (this._swimSoundTimer ?? 0) - dt);
+    if (this.player.inWater && this.player.speed > .3 && this._swimSoundTimer === 0) {
+      this.audio.playWaterSplash?.(.16);
+      this._swimSoundTimer = this.input.isRunning ? .65 : .95;
     }
     this.profiler?.mark?.('jugadorCamaraColisiones');
 
@@ -871,12 +889,19 @@ export class Game {
     this.diseases.update(dt);
 
     // 7. Interacción (basura, autos, recicladora, tienda, cambuche, dealer)
-    if (!this.player.isStunned) this.interaction.update(dt, this.input, this.clock);
-    this.steal?.update(dt);
+    if (!this.player.isStunned) {
+      // Los temporizadores y la selección de basura terminan normalmente al entrar;
+      // nadar no permite comerciar ni iniciar acciones terrestres bajo el agua.
+      const controls = this.player.isSwimming
+        ? (this._waterInput ??= { consumePress: () => false, isDown: () => false }) : this.input;
+      this.interaction.update(dt, controls, this.clock);
+      if (this.player.isSwimming) this.interaction.currentTarget = this.interaction.currentTargetType = null;
+    }
+    if (!this.player.isSwimming) this.steal?.update(dt);
     if (this._handleDeath()) return;
 
     // 7b. Mecánica de popó y lanzamiento a peatones
-    if (!this.player.isStunned && this.input.consumePress('KeyX')) {
+    if (!this.player.isStunned && !this.player.isSwimming && this.input.consumePress('KeyX')) {
       const hasPoop = this.inventory.count('popo') > 0;
       if (hasPoop) {
         this.poopSystem.throwPoop(this.player, this.cameraRig);
@@ -884,7 +909,7 @@ export class Game {
         this.poopSystem.poop(this.player);
       }
     }
-    if (!this.player.isStunned && this.input.consumePress('KeyZ')) {
+    if (!this.player.isStunned && !this.player.isSwimming && this.input.consumePress('KeyZ')) {
       this.poopSystem.poop(this.player);
     }
     this.poopSystem.update(dt);
@@ -921,7 +946,7 @@ export class Game {
     this.audio.updateWorld?.(dt, this.player.position, this.cameraRig.camera, this.traffic?.vehicles ?? [], this.world.active?.busServices ?? this.world.active?.busService);
     this.audio.setRaining?.(isRaining);
     // Las pisadas siguen la distancia recorrida en el suelo; en el aire no suenan.
-    const travelled = this.player.isGrounded === false ? 0 : Math.hypot(this.player.position.x - previousX, this.player.position.z - previousZ);
+    const travelled = this.player.isGrounded === false || this.player.inWater ? 0 : Math.hypot(this.player.position.x - previousX, this.player.position.z - previousZ);
     this.audio.updateSteps(moving, this.input.isRunning, groundType, isRaining, travelled, dt);
     this.audio.updateBoost(this.interaction.boostActive);
     this.overlays?.update?.(dt, this.weather, this.clock, this.psychosis);
@@ -941,6 +966,7 @@ export class Game {
       { gps: this.gps, running: this.input.isRunning && (this.input.axis.x !== 0 || this.input.axis.z !== 0) });
 
     // 13. UI
+    this.hud.setMovementState?.(this.player);
     this.hud.update(
       this.stats, this.clock, this.interaction, this.inventory,
       this.diseases, this.talents, this.crafting, dt
@@ -1015,6 +1041,15 @@ export class Game {
     if (notify) window.dispatchEvent(new CustomEvent('toast', { detail: { text: 'Calidad gráfica: ' + quality, type: 'info' } }));
   }
 
+  _updatePlayerMovement(dt) {
+    const district = this.world.active;
+    this.player.update(dt, this.cameraRig.camera, this.collisions, (x, z, context) =>
+      district?.getPlayerGroundSurface?.(x, z, context)
+        ?? district?.getMovementGroundHeight?.(x, z, context.from.y)
+        ?? district?.getGroundHeight?.(x, z) ?? 0,
+    district?.npcs ?? [], (x, z) => district?.getWaterInfo?.(x, z) ?? null);
+  }
+
   _registerRenderGroups() {
     // Las fuentes de la ciudad y del fogón no cambian de posición; sí de intensidad/visibilidad.
     this.localLights.refreshSources({ static: true });
@@ -1037,6 +1072,7 @@ export class Game {
 
   stop() {
     this._running = false;
+    this.waterEffects?.dispose();
     this.gpsBeacon?.dispose();
     this.psychosis?.dispose?.();
     this.poopSystem?.dispose?.();
