@@ -4,11 +4,10 @@ import { XP_PER_LEVEL, XP_CRAFT } from '../utils/constants.js';
 import { NEEDS } from '../systems/StatsSystem.js';
 import { cop } from '../utils/money.js';
 import { ITEMS, itemRarityLabel } from '../data/items.js';
-import { itemArtHTML, itemCategory } from './itemArt.js';
+import { itemArtHTML, itemCategory, itemEffectLine } from './itemArt.js';
 import { NEED_META, needLevel } from './needsMeta.js';
 import { describeWeather } from '../world/Climate.js';
 
-const NEED_LABELS = { hambre: 'hambre', sed: 'sed', energia: 'energía', salud: 'salud', higiene: 'higiene', animo: 'ánimo', vicio: 'vicio' };
 
 export class HUD {
   constructor() {
@@ -543,7 +542,7 @@ else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] So
       const heavy = r.craftable && !ready;
       const selected = r.id === this._craftSelected;
       const state = ready ? 'disponible' : heavy ? 'no cabe en el costal' : 'faltan materiales';
-      const cls = ['craft-recipe', `cat-${itemCategory(r.result)}`, ready && 'craftable', heavy && 'heavy', selected && 'selected']
+      const cls = ['item-slot', 'craft-recipe', `cat-${itemCategory(r.result)}`, ready && 'craftable', heavy && 'heavy', selected && 'selected']
         .filter(Boolean).join(' ');
       const flag = ready ? '✓' : heavy ? 'kg' : '';
       return `
@@ -573,7 +572,7 @@ else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] So
 
   /** Banco de trabajo: resultado grande, materiales y acción principal. */
   _craftBench(r, inventory) {
-    if (!r) return '<section class="craft-bench"><p class="craft-reason">No hay recetas.</p></section>';
+    if (!r) return '<section class="item-bench craft-bench"><p class="craft-reason">No hay recetas.</p></section>';
     const item = ITEMS[r.result];
     const ready = r.craftable && r.fits !== false;
     let missing = 0;
@@ -596,17 +595,17 @@ else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] So
       : missing === 1 ? 'Te falta 1 material' : `Te faltan ${missing} materiales`;
 
     return `
-      <section class="craft-bench cat-${itemCategory(r.result)} ${state}">
-        <div class="craft-pedestal">
+      <section class="item-bench craft-bench cat-${itemCategory(r.result)} ${state}">
+        <div class="item-pedestal craft-pedestal${ready ? ' lit' : ''}">
           ${itemArtHTML(r.result, 'craft-result-art')}
-          <span class="craft-yield">×${r.qty}</span>
+          <span class="item-badge craft-yield">×${r.qty}</span>
         </div>
         <h3 class="craft-result-name">${r.name}</h3>
         <p class="craft-effect">${this._craftEffect(item)}</p>
         <h4 class="craft-mats-title">Materiales</h4>
         <ul class="craft-mats">${mats}</ul>
         <p class="craft-reason" role="status">${reason}</p>
-        <button type="button" class="craft-go" data-act="craft" ${ready ? '' : 'disabled'}>
+        <button type="button" class="item-primary craft-go" data-act="craft" ${ready ? '' : 'disabled'}>
           ${itemArtHTML('yunque', 'craft-go-art')}<span>Fabricar</span>
         </button>
       </section>
@@ -615,16 +614,7 @@ else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] So
 
   /** Una línea con lo que hace el objeto, a partir de sus datos reales. */
   _craftEffect(item) {
-    if (!item) return '';
-    const parts = [];
-    if (item.consumable) parts.push(`+${item.amount} ${NEED_LABELS[item.consumable]}`);
-    for (const k of NEEDS) {
-      if (k !== item.consumable && item[k]) parts.push(`${item[k] > 0 ? '+' : ''}${item[k]} ${NEED_LABELS[k]}`);
-    }
-    if (item.cure) parts.push(`Cura: ${item.cure}`);
-    if (!parts.length) parts.push(item.usable ? 'Se usa desde el inventario' : `Se vende por ${cop(item.value)}`);
-    parts.push(`${item.weight} kg`);
-    return parts.join(' · ');
+    return itemEffectLine(item);
   }
 
   _onCraftClick(e) {
