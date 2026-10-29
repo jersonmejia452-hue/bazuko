@@ -52,6 +52,7 @@ export class ArticulatedBusRig {
     this.reference = Array.from({ length: count }, (_, i) => (ends[i] + ends[i + 1]) / 2);
     this.pivotZ = spec.pivots.map(p => p[2]);
     this.centerZ = (ends[0] + ends[count]) / 2;
+    this.halfLength = Array.from({ length: count }, (_, i) => Math.abs(ends[i] - ends[i + 1]) / 2);
 
     // Cada seccion: un nodo que se coloca sobre el eje del carril y, dentro, la pieza girada 180 grados y anclada en su punto de referencia.
     this.sectionRoots = [];
@@ -171,16 +172,25 @@ export class ArticulatedBusRig {
     const direction = bus.direction;
     const ground = (x, z) => bus.groundHeight?.(x, z) ?? bus.height ?? 0;
     const pathX = z => bus.pathX ? bus.pathX(z, bus.laneX) : bus.position.x;
-    const poses = this.reference.map(reference => {
+    const poses = this.reference.map((reference, i) => {
       const z = bus.position.z + direction * (reference - this.centerZ);
       const x = pathX(z);
       const dx = bus.pathX ? bus.pathX(z + direction * .01, bus.laneX) - bus.pathX(z - direction * .01, bus.laneX) : 0;
       const scale = Math.hypot(dx, .02);
       const heading = { x: dx / scale, z: direction * .02 / scale };
-      const pitch = Math.atan2(
-        ground(x + heading.x * 1.5, z + heading.z * 1.5) - ground(x - heading.x * 1.5, z - heading.z * 1.5), 3);
+      // como el bus entero: la inclinacion sale de la cuerda entre los extremos de la seccion y, para que ninguna parte corte el suelo en
+      // el pie de la rampa o en la cresta, se apoya en cinco puntos y se sube lo necesario
+      const half = this.halfLength[i], length = half * 2;
+      const at = offset => ground(pathX(z + heading.z * offset), z + heading.z * offset);
+      const pitch = Math.atan2(at(half) - at(-half), length);
+      const slope = Math.tan(pitch);
+      let y = ground(x, z);
+      for (const fraction of [-.5, -.25, 0, .25, .5]) {
+        const offset = fraction * length;
+        y = Math.max(y, at(-offset) + offset * slope);
+      }
       const yaw = Math.atan2(-heading.x, -heading.z);
-      return { x, z, y: ground(x, z), yaw, pitch };
+      return { x, z, y, yaw, pitch };
     });
     this.sectionRoots.forEach((section, i) => {
       const pose = poses[i];
@@ -195,7 +205,13 @@ export class ArticulatedBusRig {
         const joint = new THREE.Vector3(0, 0, this.pivotZ[i - 1]);
         const previous = joint.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(this.sectionRoots[i - 1].matrix, this.flips[i - 1].matrix));
         const current = joint.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(section.matrix, this.flips[i].matrix));
-        section.position.add(previous.sub(current));
+        const gap = previous.sub(current);
+        if (gap.y < 0) {
+          // el extremo de esta seccion queda mas alto que el de la anterior: se sube la anterior en vez de hundir esta en el suelo
+          for (let k = 0; k < i; k++) { this.sectionRoots[k].position.y -= gap.y; this.sectionRoots[k].updateMatrix(); }
+          gap.y = 0;
+        }
+        section.position.add(gap);
         section.updateMatrix();
       }
     });
