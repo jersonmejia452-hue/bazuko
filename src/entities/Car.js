@@ -26,12 +26,19 @@ function createSeatedDriver(height) {
 const CRIOLLOS = new Set(['zapatico', 'huevito', 'amigofiel']);
 
 export class Car {
-  constructor(scene, position, rotation = 0, { traffic = false, kind = null } = {}) {
+  constructor(scene, position, rotation = 0, { traffic = false, kind = null, variant = null } = {}) {
     this.scene = scene;
     this.used = false;
     this.cooldown = 0;
     this.traffic = traffic;
     this.pursuit = false;
+    this.driverInside = true;
+    this._visualTime = 0;
+    this._roadPhase = 0;
+    this._wiperPhase = 0;
+    this._steering = 0;
+    this._motionWeight = 0;
+    this._previousSpeed = null;
 
     this.group = new THREE.Group();
     this.group.position.copy(position);
@@ -42,13 +49,18 @@ export class Car {
     const resolvedKind = kind ?? (Math.random() < 0.3 ? 'taxi' : 'carro');
     this.kind = resolvedKind;
     this.modelKind = resolvedKind === 'taxi' ? 'car2' : 'car1';
-    const v = makeVehicle(resolvedKind, Math.floor(Math.random() * 8), { beams: true });
+    const v = makeVehicle(resolvedKind, Number.isFinite(variant) ? Math.trunc(variant) : Math.floor(Math.random() * 8), { beams: true });
     this.vehicle = v;
     if (!traffic && v.beam) v.beam.visible = false;
     this.length = v.length;
     this.width = v.width;
-    v.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    // El constructor visual decide qué proyecta sombra: nunca los haces ni los vidrios.
+    if (!v.visualManaged) v.group.traverse((o) => {
+      if (o.isMesh && !o.material?.transparent) { o.castShadow = true; o.receiveShadow = true; }
+    });
     this.group.add(v.group);
+    this._bodyRestY = v.bodyVisual?.position.y ?? 0;
+    this._wetMaterials = (v.wetMaterials ?? []).map(material => ({ material, roughness: material.roughness }));
 
     // Retrovisores (lo que se roba): a los lados, en la base del parabrisas
     const mirrorMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.4 });
@@ -61,8 +73,10 @@ export class Car {
       glass.rotation.y = -Math.PI / 2;
       glass.position.x = -0.065;
       m.add(shell, glass);
-      m.position.set(0.82, 1.02, side * (v.width / 2 + 0.1));
-      this.group.add(m);
+      const anchor = v.mirrorAnchors?.[this.mirrors.length];
+      if (anchor) m.position.copy(anchor);
+      else m.position.set(0.82, 1.02, side * (v.width / 2 + 0.1));
+      (v.bodyVisual ?? this.group).add(m);
       this.mirrors.push(m);
     }
 
@@ -81,8 +95,11 @@ export class Car {
     this.group.add(this.marker);
 
     // Solo los carros en circulación llevan conductor; los estacionados activan la alarma.
-    this.driver = traffic ? createSeatedDriver(this.modelKind === 'car2' ? 1.45 : 1.62) : null;
-    if (this.driver) this.group.add(this.driver);
+    this.driver = traffic ? createSeatedDriver(v.driverHeight ?? (this.modelKind === 'car2' ? 1.45 : 1.62)) : null;
+    if (this.driver) {
+      if (v.driverAnchor) this.driver.position.copy(v.driverAnchor);
+      (v.bodyVisual ?? this.group).add(this.driver);
+    }
   }
 
   /** Muestra u oculta al conductor sentado (se baja del carro o vuelve a subir). */
@@ -100,11 +117,12 @@ export class Car {
   get position() { return this.group.position; }
 
   preloadModel() {
-    // Patrullas y carros criollos (Zapatico, Huevito, Amigo Fiel) no tienen modelo
-    // importado: conservan su carrocería propia, con luces o vidrios transparentes.
-    if (this.kind === 'police' || CRIOLLOS.has(this.vehicle.model)) return this._modelPromise ??= Promise.resolve();
+    // La carrocería administrada conserva ruedas, cristales y piezas móviles al terminar la carga.
+    if (this.vehicle.visualManaged || this.kind === 'police' || CRIOLLOS.has(this.vehicle.model)) return this._modelPromise ??= Promise.resolve();
     return this._modelPromise ??= createImportedModel(this.modelKind).then(model => {
       if (this._disposed) { disposeImportedInstance(model); return; }
+      for (const mirror of this.mirrors) this.group.add(mirror);
+      if (this.driver) this.group.add(this.driver);
       this.group.remove(this.vehicle.group);
       this.vehicle.dispose();
       this.importedModel = model;
@@ -143,6 +161,7 @@ export class Car {
   }
 
   update(dt) {
+    if (!(dt > 0) || this._disposed) return;
     if (this.cooldown > 0) {
       this.cooldown -= dt;
       if (this.cooldown <= 0) {
@@ -154,23 +173,77 @@ export class Car {
     if (this.marker.visible) {
       this.marker.rotation.z += dt * 0.5;
     }
+    // El tráfico avanza sus visuales en cada subpaso; los estacionados también limpian la lluvia.
+    if (!this.traffic) this.animateDrive(0, false, { dt, speed: 0 });
   }
 
-  animateDrive(distance, braking) {
-    for (const wheel of this.vehicle.wheels) wheel.rotation.z -= distance / 0.33;
+  /** Distancia firmada en metros; dirección en radianes (+ izquierda), todo con tiempo de simulación. */
+  animateDrive(distance, braking = false, { dt = 0, speed, acceleration, steering = 0, turnSignal = null } = {}) {
+    if (this._disposed) return;
+    const step = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+    const travel = Number.isFinite(distance) ? distance : 0;
+    const v = this.vehicle;
+    for (const wheel of v.wheels ?? []) {
+      const radius = wheel.userData.radius ?? v.wheelRadius ?? .33;
+      if (radius > 0) wheel.rotation.z -= travel / radius;
+    }
     if (this.vehicle.tailMat && braking !== this._braking) {
       this.vehicle.tailMat.color.set('#ff1a12').multiplyScalar(braking ? 3.5 : 1.4);
       this._braking = braking;
     }
-    const lights = this.vehicle.policeLights;
+    // Una llamada legacy sin dt sigue girando ruedas/freno, pero no inventa tiempo para los efectos.
+    if (step <= 0) return;
+    this._visualTime += step;
+    this._roadPhase = (this._roadPhase + Math.abs(travel) * 2.8) % (Math.PI * 2);
+    const velocity = Number.isFinite(speed) ? speed : travel / step;
+    const accel = Number.isFinite(acceleration) ? acceleration
+      : this._previousSpeed === null ? 0 : (velocity - this._previousSpeed) / step;
+    this._previousSpeed = velocity;
+    const damp = -Math.expm1(-9 * step);
+    const targetSteering = Number.isFinite(steering) ? THREE.MathUtils.clamp(steering, -.34, .34) : 0;
+    this._steering += (targetSteering - this._steering) * damp;
+    for (const pivot of v.frontWheelPivots ?? []) pivot.rotation.y = this._steering;
+    this._motionWeight += (Math.min(Math.abs(velocity) / 5, 1) - this._motionWeight) * damp;
+    if (v.bodyVisual) {
+      const body = v.bodyVisual;
+      const pitch = THREE.MathUtils.clamp(accel * .007, -.035, .028);
+      const lateral = velocity * velocity * Math.tan(this._steering) / (v.wheelbase ?? this.length * .58);
+      const roll = THREE.MathUtils.clamp(lateral * .008, -.035, .035);
+      body.rotation.z += (pitch - body.rotation.z) * damp;
+      body.rotation.x += (roll - body.rotation.x) * damp;
+      body.position.y = this._bodyRestY + Math.sin(this._roadPhase) * .006 * this._motionWeight;
+    }
+    if (turnSignal !== this._turnSignal) {
+      this._turnSignal = turnSignal;
+      this._signalTime = 0;
+    }
+    this._signalTime = (this._signalTime ?? 0) + step;
+    const blink = (this._signalTime ?? 0) % .8 < .4;
+    const signals = v.signalMaterials;
+    if (signals) {
+      signals.left.emissiveIntensity = blink && (turnSignal === 'left' || turnSignal === 'hazard') ? 2.5 : .12;
+      signals.right.emissiveIntensity = blink && (turnSignal === 'right' || turnSignal === 'hazard') ? 2.5 : .12;
+    }
+    if (this._isRaining || this._wiperPhase > 0) {
+      // Termina el barrido al dejar de llover y aparca en el ángulo de reposo.
+      const phase = this._wiperPhase + step / 1.15;
+      this._wiperPhase = this._isRaining ? phase % 1 : phase >= 1 ? 0 : phase;
+    }
+    for (const wiper of v.wipers ?? []) {
+      wiper.rotation.z = (wiper.userData.restAngle ?? 0) +
+        (wiper.userData.sweepAngle ?? 1.25) * (.5 - .5 * Math.cos(this._wiperPhase * Math.PI * 2));
+    }
+    const lights = v.policeLights;
     if (lights) {
-      const on = Math.floor(performance.now() / (this.pursuit ? 90 : 160)) % 2 === 0;
+      const on = Math.floor(this._visualTime / (this.pursuit ? .09 : .16)) % 2 === 0;
       lights.blue.color.set(on ? '#1a6cff' : '#061028').multiplyScalar(on ? 4 : 0.35);
       lights.red.color.set(on ? '#061028' : '#ff1a2a').multiplyScalar(on ? 0.35 : 4);
     }
   }
 
   setNight(isNight, isRaining = false) {
+    this.setWeather({ isRaining });
+    if (this.vehicle.headlightMaterial) this.vehicle.headlightMaterial.emissiveIntensity = isNight ? 1.35 : isRaining ? .8 : .55;
     const on = this.traffic || isNight || isRaining;
     if (this.vehicle?.beam) {
       this.vehicle.beam.visible = on;
@@ -181,9 +254,19 @@ export class Car {
     }
   }
 
+  setWeather({ isRaining = false } = {}) {
+    if (this._isRaining === !!isRaining) return;
+    this._isRaining = !!isRaining;
+    for (const { material, roughness } of this._wetMaterials) material.roughness = roughness * (this._isRaining ? .75 : 1);
+  }
+
   dispose() {
+    if (this._disposed) return;
     this._disposed = true;
     this.scene.remove(this.group);
+    // Espejos y conductor pertenecen al carro, aunque acompañen la suspensión de bodyVisual.
+    for (const mirror of this.mirrors) this.group.add(mirror);
+    if (this.driver) this.group.add(this.driver);
     this.group.remove(this.vehicle.group);
     this.vehicle.dispose();
     const geometries = new Set(), materials = new Set();

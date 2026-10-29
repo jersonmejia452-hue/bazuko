@@ -2,13 +2,15 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { radialSprite } from './textures.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { VehicleBodyBuilder, addCarBody, makeWipers } from './VehicleBody.js';
 
-// Texturas compartidas en cach├⌐ para evitar regeneraci├│n y consumo de memoria
+// Texturas compartidas en caché para evitar regeneración y consumo de memoria
 const texCache = new Map();
 
 function createSafeCanvasTexture(w, h, drawFn) {
   if (typeof document === 'undefined') {
-    return new THREE.Texture();
+    const texture = new THREE.Texture(); texture.colorSpace = THREE.SRGBColorSpace; return texture;
   }
   const c = document.createElement('canvas');
   c.width = w;
@@ -23,33 +25,33 @@ function createSafeCanvasTexture(w, h, drawFn) {
 }
 
 export const PUBLIC_PLATES = [
-  { code: 'WDD 512', city: 'BOGOT├ü D.C.' },
-  { code: 'VEP 384', city: 'BOGOT├ü D.C.' },
-  { code: 'TLX 709', city: 'BOGOT├ü D.C.' },
+  { code: 'WDD 512', city: 'BOGOTÁ D.C.' },
+  { code: 'VEP 384', city: 'BOGOTÁ D.C.' },
+  { code: 'TLX 709', city: 'BOGOTÁ D.C.' },
   { code: 'SPO 192', city: 'SOACHA' },
-  { code: 'SKM 463', city: 'BOGOT├ü D.C.' },
-  { code: 'WPD 204', city: 'BOGOT├ü D.C.' },
-  { code: 'STP 827', city: 'CH├ìA' },
-  { code: 'TET 351', city: 'BOGOT├ü D.C.' },
-  { code: 'WDA 940', city: 'BOGOT├ü D.C.' },
+  { code: 'SKM 463', city: 'BOGOTÁ D.C.' },
+  { code: 'WPD 204', city: 'BOGOTÁ D.C.' },
+  { code: 'STP 827', city: 'CHÍA' },
+  { code: 'TET 351', city: 'BOGOTÁ D.C.' },
+  { code: 'WDA 940', city: 'BOGOTÁ D.C.' },
   { code: 'UPB 628', city: 'ENVIGADO' },
-  { code: 'VEE 175', city: 'BOGOT├ü D.C.' },
+  { code: 'VEE 175', city: 'BOGOTÁ D.C.' },
 ];
 
 export const PRIVATE_PLATES = [
-  { code: 'BGO 418', city: 'BOGOT├ü D.C.' },
-  { code: 'CKM 890', city: 'BOGOT├ü D.C.' },
-  { code: 'DKS 214', city: 'BOGOT├ü D.C.' },
-  { code: 'FKB 719', city: 'BOGOT├ü D.C.' },
+  { code: 'BGO 418', city: 'BOGOTÁ D.C.' },
+  { code: 'CKM 890', city: 'BOGOTÁ D.C.' },
+  { code: 'DKS 214', city: 'BOGOTÁ D.C.' },
+  { code: 'FKB 719', city: 'BOGOTÁ D.C.' },
   { code: 'RNY 531', city: 'ENVIGADO' },
-  { code: 'KLY 672', city: 'BOGOT├ü D.C.' },
-  { code: 'ZNT 108', city: 'CH├ìA' },
-  { code: 'HWK 345', city: 'BOGOT├ü D.C.' },
-  { code: 'MHO 962', city: 'MEDELL├ìN' },
-  { code: 'NCX 803', city: 'BOGOT├ü D.C.' },
+  { code: 'KLY 672', city: 'BOGOTÁ D.C.' },
+  { code: 'ZNT 108', city: 'CHÍA' },
+  { code: 'HWK 345', city: 'BOGOTÁ D.C.' },
+  { code: 'MHO 962', city: 'MEDELLÍN' },
+  { code: 'NCX 803', city: 'BOGOTÁ D.C.' },
 ];
 
-/** Placas colombianas: amarilla para particular, blanca para p├║blico/taxi */
+/** Placas colombianas: amarilla para particular, blanca para público/taxi */
 function getPlateTexture(code, city, isPublic = false) {
   const key = `plate_${code}_${isPublic}_${city}`;
   if (texCache.has(key)) return texCache.get(key);
@@ -79,7 +81,7 @@ function getPlateTexture(code, city, isPublic = false) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 46px "Arial Black", Impact, sans-serif';
-    const displayCode = code.includes('┬╖') ? code : code.replace(' ', ' ┬╖ ');
+    const displayCode = code.includes('·') ? code : code.replace(' ', ' · ');
     ctx.fillText(displayCode, 128, 54);
 
     ctx.font = '800 17px "Arial Black", sans-serif';
@@ -90,8 +92,8 @@ function getPlateTexture(code, city, isPublic = false) {
   return t;
 }
 
-/** Calcoman├¡a obligatoria de puertas en taxis colombianos */
-function getTaxiDoorTexture(code, city = 'BOGOT├ü D.C.') {
+/** Calcomanía obligatoria de puertas en taxis colombianos */
+function getTaxiDoorTexture(code, city = 'BOGOTÁ D.C.') {
   const key = `taxi_door_${code}`;
   if (texCache.has(key)) return texCache.get(key);
 
@@ -117,7 +119,7 @@ function getTaxiDoorTexture(code, city = 'BOGOT├ü D.C.') {
     ctx.fillRect(20, 154, 216, 4);
 
     ctx.font = '800 20px sans-serif';
-    ctx.fillText('SERVICIO P├ÜBLICO', 128, 190);
+    ctx.fillText('SERVICIO PÚBLICO', 128, 190);
     ctx.font = '700 17px sans-serif';
     ctx.fillText('RADIO TAXI', 128, 222);
   });
@@ -126,7 +128,7 @@ function getTaxiDoorTexture(code, city = 'BOGOT├ü D.C.') {
   return t;
 }
 
-/** Placa pintada en el techo del taxi para control a├⌐reo */
+/** Placa pintada en el techo del taxi para control aéreo */
 function getTaxiRoofPlateTexture(code) {
   const key = `taxi_roof_${code}`;
   if (texCache.has(key)) return texCache.get(key);
@@ -346,13 +348,13 @@ function getRimTexture() {
   return t;
 }
 
-/** Tabla cl├ísica de buseta bogotana en el panor├ímico */
+/** Tabla clásica de buseta bogotana en el panorámico */
 function getBusetaRouteBoardTexture(routeIndex = 0) {
   const routes = [
-    { num: '14-2', dest: 'CRA 10 ┬╖ SOACHA', via: 'SAN MATEO ┬╖ BOSA', bg: '#1b5e20', numBg: '#fbc02d' },
-    { num: '314', dest: 'CL 80 ┬╖ ENGATIV├ü', via: 'V├ìA CORINTO ┬╖ MINUTO', bg: '#0d47a1', numBg: '#d32f2f' },
-    { num: 'E25', dest: 'SUBA ┬╖ CENTRO', via: 'CALLE 100 ┬╖ CRA 7MA', bg: '#b71c1c', numBg: '#ffffff' },
-    { num: '496', dest: 'FONTIB├ôN ┬╖ CL 26', via: 'SALITRE ┬╖ GERMANIA', bg: '#e65100', numBg: '#1b5e20' },
+    { num: '14-2', dest: 'CRA 10 · SOACHA', via: 'SAN MATEO · BOSA', bg: '#1b5e20', numBg: '#fbc02d' },
+    { num: '314', dest: 'CL 80 · ENGATIVÁ', via: 'VÍA CORINTO · MINUTO', bg: '#0d47a1', numBg: '#d32f2f' },
+    { num: 'E25', dest: 'SUBA · CENTRO', via: 'CALLE 100 · CRA 7MA', bg: '#b71c1c', numBg: '#ffffff' },
+    { num: '496', dest: 'FONTIBÓN · CL 26', via: 'SALITRE · GERMANIA', bg: '#e65100', numBg: '#1b5e20' },
   ];
   const r = routes[Math.abs(routeIndex) % routes.length];
   const key = `bus_board_${r.num}`;
@@ -387,7 +389,7 @@ function getBusetaRouteBoardTexture(routeIndex = 0) {
   return t;
 }
 
-/** Livery lateral de buseta tradicional de Bogot├í */
+/** Livery lateral de buseta tradicional de Bogotá */
 function getBusetaLiveryTexture(route) {
   const key = `buseta_livery_${route}`;
   if (texCache.has(key)) return texCache.get(key);
@@ -414,7 +416,7 @@ function getBusetaLiveryTexture(route) {
 
     ctx.fillStyle = '#444444';
     ctx.font = '800 20px sans-serif';
-    ctx.fillText('SITP PROVISIONAL ┬╖ CAPACIDAD 19 PASAJEROS', 40, 95);
+    ctx.fillText('SITP PROVISIONAL · CAPACIDAD 19 PASAJEROS', 40, 95);
 
     ctx.fillStyle = '#ffffff';
     ctx.font = '900 28px sans-serif';
@@ -425,7 +427,7 @@ function getBusetaLiveryTexture(route) {
   return t;
 }
 
-/** Livery blanco y verde institucional de la Polic├¡a Nacional de Colombia */
+/** Livery blanco y verde institucional de la Policía Nacional de Colombia */
 function getPoliceLiveryTexture() {
   const key = 'police_livery';
   if (texCache.has(key)) return texCache.get(key);
@@ -445,9 +447,9 @@ function getPoliceLiveryTexture() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '900 48px Overpass, "Arial Black", sans-serif';
-    ctx.fillText('POLIC├ìA', 512, 104);
+    ctx.fillText('POLICÍA', 512, 104);
     ctx.font = '800 20px Overpass, "Arial Black", sans-serif';
-    ctx.fillText('NACIONAL ┬╖ DIOS Y PATRIA', 512, 138);
+    ctx.fillText('NACIONAL · DIOS Y PATRIA', 512, 138);
 
     ctx.font = '900 28px sans-serif';
     ctx.fillText('CAI', 110, 116);
@@ -459,338 +461,186 @@ function getPoliceLiveryTexture() {
   return t;
 }
 
+/** Las etiquetas de un coche comparten un atlas: placas, parrilla, taxi y librea policial. */
+function getDecalAtlas(plate, kind, badge) {
+  const key = `decals_${kind}_${plate.code}_${plate.city}_${badge}`;
+  if (texCache.has(key)) return texCache.get(key);
+  const labels = {
+    plate: { rect:[0,0,256,128], texture:getPlateTexture(plate.code,plate.city,kind!=='carro') },
+    grille: { rect:[0,128,256,64], texture:getGrilleTexture(badge) }
+  };
+  if (kind==='taxi') {
+    labels.door={rect:[256,0,256,256],texture:getTaxiDoorTexture(plate.code,plate.city)};
+    labels.roof={rect:[0,192,256,128],texture:getTaxiRoofPlateTexture(plate.code)};
+    labels.sign={rect:[0,320,256,128],texture:getTaxiSignTexture()};
+  }
+  if (kind==='police') labels.police={rect:[0,256,512,128],texture:getPoliceLiveryTexture()};
+  const atlas = createSafeCanvasTexture(512,512,ctx=>{
+    ctx.fillStyle='#171c1d'; ctx.fillRect(0,0,512,512);
+    for (const label of Object.values(labels)) ctx.drawImage(label.texture.image,...label.rect);
+  });
+  atlas.name=`Identificación ${plate.code}`; atlas.anisotropy=4;
+  atlas.userData.labelRects=Object.fromEntries(Object.entries(labels).map(([name,{rect}])=>[name,rect]));
+  texCache.set(key,atlas); return atlas;
+}
+
+function wheelGeometry() {
+  const parts=[];
+  const add=(geometry,color)=>{
+    const g=geometry.index?geometry.toNonIndexed():geometry;
+    if (g!==geometry) geometry.dispose();
+    const c=new THREE.Color(color), colors=new Float32Array(g.attributes.position.count*3);
+    for(let i=0;i<colors.length;i+=3) colors.set([c.r,c.g,c.b],i);
+    g.setAttribute('color',new THREE.BufferAttribute(colors,3)); parts.push(g);
+  };
+  const points=[[.18,-.12],[.275,-.12],[.32,-.09],[.33,-.045],[.33,.045],[.32,.09],[.275,.12],[.18,.12]];
+  const tire=new THREE.LatheGeometry(points.map(([x,y])=>new THREE.Vector2(x,y)),16);
+  tire.rotateX(Math.PI/2); add(tire,'#171b1c');
+  for(const side of [-1,1]) {
+    const ring=new THREE.RingGeometry(.19,.255,16); if(side<0) ring.rotateY(Math.PI); ring.translate(0,0,side*.121); add(ring,'#a9adac');
+    for(let i=0;i<5;i++) {
+      const angle=i*Math.PI*2/5, spoke=new THREE.BoxGeometry(.048,.19,.018);
+      spoke.translate(0,.135,side*.125); spoke.rotateZ(angle); add(spoke,'#929b9d');
+    }
+    const hub=new THREE.CircleGeometry(.073,12); if(side<0) hub.rotateY(Math.PI);
+    hub.translate(0,0,side*.138); add(hub,'#afb5b4');
+  }
+  const geometry=mergeGeometries(parts,false); for(const part of parts) part.dispose();
+  geometry.computeBoundingBox(); geometry.computeBoundingSphere(); return geometry;
+}
+
 const cache = {};
 function shared() {
   if (cache.ready) return cache;
-  cache.glass = new THREE.MeshPhysicalMaterial({ color: '#0a0d12', metalness: 0.2, roughness: 0.08, clearcoat: 1, clearcoatRoughness: 0.05 });
-  cache.tire = new THREE.MeshStandardMaterial({ color: '#111111', roughness: 0.9 });
-  cache.rim = new THREE.MeshStandardMaterial({ map: getRimTexture(), metalness: 0.85, roughness: 0.35 });
-  cache.dark = new THREE.MeshStandardMaterial({ color: '#16181b', roughness: 0.7 });
-  cache.chrome = new THREE.MeshStandardMaterial({ color: '#d5d7db', metalness: 0.9, roughness: 0.15 });
-  cache.head = new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff4dc').multiplyScalar(3) });
-  cache.tail = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff1a12').multiplyScalar(1.4) });
-  cache.wheelGeo = new THREE.CylinderGeometry(0.33, 0.33, 0.24, 18);
-  cache.wheelGeo.rotateX(Math.PI / 2);
-  cache.rimGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.25, 12);
-  cache.rimGeo.rotateX(Math.PI / 2);
-  cache.plateGeo = new THREE.PlaneGeometry(0.44, 0.22);
-  cache.beamTex = radialSprite(128, 'rgba(255,240,215,0.9)', 'rgba(255,240,215,0)');
-  cache.flareTex = radialSprite(64, 'rgba(255,255,255,1)', 'rgba(255,255,255,0)');
-  cache.ready = true;
-  return cache;
+  cache.dark=new THREE.MeshStandardMaterial({color:'#242b2c',roughness:.84}); cache.dark.name='Cauchos e interior';
+  cache.chrome=new THREE.MeshStandardMaterial({color:'#b6bfbe',metalness:.78,roughness:.29}); cache.chrome.name='Metal satinado';
+  cache.wheel=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.72,metalness:.12,side:THREE.DoubleSide});
+  cache.wheelGeo=wheelGeometry();
+  cache.beamTex=radialSprite(128,'rgba(255,240,215,0.9)','rgba(255,240,215,0)');
+  cache.flareTex=radialSprite(64,'rgba(255,255,255,1)','rgba(255,255,255,0)');
+  cache.ready=true; return cache;
 }
 
-export const PAINTS = ['#e8e8e6', '#b9bec4', '#1d1f22', '#7a1414', '#1f3d6b', '#4d5a3a', '#8c8f93', '#d9d4c7'];
+export const PAINTS=['#e8e8e6','#b9bec4','#1d1f22','#7a1414','#1f3d6b','#4d5a3a','#8c8f93','#d9d4c7'];
+const MODEL_PAINTS={
+  zapatico:['#a72d27','#dadad2','#8c9c9e','#303739','#37688b','#b76539'],
+  huevito:['#55714d','#426987','#aa3934','#cfb253','#9caeb0','#e3e1d6'],
+  amigofiel:['#d5cdb3','#507889','#904b39','#52644b','#bd9a58','#e0ddd0'],
+  sedan:['#798d93','#dddeda','#354b62','#743b38','#343b3e','#9b8771']
+};
 
-const HUEVITO_PAINTS = ['#2e7d32', '#1565c0', '#c62828', '#fbc02d', '#b0bec5', '#f5f5f5'];
-const AMIGOFIEL_PAINTS = ['#ede8d5', '#35688a', '#8b261e', '#3e563d', '#c29440', '#ffffff'];
-const ZAPATICO_PAINTS = ['#d32f2f', '#f5f5f5', '#90a4ae', '#1a1c1e', '#1976d2', '#e65100'];
-const SEDAN_PAINTS = ['#78909c', '#f5f5f5', '#1a365d', '#5d1010', '#181a1c', '#a1887f'];
-
-function paint(color) {
-  return new THREE.MeshPhysicalMaterial({ color, metalness: 0.45, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.08 });
+function label(batch,material,name,size,position,rotation) {
+  const [x,y,w,h]=material.map.userData.labelRects[name], g=new THREE.PlaneGeometry(...size), uv=g.attributes.uv;
+  for(let i=0;i<uv.count;i++) uv.setXY(i,(x+2+uv.getX(i)*(w-4))/512,1-(y+h-2-uv.getY(i)*(h-4))/512);
+  batch.add(g,material,position,rotation);
 }
 
-/**
- * Crea un veh├¡culo colombiano aut├⌐ntico. El frente apunta a +X local.
- * kind: 'taxi' | 'carro' | 'buseta' | 'police'
- */
-export function makeVehicle(kind = 'carro', seedColor = 0, { beams = true } = {}) {
-  const s = shared();
-  const g = new THREE.Group();
-  const isBus = kind === 'buseta';
-  const isTaxi = kind === 'taxi';
-  const isPolice = kind === 'police';
-
-  // Selecci├│n de modelo reconocible de Colombia
-  let model = 'zapatico';
-  if (isBus) {
-    model = 'buseta';
-  } else if (isPolice) {
-    model = 'sedan';
-  } else if (isTaxi) {
-    model = (Math.abs(seedColor) % 3 === 0) ? 'sedan' : 'zapatico';
-  } else {
-    const models = ['zapatico', 'huevito', 'amigofiel', 'sedan'];
-    model = models[Math.abs(seedColor) % models.length];
+/** Frente +X. El volumen físico se conserva; todas las piezas visuales comparten ese eje. */
+export function makeVehicle(kind='carro',seedColor=0,{beams=true}={}) {
+  const seed=Number.isFinite(seedColor)?Math.abs(Math.trunc(seedColor)):0, s=shared(), g=new THREE.Group();
+  const isBus=kind==='buseta', isTaxi=kind==='taxi', isPolice=kind==='police';
+  const model=isBus?'buseta':isPolice?'sedan':isTaxi?(seed%3===0?'sedan':'zapatico'):['zapatico','huevito','amigofiel','sedan'][seed%4];
+  const L=isBus?7.6:4.3,W=isBus?2.3:1.76, color=isTaxi?'#e8b929':isPolice?'#e4e8e3':isBus?'#f0ede6':MODEL_PAINTS[model][seed%6];
+  const bodyMat=new THREE.MeshPhysicalMaterial({color,metalness:.18,roughness:.36,clearcoat:.65,clearcoatRoughness:.2});
+  bodyMat.name='Esmalte';
+  if(!isBus) { bodyMat.vertexColors=true; bodyMat.userData.roadDust=true; }
+  const glass=new THREE.MeshPhysicalMaterial({color:'#6e8789',metalness:.12,roughness:.18,clearcoat:.6,
+    transparent:true,opacity:.72,depthWrite:false}); glass.name='Vidrio ahumado';
+  const batch=new VehicleBodyBuilder();
+  let bodyInfo;
+  if(isBus) {
+    bodyMat.color.set('#ffffff'); bodyMat.map=getBusetaLiveryTexture('CENTRO · TERMINAL · SOACHA');
+    batch.add(new RoundedBoxGeometry(L,2.6,W,2,.12),bodyMat,[0,1.7,0]);
+    batch.box([.04,1.0,W-.25],[L/2+.002,2,0],glass);
+    for(const side of [-1,1]) for(let i=0;i<6;i++) {
+      batch.box([.82,.75,.025],[-2.6+i*.99,2.15,side*(W/2+.008)],glass);
+      batch.box([.12,.71,.028],[-2.95+i*.99,2.14,side*(W/2+.023)],s.dark);
+    }
+    const board=new THREE.MeshStandardMaterial({map:getBusetaRouteBoardTexture(seed),roughness:.8});
+    batch.add(new THREE.PlaneGeometry(1.5,.36),board,[L/2+.025,2.62,0],[0,Math.PI/2,0]);
+    bodyInfo={profile:{roofY:3},windshield:{bottom:[L/2+.03,1.52,0],top:[L/2+.03,2.50,0]},mirrorAnchors:[new THREE.Vector3(3.3,1.9,-1.25),new THREE.Vector3(3.3,1.9,1.25)]};
+  } else bodyInfo=addCarBody(batch,model,{paint:bodyMat,glass,dark:s.dark,chrome:s.chrome});
+  const p=bodyInfo.profile;
+  const plateData=isPolice?{code:'WPD 204',city:'BOGOTÁ D.C.'}:(isTaxi||isBus?PUBLIC_PLATES:PRIVATE_PLATES)[seed%(isTaxi||isBus?PUBLIC_PLATES:PRIVATE_PLATES).length];
+  const decalMat=new THREE.MeshStandardMaterial({map:getDecalAtlas(plateData,kind,model==='amigofiel'?'rombo':seed%2?'ovalo':'alas'),roughness:.72});
+  decalMat.name='Placas y distintivos';
+  for(const sign of [-1,1]) label(batch,decalMat,'plate',[.44,.22],[sign*(L/2-.002),isBus?.58:.43,0],[0,sign*Math.PI/2,0]);
+  if(!isBus) label(batch,decalMat,'grille',[model==='amigofiel'?.94:.83,.16],[2.119,.70,0],[0,Math.PI/2,0]);
+  if(isTaxi) {
+    for(const side of [-1,1]) label(batch,decalMat,'door',[.32,.32],[.12,.78,side*.874],[0,side<0?Math.PI:0,0]);
+    label(batch,decalMat,'roof',[.62,.28],[-.62,p.roofY+.025,0],[-Math.PI/2,0,Math.PI/2]);
+    batch.box([.30,.14,.60],[-.07,p.roofY+.08,0],s.dark);
+    for(const sign of [-1,1]) label(batch,decalMat,'sign',[.55,.13],[-.07+sign*.152,p.roofY+.08,0],[0,sign*Math.PI/2,0]);
   }
-
-  // Dimensiones según el arquetipo (L=4.3, W=1.76 para carros garantiza compatibilidad total con tráfico)
-  let L = 4.3, W = 1.76, H = 0.74, cabinY = 1.25, cabinL = 2.25, cabinW = 1.58, roofL = 1.75;
-  if (model === 'buseta') {
-    L = 7.6; W = 2.3; H = 2.6;
-  } else if (model === 'huevito') {
-    H = 0.72; cabinY = 1.22; cabinL = 2.35; cabinW = 1.58; roofL = 1.82;
-  } else if (model === 'amigofiel') {
-    H = 0.75; cabinY = 1.28; cabinL = 2.38; cabinW = 1.52; roofL = 1.95;
-  } else if (model === 'sedan') {
-    H = 0.76; cabinY = 1.26; cabinL = 2.35; cabinW = 1.62; roofL = 1.78;
+  if(isPolice) {
+    for(const side of [-1,1]) label(batch,decalMat,'police',[1.90,.46],[-.04,.77,side*.875],[0,side<0?Math.PI:0,0]);
+    const green=new THREE.MeshStandardMaterial({color:'#235b3b',roughness:.43});
+    batch.box([.78,.018,.54],[1.46,.942,0],green);
   }
-
-  // Color de carrocer├¡a aut├⌐ntico
-  let color = '#f2ba06'; // Amarillo taxi Bogot├í
-  if (isPolice) {
-    color = '#f4f6f8';
-  } else if (!isTaxi && !isBus) {
-    if (model === 'huevito') color = HUEVITO_PAINTS[Math.abs(seedColor) % HUEVITO_PAINTS.length];
-    else if (model === 'amigofiel') color = AMIGOFIEL_PAINTS[Math.abs(seedColor) % AMIGOFIEL_PAINTS.length];
-    else if (model === 'sedan') color = SEDAN_PAINTS[Math.abs(seedColor) % SEDAN_PAINTS.length];
-    else color = ZAPATICO_PAINTS[Math.abs(seedColor) % ZAPATICO_PAINTS.length];
+  // Intermitentes y frenos son materiales exclusivos: un coche nunca enciende los del vecino.
+  const signalMaterials={};
+  for(const [name,side] of [['left',-1],['right',1]]) {
+    const mat=new THREE.MeshStandardMaterial({color:'#c96c23',emissive:'#ff8a24',emissiveIntensity:.12,roughness:.3});
+    mat.name=`Direccional ${name}`; signalMaterials[name]=mat;
+    for(const end of [-1,1]) batch.box([.03,.09,.12],[end*(L/2-.026),isBus?.92:.66,side*(W/2-.16)],mat);
+    if(!isBus) batch.box([.09,.04,.015],[.93,.82,side*.875],mat);
   }
-
-  let bodyMat = paint(color);
-  if (isBus) {
-    bodyMat = new THREE.MeshPhysicalMaterial({
-      map: getBusetaLiveryTexture('CENTRO ┬╖ TERMINAL ┬╖ SOACHA'),
-      metalness: 0.2,
-      roughness: 0.4,
-      clearcoat: 0.8
+  const headTexture=getHeadlightTexture(model==='amigofiel');
+  const headMat=new THREE.MeshStandardMaterial({map:headTexture,emissiveMap:headTexture,emissive:'#fff1d3',emissiveIntensity:.55,roughness:.22}); headMat.name='Faros';
+  const tailMat=new THREE.MeshBasicMaterial({map:getTaillightTexture(),color:new THREE.Color('#ff1a12').multiplyScalar(1.4)}); tailMat.name='Stops';
+  const hy=isBus?.95:model==='amigofiel'?.80:.74;
+  for(const side of [-1,1]) {
+    batch.add(new THREE.PlaneGeometry(model==='amigofiel'?.27:.34,model==='amigofiel'?.27:.16),headMat,[L/2-.028,hy,side*(W/2-.34)],[0,Math.PI/2,0]);
+    batch.add(new THREE.PlaneGeometry(.28,.16),tailMat,[-L/2+.028,model==='zapatico'?.78:hy,side*(W/2-.28)],[0,-Math.PI/2,0]);
+  }
+  let policeLights=null;
+  if(isPolice) {
+    batch.box([.30,.07,1.18],[-.24,p.roofY+.06,0],s.dark);
+    const blue=new THREE.MeshBasicMaterial({color:new THREE.Color('#1a6cff').multiplyScalar(3)});
+    const red=new THREE.MeshBasicMaterial({color:new THREE.Color('#ff1a2a').multiplyScalar(3)});
+    batch.box([.26,.09,.46],[-.24,p.roofY+.13,.30],blue);
+    batch.box([.26,.09,.46],[-.24,p.roofY+.13,-.30],red); policeLights={blue,red};
+  }
+  const bodyVisual=batch.build(bodyMat); g.add(bodyVisual);
+  // Vidrio y pequeñas lámparas no proyectan bloques negros sobre el habitáculo.
+  bodyVisual.traverse(mesh=>{if(mesh.isMesh&&(mesh.material===glass||mesh.material===decalMat||mesh.material===headMat||mesh.material===tailMat)) mesh.castShadow=false;});
+  const wipers=makeWipers(bodyInfo.windshield,s.dark); for(const wiper of wipers) bodyVisual.add(wiper.parent);
+  const wx=isBus?L/2-1.3:1.33,wz=W/2-.13,wheels=[],frontWheelPivots=[];
+  for(const [x,z] of [[wx,-wz],[wx,wz],[-wx,-wz],[-wx,wz]]) {
+    const pivot=new THREE.Group(); pivot.position.set(x,.33,z); pivot.name=x>0?'Eje delantero dirigible':'Eje trasero';
+    const wheel=new THREE.Mesh(s.wheelGeo,s.wheel); wheel.name='Rueda'; wheel.castShadow=wheel.receiveShadow=true;
+    wheel.userData.radius=.33; wheel.userData.front=x>0; pivot.add(wheel); g.add(pivot); wheels.push(wheel);
+    if(x>0) frontWheelPivots.push(pivot);
+  }
+  const flares=[];
+  const flareMaterial=new THREE.SpriteMaterial({map:s.flareTex,color:'#fff1d6',blending:THREE.AdditiveBlending,depthWrite:false,transparent:true,opacity:.65});
+  for(const side of [-1,1]) {
+    const flare=new THREE.Sprite(flareMaterial); flare.name='Resplandor de faro'; flare.userData.vehicleGlow=true;
+    flare.scale.set(.44,.28,1); flare.position.set(L/2+.025,hy,side*(W/2-.34)); bodyVisual.add(flare); flares.push(flare);
+  }
+  let beam=null;
+  if(beams) {
+    beam=new THREE.Mesh(new THREE.PlaneGeometry(8,3.6),new THREE.MeshBasicMaterial({map:s.beamTex,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,opacity:.32,color:'#ffe8c8'}));
+    beam.name='Haz sobre el pavimento'; beam.userData.vehicleGlow=true; beam.rotation.x=-Math.PI/2;
+    beam.position.set(L/2+4.0,.03,0); beam.renderOrder=2; g.add(beam);
+  }
+  let disposed=false;
+  const dispose=()=>{
+    if(disposed)return; disposed=true;
+    const sharedResources=new Set([...Object.values(s),...texCache.values()]);
+    const geometries=new Set(),materials=new Set(),textures=new Set();
+    g.traverse(o=>{
+      if(o.geometry&&!sharedResources.has(o.geometry))geometries.add(o.geometry);
+      for(const mat of Array.isArray(o.material)?o.material:o.material?[o.material]:[]) if(!sharedResources.has(mat))materials.add(mat);
     });
-  } else if (isPolice) {
-    bodyMat = new THREE.MeshPhysicalMaterial({
-      map: getPoliceLiveryTexture(),
-      metalness: 0.25,
-      roughness: 0.38,
-      clearcoat: 0.9,
-      clearcoatRoughness: 0.1
-    });
-  }
-
-  // Carrocer├¡a principal (Debe ser g.children[0] para contrato de pruebas y eventos de dispose)
-  const bodyRadius = isBus ? 0.18 : (model === 'amigofiel' ? 0.14 : 0.22);
-  const bodyY = isBus ? 0.4 + H / 2 : (model === 'amigofiel' ? 0.63 : 0.59);
-  const body = new THREE.Mesh(new RoundedBoxGeometry(L, H, W, 3, bodyRadius), bodyMat);
-  body.position.y = bodyY;
-  body.castShadow = true;
-  g.add(body);
-
-  if (isBus) {
-    const win = new THREE.Mesh(new THREE.BoxGeometry(L - 1.2, 0.75, W + 0.02), new THREE.MeshStandardMaterial({ color: '#1a1206', emissive: '#ffbf6e', emissiveIntensity: 0.9, roughness: 0.2 }));
-    win.position.set(-0.2, 2.15, 0);
-    g.add(win);
-    const wind = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.0, W - 0.25), s.glass);
-    wind.position.set(L / 2 + 0.005, 2.0, 0);
-    g.add(wind);
-
-    // Tabla de ruta en el panor├ímico superior
-    const routeBoard = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.36), new THREE.MeshBasicMaterial({ map: getBusetaRouteBoardTexture(seedColor) }));
-    routeBoard.position.set(L / 2 + 0.03, 2.62, 0);
-    routeBoard.rotation.y = Math.PI / 2;
-    g.add(routeBoard);
-  } else {
-    // Cabina acristalada
-    const cabin = new THREE.Mesh(new RoundedBoxGeometry(cabinL, 0.64, cabinW, 3, 0.18), s.glass);
-    cabin.position.set(-0.22, cabinY, 0);
-    if (model === 'huevito') cabin.rotation.z = -0.05; // Inclinaci├│n aerodin├ímica de cu├▒a
-    g.add(cabin);
-
-    // Techo
-    const roofY = cabinY + 0.34;
-    const roofMat = isPolice ? paint('#f4f6f8') : bodyMat;
-    const roof = new THREE.Mesh(new RoundedBoxGeometry(roofL, 0.08, cabinW - 0.04, 2, 0.04), roofMat);
-    roof.position.set(-0.28, roofY, 0);
-    g.add(roof);
-
-    // Pilar B (marco de ventana divisorio)
-    const bPillar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.62, cabinW + 0.01), s.dark);
-    bPillar.position.set(-0.22, cabinY, 0);
-    g.add(bPillar);
-
-    // Ba├║l trasero para el modelo Sed├ín
-    if (model === 'sedan') {
-      const trunk = new THREE.Mesh(new RoundedBoxGeometry(0.75, 0.14, cabinW, 2, 0.04), bodyMat);
-      trunk.position.set(-1.64, 0.97, 0);
-      g.add(trunk);
+    for(const mat of materials) {
+      for(const value of Object.values(mat)) if(value?.isTexture&&!sharedResources.has(value))textures.add(value);
+      mat.dispose();
     }
-
-    // Boceles laterales negros protectores
-    const bocelGeo = new THREE.BoxGeometry(2.3, 0.04, 0.02);
-    for (const bz of [W / 2 + 0.008, -W / 2 - 0.008]) {
-      const bocel = new THREE.Mesh(bocelGeo, s.dark);
-      bocel.position.set(-0.15, 0.58, bz);
-      g.add(bocel);
-    }
-
-    // Paragolpes cromados con topes de caucho para el clásico familiar
-    if (model === 'amigofiel') {
-      const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.12, W + 0.04), s.chrome);
-      frontBumper.position.set(L / 2 + 0.06, 0.44, 0);
-      g.add(frontBumper);
-      const rearBumper = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.12, W + 0.04), s.chrome);
-      rearBumper.position.set(-L / 2 - 0.06, 0.48, 0);
-      g.add(rearBumper);
-      for (const bz of [-0.45, 0.45]) {
-        const topeF = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.20, 0.08), s.dark);
-        topeF.position.set(L / 2 + 0.06, 0.44, bz);
-        g.add(topeF);
-        const topeR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.20, 0.08), s.dark);
-        topeR.position.set(-L / 2 - 0.06, 0.48, bz);
-        g.add(topeR);
-      }
-    }
-
-    // Tubo de escape trasero
-    const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.22, 8), s.dark);
-    exhaust.rotation.z = Math.PI / 2;
-    exhaust.position.set(-L / 2 + 0.06, 0.26, -W / 2 + 0.32);
-    g.add(exhaust);
-  }
-
-  // Placas colombianas (delantera y trasera)
-  const isPublic = isTaxi || isBus || isPolice;
-  let plateData;
-  if (isPolice) {
-    plateData = { code: 'WPD 204', city: 'BOGOT├ü D.C.' };
-  } else {
-    const plateList = isPublic ? PUBLIC_PLATES : PRIVATE_PLATES;
-    plateData = plateList[Math.abs(seedColor) % plateList.length];
-  }
-  const plateTex = getPlateTexture(plateData.code, plateData.city, isPublic);
-  const plateMat = new THREE.MeshBasicMaterial({ map: plateTex, side: THREE.DoubleSide });
-
-  const frontPlate = new THREE.Mesh(s.plateGeo, plateMat);
-  frontPlate.rotation.y = Math.PI / 2;
-  frontPlate.position.set(L / 2 + 0.015, isBus ? 0.55 : 0.44, 0);
-  g.add(frontPlate);
-
-  const rearPlate = new THREE.Mesh(s.plateGeo, plateMat);
-  rearPlate.rotation.y = -Math.PI / 2;
-  rearPlate.position.set(-L / 2 - 0.015, isBus ? 0.65 : 0.50, 0);
-  g.add(rearPlate);
-
-  // Detalles exclusivos de taxi
-  if (isTaxi) {
-    const doorTex = getTaxiDoorTexture(plateData.code, plateData.city);
-    const doorMat = new THREE.MeshBasicMaterial({ map: doorTex, transparent: true });
-    const leftDoorDecal = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.36), doorMat);
-    leftDoorDecal.position.set(0.15, 0.80, W / 2 + 0.012);
-    g.add(leftDoorDecal);
-
-    const rightDoorDecal = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.36), doorMat);
-    rightDoorDecal.rotation.y = Math.PI;
-    rightDoorDecal.position.set(0.15, 0.80, -W / 2 - 0.012);
-    g.add(rightDoorDecal);
-
-    const roofTex = getTaxiRoofPlateTexture(plateData.code);
-    const roofPlateMat = new THREE.MeshBasicMaterial({ map: roofTex, transparent: true });
-    const roofDecal = new THREE.Mesh(new THREE.PlaneGeometry(0.68, 0.30), roofPlateMat);
-    roofDecal.rotation.x = -Math.PI / 2;
-    roofDecal.position.set(-0.35, cabinY + 0.38 + 0.01, 0);
-    g.add(roofDecal);
-
-    const signMat = new THREE.MeshBasicMaterial({ map: getTaxiSignTexture() });
-    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.17, 0.26), signMat);
-    sign.position.set(-0.15, cabinY + 0.38 + 0.13, 0);
-    g.add(sign);
-  }
-
-  // Detalles exclusivos de patrulla de polic├¡a
-  let policeLights = null;
-  if (isPolice) {
-    const roofY = cabinY + 0.34;
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.10, W - 0.35), new THREE.MeshStandardMaterial({ color: '#101214', roughness: 0.4, metalness: 0.65 }));
-    bar.position.set(-0.2, roofY + 0.08, 0);
-    g.add(bar);
-
-    const blueMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#1a6cff').multiplyScalar(3) });
-    const redMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff1a2a').multiplyScalar(3) });
-    const blue = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.10, 0.28), blueMat);
-    const red = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.10, 0.28), redMat);
-    blue.position.set(-0.2, roofY + 0.14, 0.26);
-    red.position.set(-0.2, roofY + 0.14, -0.26);
-    g.add(blue, red);
-    policeLights = { blue: blueMat, red: redMat };
-
-    const green = paint('#0b5c2e');
-    const hoodMark = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.03, 0.55), green);
-    hoodMark.position.set(1.35, 0.96, 0);
-    g.add(hoodMark);
-  }
-
-  // Parrilla frontal
-  if (!isBus) {
-    let badge = 'rombo';
-    if (isTaxi || model === 'zapatico') badge = (Math.abs(seedColor) % 2 === 0) ? 'alas' : 'ovalo';
-    else if (model === 'sedan') badge = (Math.abs(seedColor) % 2 === 0) ? 'rombo' : 'alas';
-    const grilleMat = new THREE.MeshBasicMaterial({ map: getGrilleTexture(badge), side: THREE.DoubleSide });
-    const grille = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.20), grilleMat);
-    grille.rotation.y = Math.PI / 2;
-    grille.position.set(L / 2 + 0.012, 0.68, 0);
-    g.add(grille);
-  }
-
-  // Ruedas
-  const wx = isBus ? L / 2 - 1.3 : (L / 2 - 0.82);
-  const wz = W / 2 - 0.12;
-  const wheels = [];
-  for (const [x, z] of [[wx, wz], [wx, -wz], [-wx, wz], [-wx, -wz]]) {
-    const w = new THREE.Mesh(s.wheelGeo, s.tire);
-    w.position.set(x, 0.33, z);
-    const rim = new THREE.Mesh(s.rimGeo, s.rim);
-    w.add(rim);
-    g.add(w);
-    wheels.push(w);
-  }
-
-  // Farolas delanteras
-  const hy = isBus ? 0.95 : 0.66;
-  const isRoundLight = model === 'amigofiel';
-  const headMat = new THREE.MeshBasicMaterial({ map: getHeadlightTexture(isRoundLight) });
-  const flares = [];
-  for (const z of [W / 2 - 0.32, -(W / 2 - 0.32)]) {
-    const h = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.16), headMat);
-    h.rotation.y = Math.PI / 2;
-    h.position.set(L / 2 + 0.012, hy, z);
-    g.add(h);
-
-    const flare = new THREE.Sprite(new THREE.SpriteMaterial({ map: s.flareTex, color: '#fff1d6', blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.85 }));
-    flare.scale.set(0.9, 0.6, 1);
-    flare.position.set(L / 2 + 0.12, hy, z);
-    g.add(flare);
-    flares.push(flare);
-  }
-
-  // Luces traseras
-  const tailMat = new THREE.MeshBasicMaterial({ map: getTaillightTexture(), color: new THREE.Color('#ff1a12').multiplyScalar(1.4) });
-  const isVerticalTail = model === 'zapatico';
-  const tailW = isVerticalTail ? 0.14 : 0.32;
-  const tailH = isVerticalTail ? 0.42 : 0.16;
-  const tailY = isVerticalTail ? 1.00 : hy;
-  for (const z of [W / 2 - 0.25, -(W / 2 - 0.25)]) {
-    const t = new THREE.Mesh(new THREE.PlaneGeometry(tailW, tailH), tailMat);
-    t.rotation.y = -Math.PI / 2;
-    t.position.set(-L / 2 - 0.012, tailY, z);
-    g.add(t);
-  }
-
-  // Haz de luz en el suelo
-  let beam = null;
-  if (beams) {
-    beam = new THREE.Mesh(
-      new THREE.PlaneGeometry(8, 3.6),
-      new THREE.MeshBasicMaterial({ map: s.beamTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.32, color: '#ffe8c8' }),
-    );
-    beam.rotation.x = -Math.PI / 2;
-    beam.position.set(L / 2 + 5.2, 0.03, 0);
-    beam.renderOrder = 2;
-    g.add(beam);
-  }
-
-  const dispose = () => {
-    const sharedResources = new Set(Object.values(s));
-    for (const t of texCache.values()) sharedResources.add(t);
-    const geometries = new Set(), materials = new Set(), textures = new Set();
-    g.traverse((o) => {
-      if (o.geometry && !sharedResources.has(o.geometry)) geometries.add(o.geometry);
-      if (o.material && !sharedResources.has(o.material)) materials.add(o.material);
-    });
-    for (const material of materials) {
-      if (material.map && !sharedResources.has(material.map)) textures.add(material.map);
-      material.dispose();
-    }
-    for (const geometry of geometries) geometry.dispose();
-    for (const texture of textures) texture.dispose();
+    for(const geometry of geometries)geometry.dispose(); for(const texture of textures)texture.dispose();
   };
-
-  return { group: g, length: L, width: W, model, wheels, tailMat, beam, flares, policeLights, dispose };
+  return {group:g,length:L,width:W,model,wheels,tailMat,beam,flares,policeLights,dispose,
+    frontWheelPivots,bodyVisual,signalMaterials,wipers,visualManaged:true,wheelRadius:.33,wheelbase:wx*2,
+    mirrorAnchors:bodyInfo.mirrorAnchors,driverAnchor:new THREE.Vector3(.03,0,-.36),driverHeight:p.roofY-.06,
+    wetMaterials:[bodyMat,glass],headlightMaterial:headMat};
 }

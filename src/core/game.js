@@ -288,7 +288,7 @@ export class Game {
     this.traffic?.setBus?.(district?.busServices ?? district?.busService);
     if (this.cambuche) this.cambuche.group.position.y = district?.getGroundHeightUnder?.(this.cambuche.group)
       ?? district?.getGroundHeight?.(this.cambuche.position.x, this.cambuche.position.z) ?? 0;
-    // Calcular los límites después de reemplazar las carrocerías por los GLB.
+    // Calcular los límites después de preparar los modelos y sus piezas móviles.
     this._registerRenderGroups();
 
     if (this.cameraRig.mode === 'third-person') this.player.root.rotation.y = this.cameraRig.yaw + Math.PI;
@@ -297,6 +297,9 @@ export class Game {
     this.sceneMgr.followTarget(this.player.position);
     this._wasNight = this.clock.isNight;
     district?.setNightMode?.(this._wasNight);
+    for (const car of [...(this.cars ?? []), ...(this.traffic?.vehicles ?? []).map(vehicle => vehicle.car)]) {
+      car.setNight?.(this._wasNight, this.weather?.isRaining ?? false);
+    }
     this.dealer?.setNight(this._wasNight);
     this.world.update(0, this.player.position, this.cameraRig.camera);
     this.localLights.update(0, this.player.position, (x, z) => district?.getGroundHeight?.(x, z) ?? 0, this.cameraRig.camera);

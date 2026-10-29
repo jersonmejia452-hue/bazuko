@@ -68,11 +68,11 @@ test('los GLB reales caben en las dimensiones actuales y descansan sobre Y=0', (
   assert.ok(front.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), IMPORTED_MODELS.transmilenio.yaw).z < -.99);
 });
 
-test('carros comparten el GLB, conservan rumbo y robo, y eliminar uno conserva el otro', async () => {
+test('el respaldo GLB de carros conserva rumbo, robo y recursos compartidos al eliminar una instancia', async () => {
   const scene = new THREE.Scene();
   const cars = [new Car(scene, new THREE.Vector3(5, .1, 6), .7), new Car(scene, new THREE.Vector3(12, 0, 6))];
-  // Los carros criollos conservan su carrocería; este caso usa el sedán importado.
-  cars.forEach(car => { car.modelKind = 'car1'; car.vehicle.model = 'sedan'; });
+  // El aspecto administrado se conserva normalmente; aquí se fuerza la vía heredada de respaldo.
+  cars.forEach(car => { car.modelKind = 'car1'; car.vehicle.model = 'sedan'; car.vehicle.visualManaged = false; });
   await Promise.all(cars.map(car => car.preloadModel()));
   assert.equal(loads.get('car1.opt.glb'), 1);
   const first = cars[0].importedModel.children[0].children[0].children[0];

@@ -102,6 +102,8 @@ Bogota.busServices contiene ambos buses; busService conserva el primero por comp
 
 CollisionSystem mantiene una AABB de referencia y una OBB de dimensiones constantes por bus. El barrido del jugador se resuelve en el espacio local; PlayerRagdoll usa el mismo centro, dimensiones y quaternion. No usar la envolvente diagonal como colisión final. VehicleAudio mantiene voces independientes por instancia. Tráfico y semáforos no bloquean buses elevados por objetos de la calle inferior.
 
+La flota animada conserva sus carrocerías administradas durante preloadModel. Las ruedas, dirección, suspensión visual, señales y limpiaparabrisas usan tiempo de simulación; no mover la raíz física para animar la carrocería. El desvanecimiento debe respetar transparent/depthWrite originales de cada material. No añadir luces dinámicas por vehículo. Ver docs/vehiculos-bogota.md.
+
 transit-terminal.test.js comprueba acceso a pie, parada y salida en ambos sentidos, carrocerías dentro del tablero y separación al cruzarse en las curvas. Las pruebas de lógica no sustituyen la revisión visual en el juego.
 
 El rodeo de Colpatria usa un eje con transiciones de curvatura suaves entre Z 80 y Z 260. Las barandas, el asfalto y el tablero comparten bordes a distancia perpendicular constante del eje. Los carriles de ambos sentidos siguen ese mismo trazado; el corredor del lago y sus consultas de altura acompañan la curva.
