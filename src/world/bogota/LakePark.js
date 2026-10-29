@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { busPathX } from './Colpatria.js';
 import { BRIDGE_RISE } from './BridgeElevation.js';
 import { createLakeWaterMaterial } from './LakeWaterMaterial.js';
+import { createLakeShoreMaterial, createLakeShorePalette, sampleLakeShore } from './LakeShoreMaterials.js';
 
 export const LAKE_PARK = Object.freeze({ name: 'Parque del Lago', z0: 222, z1: 318,
   lakeX: 75, lakeZ: 262, radiusX: 50, radiusZ: 26, surfaceY: -.18, maxDepth: 6, bankWidth: 2 });
@@ -65,25 +66,25 @@ export function lakeWaterInfo(x, z, landHeightAt = flatPark) {
   return { surfaceY: LAKE_PARK.surfaceY, depth, bottomY };
 }
 
-function lakeGrid(landHeightAt, surface = false) {
+function lakeGrid(landHeightAt, surface = false, shoreOptions = {}) {
   const { x0, x1, z0, z1, step } = LAKE_TERRAIN;
   const columns = (x1 - x0) / step + 1, rows = (z1 - z0) / step + 1;
-  const positions = [], colors = [], uvs = [], depths = [], plazas = [], indices = [];
-  const sand = new THREE.Color('#8b826a'), bed = new THREE.Color('#46574f'), tint = new THREE.Color();
-  const grass = new THREE.Color('#3e5a2c'), plaza = new THREE.Color('#c9b9a0');
+  const positions = [], colors = [], uvs = [], depths = [], plazas = [], layers = [], indices = [];
+  const palette = createLakeShorePalette(shoreOptions), sample = { color: new THREE.Color() };
   for (let row = 0; row < rows; row++) for (let col = 0; col < columns; col++) {
     const x = x0 + col * step, z = z0 + row * step;
     const y = terrainVertexHeight(x, z, landHeightAt), depth = Math.max(0, LAKE_PARK.surfaceY - y);
     positions.push(x, surface ? LAKE_PARK.surfaceY : y, z);
     uvs.push(x / 8, z / 8);
     depths.push(depth);
-    const bank = THREE.MathUtils.smoothstep((lakeRadius(x, z) - 1) * LAKE_PARK.radiusZ, 0, LAKE_PARK.bankWidth);
+    const bankDistance = (lakeRadius(x, z) - 1) * LAKE_PARK.radiusZ;
+    const bank = THREE.MathUtils.smoothstep(bankDistance, 0, LAKE_PARK.bankWidth);
     const onPlaza = landHeightAt(x, z) >= .1 ? bank : 0;
     plazas.push(onPlaza);
-    const grain = .92 + .08 * Math.sin(x * 1.71 + z * .93) * Math.sin(z * 2.21 - x * .67);
-    tint.copy(sand).lerp(bed, THREE.MathUtils.smoothstep(depth, .2, 5)).multiplyScalar(grain);
-    tint.lerp(onPlaza ? plaza : grass, bank);
-    colors.push(tint.r, tint.g, tint.b);
+    sampleLakeShore({ x, z, depth, bankDistance,
+      edgeDistance: Math.min(x - x0, x1 - x, z - z0, z1 - z) }, palette, sample);
+    colors.push(sample.color.r, sample.color.g, sample.color.b);
+    layers.push(sample.grass, sample.gravel, sample.wet);
   }
   for (let row = 0; row < rows - 1; row++) for (let col = 0; col < columns - 1; col++) {
     const a = row * columns + col, b = a + 1, c = a + columns, d = c + 1;
@@ -96,6 +97,7 @@ function lakeGrid(landHeightAt, surface = false) {
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.setAttribute('lakeDepth', new THREE.Float32BufferAttribute(depths, 1));
   geometry.setAttribute('lakePlaza', new THREE.Float32BufferAttribute(plazas, 1));
+  if (!surface) geometry.setAttribute('lakeLayers', new THREE.Float32BufferAttribute(layers, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   geometry.computeBoundingBox();
@@ -106,37 +108,8 @@ function lakeGrid(landHeightAt, surface = false) {
   return geometry;
 }
 
-export function buildLakeTerrain(landHeightAt = flatPark, { groundMap = null, plazaMap = null } = {}) {
-  const terrain = new THREE.Mesh(lakeGrid(landHeightAt), new THREE.MeshStandardMaterial({
-    name: 'Lecho y ribera del lago', vertexColors: true, roughness: .94, metalness: 0, map: groundMap
-  }));
-  // La franja exterior recupera las mismas texturas del parque, sin un recuadro
-  // de arena alrededor de la elipse ni perder el sendero existente.
-  if (groundMap && plazaMap) {
-    terrain.material.onBeforeCompile = shader => {
-      shader.uniforms.lakePlazaMap = { value: plazaMap };
-      shader.vertexShader = `attribute float lakePlaza;
-varying float vLakePlaza;
-varying vec2 vLakeGroundUv;
-` + shader.vertexShader;
-      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `
-#include <begin_vertex>
-vLakePlaza = lakePlaza;
-vLakeGroundUv = position.xz / 6.0;
-`);
-      shader.fragmentShader = `uniform sampler2D lakePlazaMap;
-varying float vLakePlaza;
-varying vec2 vLakeGroundUv;
-` + shader.fragmentShader;
-      shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `
-#ifdef USE_MAP
-  vec4 sampledDiffuseColor = mix(texture2D(map, vMapUv), texture2D(lakePlazaMap, vLakeGroundUv), vLakePlaza);
-  diffuseColor *= sampledDiffuseColor;
-#endif
-`);
-    };
-    terrain.material.customProgramCacheKey = () => 'lake-bed-ground-v1';
-  }
+export function buildLakeTerrain(landHeightAt = flatPark, options = {}) {
+  const terrain = new THREE.Mesh(lakeGrid(landHeightAt, false, options), createLakeShoreMaterial(options));
   terrain.name = 'Cubeta profunda y ribera continua';
   terrain.receiveShadow = true;
   // El agrupador estático elimina atributos extra; conservar los colores del lecho.

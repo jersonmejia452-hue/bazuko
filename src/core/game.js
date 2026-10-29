@@ -55,6 +55,7 @@ import { PerformanceHUD } from '../ui/PerformanceHUD.js';
 import { PhotoMode } from '../ui/PhotoMode.js';
 import { WaterEffects } from '../systems/WaterEffects.js';
 import { LocalLights } from './LocalLights.js';
+import { ContactShadows } from './ContactShadows.js';
 import { GRAPHICS_PROFILES } from './GraphicsQuality.js';
 import { FrameProfiler } from './FrameProfiler.js';
 import { loadTaskGroups, withLoadTimeout } from './Startup.js';
@@ -102,6 +103,12 @@ export class Game {
     this.world = new World(this.sceneMgr.scene);
     this.player = new Player(this.sceneMgr.scene, this.input, this.stats, this.audio);
     this.waterEffects = new WaterEffects(this.sceneMgr.scene);
+    this.contactShadows = new ContactShadows(this.sceneMgr.scene);
+    this._contactShadowFrame = {
+      player: this.player,
+      groundHeight: (x, z, y) => this.world.active?.getMovementGroundHeight?.(x, z, y) ?? 0,
+      getWaterInfo: (x, z) => this.world.active?.getWaterInfo?.(x, z)
+    };
     this.inventory.onChange(() => this.player.syncWeapon(this.inventory)); // sin el arma en el costal, vuelve a puños
     this.player.game = this;
 
@@ -1063,7 +1070,7 @@ export class Game {
     this.profiler?.mark('trafico');
     if (this._handleDeath()) return;
 
-    this.weather?.update(dt, this.player.position, this.renderer.effectiveQuality === 'baja' ? null : this.world.active, this.clock);
+    this.weather?.update(dt, this.player.position, this.world.active, this.clock);
     this.audio.setRainLevel?.(this.weather?.isRaining ? this.weather.rainIntensity : 0);
 
     // 9. Entidades
@@ -1129,12 +1136,24 @@ export class Game {
       this.sceneMgr.setQuality(quality);
       this.weather?.setQuality(quality);
       this.cameraRig.setQuality?.(quality);
-      if (this.world.active) this.world.active.animationBudget = GRAPHICS_PROFILES[quality].animationBudget;
-      this.world.active?.setWetness?.(quality === 'baja' ? 0 : this.weather?.wetness ?? 0);
+      if (this.world.active) {
+        this.world.active.animationBudget = GRAPHICS_PROFILES[quality].animationBudget;
+        this.world.active.graphicsQuality = quality;
+      }
+      this.world.active?.setWetness?.(this.weather?.wetness ?? 0);
     }
     const elapsed = this._lastRenderTime === undefined ? 0 : (now - this._lastRenderTime) / 1000;
     this._lastRenderTime = now;
     this.localLights.update(elapsed, this.player.position, (x, z) => this.world.active?.getGroundHeight?.(x, z) ?? 0, this.cameraRig.camera);
+    if (this.contactShadows) {
+      const frame = this._contactShadowFrame;
+      frame.npcs = this.world.active?.trafficPedestrians ?? this.world.active?.npcs ?? [];
+      frame.dog = this.dog;
+      frame.vehicles = this._contactVehicles;
+      frame.quality = quality;
+      frame.camera = this.cameraRig.camera;
+      this.contactShadows.update(frame);
+    }
     const showSilhouette = GRAPHICS_PROFILES[quality].silhouette &&
       (this.collisions.mayOccludePlayer?.(this.cameraRig.camera.position, this.player.position) ?? true);
     // El efecto de consumo mueve la cámara solo durante este render y captura su estela al terminar.
@@ -1176,7 +1195,8 @@ export class Game {
     this.sceneMgr.setQuality(quality);
     this.cameraRig.setQuality?.(quality);
     this._effectiveQuality = null;
-    this.world?.active?.setWetness?.(quality === 'baja' ? 0 : this.weather?.wetness ?? 0);
+    if (this.world?.active) this.world.active.graphicsQuality = quality;
+    this.world?.active?.setWetness?.(this.weather?.wetness ?? 0);
     if (notify) window.dispatchEvent(new CustomEvent('toast', { detail: { text: 'Calidad gráfica: ' + quality, type: 'info' } }));
   }
 
@@ -1193,6 +1213,9 @@ export class Game {
     // Las fuentes de la ciudad y del fogón no cambian de posición; sí de intensidad/visibilidad.
     this.localLights.refreshSources({ static: true });
     const culling = this.renderer.culling, district = this.world.active;
+    this._contactVehicles = [...(this.cars ?? []), ...(this.traffic?.vehicles ?? []).map(({ car }) => car),
+      ...(district?.busServices ?? []).map(vehicle => ({ vehicle, forwardAxis: 'z' })),
+      this.limpieza?.suv].filter(Boolean);
     this.renderer.dynamicWorldRoots = [
       ...(district?.animated ?? []),
       ...(district?.busServices ?? [district?.busService].filter(Boolean)).map(bus => bus.group)
@@ -1212,6 +1235,7 @@ export class Game {
   stop() {
     this._running = false;
     this.waterEffects?.dispose();
+    this.contactShadows?.dispose();
     this.gpsBeacon?.dispose();
     this.psychosis?.dispose?.();
     this.substanceEffects?.dispose?.();

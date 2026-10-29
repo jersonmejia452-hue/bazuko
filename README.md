@@ -8,6 +8,8 @@ Este proyecto es un fork de [juanagogo/bazuko](https://github.com/juanagogo/bazu
 
 ## Características
 
+- Recorrido cambuche → comercio → lago con materiales de Bogotá renovados, acabados por barrio, humedad y sombras de contacto también en calidad baja. [Dirección y comprobación visual](docs/recorrido-bogota.md).
+
 - Integración experimental en `pruebas-integracion`: carriles rojos con SOLO BUS, estación, semáforos que regulan el tráfico, inventario por casillas y modelos de bolsas, canecas, lámparas, carros, taxi, TransMilenio y cambuche del fork de [mreyeswilson](https://github.com/mreyeswilson/bazuko). [Detalles de integración y procedencia](docs/modelos-importados.md).
 - Radar relativo a la cámara, pausa con volumen y calidad gráfica, llovizna y compañero canino El Chato, adaptados de [Cristianlv11/bazuko](https://github.com/Cristianlv11/bazuko/tree/feature/mejoras-navegacion-audio-pausa-clima). [Detalles de compatibilidad](docs/integracion-cristian.md).
 - Cámaras en tercera persona e isométrica, intercambiables durante la partida.

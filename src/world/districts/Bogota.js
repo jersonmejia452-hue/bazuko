@@ -1,4 +1,5 @@
 import { planUrbanBuildings, buildUrbanBuilding, URBAN_DESIGNS } from '../bogota/UrbanBuildings.js';
+import { neighborhoodAt } from '../bogota/NeighborhoodIdentity.js';
 import { buildSmallBuilding, SMALL_BUILDING } from '../bogota/SmallBuilding.js';
 // src/world/districts/Bogota.js
 // Centro de Bogotá (inspirado en Santa Inés / El Cartucho y la Av. Caracas).
@@ -88,7 +89,7 @@ function worldUVs(geo, sx, sy, sz, units) {
   }
   return geo;
 }
-const repeatAll = (t) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 1); t.anisotropy = 8; t.needsUpdate = true; return t; };
+const repeatAll = (t) => { if (!t) return t; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 1); t.anisotropy = 8; t.needsUpdate = true; return t; };
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const W = (t) => t * T; // tile → metros (centro del tile)
 
@@ -107,6 +108,7 @@ export class Bogota {
     this.animated = [];       // grupos con userData.update
     this.facadeMats = [];
     this._facadeTextures = new Map();
+    this._facadeSeeds = new Map();
     this._facadeMaterials = new Map();
     this.npcs = [];
     this.vendors = [];
@@ -331,37 +333,51 @@ export class Bogota {
     const asphalt = TX.asphalt(7, 1024);
     const walk = TX.sidewalk(11);
     const dirt = TX.dirt(31);
+    const grass = TX.grass(61);
     const concrete = TX.concrete(41);
     const tex = (t, scale) => { if (!t) return t; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.userData = { scale }; return t; };
     const mats = {
-      // sin roughnessMap: los charcos espejo se ven como huecos negros con cámara cenital
+      // Relieve y rugosidad independientes del color: las reparaciones no son agujeros.
       road: new THREE.MeshStandardMaterial({
         map: tex(asphalt.map, 14),
         bumpMap: tex(asphalt.bumpMap, 14),
-        bumpScale: 0.16,
+        roughnessMap: tex(asphalt.roughnessMap, 14),
+        bumpScale: 0.025,
         roughness: 0.82,
-        color: '#b4b4b4'
+        color: '#dededb'
       }),
       busway: new THREE.MeshStandardMaterial({
         map: tex(asphalt.map, 14),
         bumpMap: tex(asphalt.bumpMap, 14),
-        bumpScale: 0.14,
+        roughnessMap: tex(asphalt.roughnessMap, 14),
+        bumpScale: 0.025,
         roughness: 1,
-        color: '#a8726a'
+        color: '#b9a29c'
       }),
       sidewalk: new THREE.MeshStandardMaterial({
         map: tex(walk.map, 6),
         bumpMap: tex(walk.bumpMap, 6),
-        bumpScale: 0.28,
+        roughnessMap: tex(walk.roughnessMap, 6),
+        bumpScale: 0.035,
         roughness: 0.75,
-        color: '#b9b4aa'
+        color: '#e2dfd5'
       }),
-      floor: new THREE.MeshStandardMaterial({ map: tex(concrete.map, 6), roughness: 0.9, color: '#8a8a86' }),
-      dirt: new THREE.MeshStandardMaterial({ map: tex(dirt.map, 8), roughness: 1, color: '#8a7a64' }),
-      grass: new THREE.MeshStandardMaterial({ map: dirt.map, roughness: 1, color: '#3e5a2c' }),
-      plaza: new THREE.MeshStandardMaterial({ map: tex(walk.map, 6), roughness: 0.8, color: '#c9b9a0' }),
+      floor: new THREE.MeshStandardMaterial({ map: tex(concrete.map, 6), bumpMap: tex(concrete.bumpMap, 6), bumpScale: .025, roughnessMap: concrete.roughnessMap, roughness: 0.95, color: '#dedbd2' }),
+      dirt: new THREE.MeshStandardMaterial({ map: tex(dirt.map, 8), bumpMap: tex(dirt.bumpMap, 8), bumpScale: .035, roughnessMap: dirt.roughnessMap, roughness: 1, color: '#d8cbb4' }),
+      grass: new THREE.MeshStandardMaterial({ map: tex(grass.map, 8), bumpMap: tex(grass.bumpMap, 8), bumpScale: .025, roughnessMap: grass.roughnessMap, roughness: 1, color: '#c2c7ac' }),
+      plaza: new THREE.MeshStandardMaterial({ map: tex(walk.map, 6), bumpMap: walk.bumpMap, bumpScale: .035, roughnessMap: walk.roughnessMap, roughness: 0.85, color: '#dfd6be' }),
       water: createLakeWaterMaterial()
     };
+    // Cuatro acabados compartidos para todo el mapa, sin una textura por baldosa.
+    for (const id of ['cambuche', 'comercio', 'lago']) {
+      const paving = TX.sidewalk(11, { district: id });
+      const material = new THREE.MeshStandardMaterial({ map: tex(paving.map, 6),
+        bumpMap: tex(paving.bumpMap, 6), bumpScale: .035, roughnessMap: paving.roughnessMap,
+        roughness: .85, color: '#e2dfd5' });
+      material.name = `Andén · ${id}`;
+      material.userData.surface = 'sidewalk';
+      mats[`sidewalk_${id}`] = material;
+    }
     const scaleOf = { road: 14, busway: 14, sidewalk: 6, floor: 6, dirt: 8, grass: 8, plaza: 6, water: 16 };
     const heightOf = GROUND_HEIGHTS;
     const quads = {};
@@ -378,7 +394,9 @@ export class Bogota {
           g.computeVertexNormals();
         }
         for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) / scaleOf[t], pos.getZ(i) / scaleOf[t]);
-        (quads[t] ??= []).push(g);
+        const neighborhood = neighborhoodAt(W(x), W(z));
+        const materialKey = t === 'sidewalk' && neighborhood.id !== 'centro' ? `sidewalk_${neighborhood.id}` : t;
+        (quads[materialKey] ??= []).push(g);
         // bordillo: cara vertical hacia la calle
         if (heightOf[t] >= SIDEWALK_Y && !onLakeBridge(W(x), W(z))) {
           for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -395,12 +413,16 @@ export class Bogota {
     mats.curb = new THREE.MeshStandardMaterial({
       color: '#d8d4c8',
       roughness: 0.8,
-      bumpMap: tex(concrete.map, 4),
-      bumpScale: 0.12
+      map: tex(concrete.map, 4),
+      bumpMap: tex(concrete.bumpMap, 4),
+      bumpScale: 0.025
     });
     this.groundMaterials = mats;
     const landHeightAt = (x, z) => this._lakeLandHeight(x, z);
-    this.lakeTerrain = buildLakeTerrain(landHeightAt, { groundMap: mats.grass.map, plazaMap: mats.plaza.map });
+    const lakePaving = mats.sidewalk_lago;
+    this.lakeTerrain = buildLakeTerrain(landHeightAt, { groundMap: mats.grass.map,
+      groundBumpMap: mats.grass.bumpMap, groundTint: mats.grass.color,
+      plazaMap: lakePaving.map, plazaBumpMap: lakePaving.bumpMap, plazaTint: lakePaving.color });
     this.lakeWater = buildLakeWater(mats.water, landHeightAt);
     this.group.add(this.lakeTerrain, this.lakeWater);
     this.animated.push(this.lakeWater);
@@ -417,21 +439,29 @@ export class Bogota {
     this.wetness = amount;
     this.isRaining = amount > 0.05;
     if (!this.groundMaterials) return;
-    const wet = THREE.MathUtils.clamp(amount, 0, 1);
+    const wet = THREE.MathUtils.clamp(amount, 0, 1) * (this.graphicsQuality === 'baja' ? .65 : 1);
     if (this.groundMaterials.road) {
-      this.groundMaterials.road.roughness = THREE.MathUtils.lerp(0.82, 0.28, wet);
-      this.groundMaterials.road.metalness = THREE.MathUtils.lerp(0.0, 0.24, wet);
-      this.groundMaterials.road.envMapIntensity = THREE.MathUtils.lerp(0.3, 1.8, wet);
+      this.groundMaterials.road.roughness = THREE.MathUtils.lerp(0.82, 0.48, wet);
+      this.groundMaterials.road.metalness = 0;
+      this.groundMaterials.road.envMapIntensity = THREE.MathUtils.lerp(0.3, 1.05, wet);
     }
     if (this.groundMaterials.busway) {
-      this.groundMaterials.busway.roughness = THREE.MathUtils.lerp(1.0, 0.42, wet);
-      this.groundMaterials.busway.metalness = THREE.MathUtils.lerp(0.0, 0.18, wet);
-      this.groundMaterials.busway.envMapIntensity = THREE.MathUtils.lerp(0.25, 1.5, wet);
+      this.groundMaterials.busway.roughness = THREE.MathUtils.lerp(1.0, 0.6, wet);
+      this.groundMaterials.busway.metalness = 0;
+      this.groundMaterials.busway.envMapIntensity = THREE.MathUtils.lerp(0.25, .85, wet);
     }
-    if (this.groundMaterials.sidewalk) {
-      this.groundMaterials.sidewalk.roughness = THREE.MathUtils.lerp(0.75, 0.38, wet);
-      this.groundMaterials.sidewalk.metalness = THREE.MathUtils.lerp(0.0, 0.15, wet);
-      this.groundMaterials.sidewalk.envMapIntensity = THREE.MathUtils.lerp(0.2, 1.2, wet);
+    for (const [name, material] of Object.entries(this.groundMaterials)) {
+      const pavement = name.startsWith('sidewalk') || name === 'plaza' || name === 'floor';
+      if (pavement) {
+        material.roughness = THREE.MathUtils.lerp(.85, .63, wet);
+        material.metalness = 0;
+        material.envMapIntensity = THREE.MathUtils.lerp(.2, .65, wet);
+      }
+      if (pavement || name === 'road' || name === 'busway') {
+        // Conservar el acabado seco para que alternar lluvia no acumule oscurecimiento.
+        material.userData.dryColor ??= material.color.clone();
+        material.color.copy(material.userData.dryColor).multiplyScalar(1 - wet * .09);
+      }
     }
   }
 
@@ -514,9 +544,12 @@ export class Bogota {
     const isB = (x, z) => map[z]?.[x] === 'building' || map[z]?.[x] === 'ruin';
     const walk = (x, z) => WALKABLE.has(map[z]?.[x]);
     const brick = TX.brick(3);
-    const sideMat = new THREE.MeshStandardMaterial({ map: repeatAll(brick.map), bumpMap: repeatAll(brick.bumpMap), bumpScale: 0.3, roughness: 0.9, color: '#c8b2a2' });
-    const roofMat = new THREE.MeshStandardMaterial({ map: repeatAll(TX.slab(13).map), roughness: 0.95 });
-    const tileRoof = new THREE.MeshStandardMaterial({ map: repeatAll(TX.roofTiles(9).map), roughness: 0.85 });
+    const sideMat = new THREE.MeshStandardMaterial({ map: repeatAll(brick.map), bumpMap: repeatAll(brick.bumpMap), bumpScale: 0.045, roughnessMap: brick.roughnessMap, roughness: 0.95, color: '#e0d3c6' });
+    const slab = TX.slab(13), tiles = TX.roofTiles(9);
+    const roofMat = new THREE.MeshStandardMaterial({ map: repeatAll(slab.map), bumpMap: repeatAll(slab.bumpMap),
+      bumpScale: .025, roughnessMap: repeatAll(slab.roughnessMap), roughness: .95 });
+    const tileRoof = new THREE.MeshStandardMaterial({ map: repeatAll(tiles.map), bumpMap: repeatAll(tiles.bumpMap),
+      bumpScale: .035, roughnessMap: repeatAll(tiles.roughnessMap), roughness: .85 });
     this._interiorMat = new THREE.MeshStandardMaterial({ map: roofMat.map, color: '#675e50', roughness: 1 });
     this._uvUnits = { brick: [TX.BRICK_TILE.w, TX.BRICK_TILE.h], slab: [4, 4], tiles: [2, 2] };
     const covered = new Set();
@@ -524,7 +557,7 @@ export class Bogota {
     const urbanPalette = {
       facades: URBAN_DESIGNS.map((design,i)=>{
         const tex=TX.facade({seed:170+i,width:6,floors:3,pxPerM:32,shopFront:false,style:i===0?'ladrillo':'concreto',wallColor:['#975c40','#b6b3a8','#c3b8a5','#857c70','#687d81'][i]});
-        return new THREE.MeshStandardMaterial({map:repeatAll(tex.map),emissiveMap:repeatAll(tex.emissiveMap),emissive:'#ffffff',emissiveIntensity:0,bumpMap:repeatAll(tex.bumpMap),bumpScale:.16,roughness:i===4?.55:.9});
+        return new THREE.MeshStandardMaterial({map:repeatAll(tex.map),emissiveMap:repeatAll(tex.emissiveMap),emissive:'#ffffff',emissiveIntensity:0,bumpMap:repeatAll(tex.bumpMap),bumpScale:.04,roughnessMap:repeatAll(tex.roughnessMap),roughness:i===4?.7:.95});
       }),
       roof:roofMat,interior:this._interiorMat,
       concrete:new THREE.MeshStandardMaterial({color:'#686962',roughness:.95}),
@@ -549,9 +582,13 @@ export class Bogota {
         // recorre la línea perpendicular buscando tramos de tiles con fachada hacia (dx, dz)
         let run = [];
         const flush = () => {
+          if (!run.length) return;
+          // Partición propia por tramo: crear texturas, UUID o adornos no mueve solares.
+          const widthRandom = TX.rng((Math.imul(run[0][0] + 17, 73856093)
+            ^ Math.imul(run[0][1] + 31, 19349663) ^ Math.imul(face + 1, 83492791) ^ 0x4b4f474f) >>> 0);
           let i = 0;
           while (i < run.length) {
-            const wTiles = Math.min(run.length - i, 2 + Math.floor(Math.random() * 3));
+            const wTiles = Math.min(run.length - i, 2 + Math.floor(widthRandom() * 3));
             this._house(run.slice(i, i + wTiles), dx, dz, face, alongX, isB, map, sideMat, roofMat, tileRoof, covered);
             i += wTiles;
           }
@@ -601,16 +638,31 @@ export class Bogota {
     for (const [x, z] of tiles) for (let d = 0; d < depth; d++) covered.add(`${x - dx * d},${z - dz * d}`);
 
     const widthM = tiles.length * T;
-    const floors = skylineFloors(tiles[0][0], tiles[0][1], ruin);
+    const [x0, z0] = tiles[0], [x1, z1] = tiles[tiles.length - 1];
+    const cx = (W(x0) + W(x1)) / 2 - dx * (depth - 1) * T / 2;
+    const cz = (W(z0) + W(z1)) / 2 - dz * (depth - 1) * T / 2;
+    const neighborhood = neighborhoodAt(cx, cz);
+    // Detalles estables por solar, separados tanto de la partición como del azar del juego.
+    const random = TX.rng((Math.imul(x0 + 17, 73856093) ^ Math.imul(z0 + 31, 19349663)
+      ^ Math.imul(tiles.length, 83492791) ^ Math.imul(depth, 2654435761) ^ Math.imul(face + 1, 97531)) >>> 0);
+    const choose = values => values[Math.floor(random() * values.length)];
+    const floors = skylineFloors(x0, z0, ruin, random());
     const h = floors * 3;
-    const style = ruin ? 'ruina' : Math.random() < 0.55 ? 'ladrillo' : 'pintada';
+    const style = ruin ? 'ruina' : random() < 0.55 ? 'ladrillo' : 'pintada';
     // el ladrillo necesita más resolución para que cada ladrillo (36 × 12 cm) se distinga
     // Variantes compartidas: ampliar el barrio no triplica las texturas de fachada en la GPU.
-    const variant = Math.floor(Math.random() * 2);
-    const textureKey = `${widthM}:${floors}:${style}:${variant}`;
+    const variant = Math.floor(random() * 2);
+    const baseTextureKey = `${widthM}:${floors}:${style}:${variant}`;
+    // La semilla de la textura depende de su clave, no del orden de llenado de la caché.
+    if (!this._facadeSeeds.has(baseTextureKey)) {
+      let seed = 2166136261;
+      for (const character of baseTextureKey) seed = Math.imul(seed ^ character.charCodeAt(0), 16777619);
+      this._facadeSeeds.set(baseTextureKey, seed >>> 0);
+    }
+    const textureKey = `${baseTextureKey}:${neighborhood.id}`;
     let tex = this._facadeTextures.get(textureKey);
     if (!tex) {
-      tex = TX.facade({ seed: Math.floor(Math.random() * 1e6), width: widthM, floors, pxPerM: style === 'pintada' ? 36 : 48, shopFront: true, style });
+      tex = TX.facade({ seed: this._facadeSeeds.get(baseTextureKey), width: widthM, floors, pxPerM: style === 'pintada' ? 36 : 48, shopFront: true, style, district: neighborhood.id });
       this._facadeTextures.set(textureKey, tex);
     }
     for (const t of [tex.map, tex.emissiveMap, tex.bumpMap, tex.roughnessMap]) {
@@ -624,20 +676,17 @@ export class Bogota {
         emissive: '#ffffff',
         emissiveIntensity: 0,
         bumpMap: tex.bumpMap,
-        bumpScale: 0.35,
-        roughness: 0.85
+        bumpScale: 0.045,
+        roughness: 0.95
       });
       if (tex.roughnessMap) facadeMat.roughnessMap = tex.roughnessMap;
       this._facadeMaterials.set(textureKey, facadeMat);
       this.facadeMats.push(facadeMat);
     }
 
-    const [x0, z0] = tiles[0], [x1, z1] = tiles[tiles.length - 1];
-    const cx = (W(x0) + W(x1)) / 2 - dx * (depth - 1) * T / 2;
-    const cz = (W(z0) + W(z1)) / 2 - dz * (depth - 1) * T / 2;
     const sx = alongX ? widthM : depth * T;
     const sz = alongX ? depth * T : widthM;
-    const clay = Math.random() < 0.4 || ruin;
+    const clay = random() < 0.4 || ruin;
     const mats = [sideMat, sideMat, clay ? tileRoof : roofMat, roofMat, sideMat, sideMat];
     mats[face] = facadeMat;
     const U = this._uvUnits;
@@ -647,6 +696,7 @@ export class Bogota {
       x: cx, z: cz, height: h, interiorMaterial: this._interiorMat,
       facadeFace: face, wallInteriorMaterial: sideMat, wallInteriorUV: U.brick
     });
+    shell.root.userData.neighborhood = neighborhood.id;
     this.group.add(shell.root);
 
     // punto de la fachada (centro, al ras de la calle) y orientación hacia afuera
@@ -655,9 +705,12 @@ export class Bogota {
     const yaw = Math.atan2(dx, dz);
 
     // aviso de local en el primer piso
-    if (!ruin && Math.random() < 0.55) {
-      const [title, sub] = pick(SHOP_NAMES);
-      const map = signTexture({ title, sub, bg: pick(['#0b4fa3', '#c0392b', '#1f6b3a', '#f2c600', '#ffffff', '#6a1b9a']), fg: '#ffffff', w: 768, h: 192 });
+    if (!ruin && random() < 0.55) {
+      const [title, sub] = choose(SHOP_NAMES);
+      const signColor = new THREE.Color(choose(['#0b4fa3', '#c0392b', '#1f6b3a', '#f2c600', '#ffffff', '#6a1b9a']));
+      signColor.lerp(new THREE.Color(neighborhood.palette.signBackground), .18);
+      const luminance = .2126 * signColor.r + .7152 * signColor.g + .0722 * signColor.b;
+      const map = signTexture({ title, sub, bg: `#${signColor.getHexString()}`, fg: luminance > .4 ? '#26302e' : '#fff3da', w: 768, h: 192 });
       if (map) {
         const sign = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(widthM * 0.85, 3.6), Math.min(widthM * 0.85, 3.6) / 4),
           new THREE.MeshBasicMaterial({ map }));
@@ -667,7 +720,7 @@ export class Bogota {
       }
     }
     // balcón de madera en las casas viejas (Cartucho) o en algunas de ladrillo
-    if ((ruin && Math.random() < 0.6) || (style === 'ladrillo' && Math.random() < 0.2)) {
+    if ((ruin && random() < 0.6) || (style === 'ladrillo' && random() < 0.2)) {
       const wood = new THREE.MeshStandardMaterial({ color: ruin ? '#4a3626' : '#5a3d24', roughness: 0.9 });
       const bal = new THREE.Group();
       const bw = Math.min(widthM * 0.7, 3.5);
@@ -687,9 +740,9 @@ export class Bogota {
       shell.walls.get(face).add(bal);
     }
     // tanque de agua negro en la terraza
-    if (!ruin && Math.random() < 0.35) {
+    if (!ruin && random() < 0.35) {
       const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.45, 0.9, 12), new THREE.MeshStandardMaterial({ color: '#1c1f22', roughness: 0.6 }));
-      tank.position.set(rand(-0.5, 0.5), h + 0.45, rand(-0.5, 0.5));
+      tank.position.set(random() - .5, h + .45, random() - .5);
       tank.castShadow = true;
       shell.roof.add(tank);
     }
@@ -1154,6 +1207,19 @@ export class Bogota {
   }
 
   dispose(scene) {
+    const textures = new Set();
+    const rememberTextures = material => {
+      // El shader de ribera posee y libera su detalle; los mapas del parque son compartidos.
+      const ownedDetail = material?.userData?.uniforms?.lakeShoreDetail?.value;
+      for (const value of Object.values(material ?? {})) if (value?.isTexture && value !== ownedDetail) textures.add(value);
+    };
+    for (const material of Object.values(this.groundMaterials ?? {})) rememberTextures(material);
+    for (const maps of this._facadeTextures.values()) for (const texture of Object.values(maps)) {
+      if (texture?.isTexture) textures.add(texture);
+    }
+    this.group.traverse(object => {
+      for (const material of [object.material].flat().filter(Boolean)) rememberTextures(material);
+    });
     for (const flock of this.pigeonFlocks ?? []) flock.dispose();
     this.signals?.dispose();
     this.stationGroup?.clear();
@@ -1161,6 +1227,7 @@ export class Bogota {
     for (const bus of this.busServices ?? []) bus.dispose();
     this.buildingVisibility.dispose();
     this._facadeTextures.clear();
+    this._facadeSeeds.clear();
     this._facadeMaterials.clear();
     scene.remove(this.group);
     for (const n of this.npcs) n.dispose();
@@ -1168,7 +1235,8 @@ export class Bogota {
       if (o.isInstancedMesh) o.dispose();
       o.geometry?.dispose?.();
       const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of mats) { m?.map?.dispose?.(); m?.dispose?.(); }
+      for (const m of mats) m?.dispose?.();
     });
+    for (const texture of textures) texture.dispose();
   }
 }
