@@ -72,6 +72,9 @@ test('ayuda bajo demanda, inventario y pausa sin abrir dos paneles al pulsar Esc
 
   await page.keyboard.press('I');
   await expect(page.locator('#inv-overlay')).toHaveClass(/open/);
+  // El foco acompaña a la casilla elegida y el banco muestra su detalle.
+  await expect(page.locator('#inv-overlay .inv-slot.selected')).toBeFocused();
+  await expect(page.locator('#inv-overlay .inv-bench .inv-name')).not.toBeEmpty();
   await page.keyboard.press('Escape');
   await expect(page.locator('#inv-overlay')).not.toHaveClass(/open/);
   await expect(page.locator('#menu')).toBeHidden();
@@ -80,9 +83,6 @@ test('ayuda bajo demanda, inventario y pausa sin abrir dos paneles al pulsar Esc
   await expect(page.locator('#menu-title')).toHaveText('Partida en Pausa');
   await page.keyboard.press('Escape');
   await expect(page.locator('#menu')).toBeHidden();
-});
-
-test('mapa con M, destino por clic y por la lista, ruta en el radar y pestañas de la pausa', async ({ page }) => {
 
   // Accesos visibles en el juego: hacen lo mismo que I y C.
   await page.locator('#inventory-open').click();
@@ -93,6 +93,9 @@ test('mapa con M, destino por clic y por la lista, ruta en el radar y pestañas 
   await page.keyboard.press('Escape');
   await expect(page.locator('#craft-panel')).not.toHaveClass(/open/);
   await expect(page.locator('#menu')).toBeHidden();
+});
+
+test('mapa con M, destino por clic y por la lista, ruta en el radar y pestañas de la pausa', async ({ page }) => {
   await startNewGame(page);
   await expect(page.locator('#minimap-canvas')).toBeVisible();
   await expect(page.locator('#minimap-info')).not.toBeEmpty();
