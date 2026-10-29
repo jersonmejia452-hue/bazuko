@@ -59,7 +59,7 @@ function inventory(game) {
   const used = [], dropped = [];
   const ui = Object.assign(Object.create(InventoryUI.prototype), {
     game, isOpen: true, selected: 0, _cache: {}, _schedule() {},
-    root: { classList: { remove() {} } }, tipEl: { style: {} },
+    root: { classList: { remove() {} }, contains: () => false }, tipEl: { style: {} },
     slotEls: Array.from({ length: 30 }, () => ({ el: new Control() })),
     inv: { slotCount: 30, slots: Array.from({ length: 30 }, (_, index) => ({ id: `item${index}`, qty: 2 })), removeAt(index, count) { dropped.push([index, count]); } },
     _useItem(id, index) { used.push([id, index]); }

@@ -106,11 +106,32 @@ test('los objetos de la mesa tienen iconos limpios y acreditados', async () => {
       assert.match(itemArtHTML(id), /item-art" style="--art: url\('[^'"]+\/item-art\/[^'"]+\.svg'\)"/);
     }
   }
-  assert.match(itemArtHTML('pan'), /item-art--emoji[^>]*>🍞</);
+  assert.match(itemArtHTML('pegante'), /item-art--emoji[^>]*>🧪</);
   const dir = new URL('../src/ui/item-art/', import.meta.url);
   for (const file of readdirSync(dir)) {
     const svg = readFileSync(new URL(file, dir), 'utf8');
     assert.match(svg, /^<svg [^>]*viewBox="0 0 512 512" fill="currentColor">(<path d="[^"<>]+"\/>)+<\/svg>\s*$/, file);
-    assert.ok(credits.includes(`\`${file}\``), `${file} sin créditos en docs/iconos.md`);
+    // Fila completa: archivo, objeto, enlace al icono original y autor.
+    const row = credits.split(/\r?\n/).find((line) => line.startsWith(`| \`${file}\``));
+    assert.ok(row, `${file} sin créditos en docs/iconos.md`);
+    if (/\| Dibujo propio del proyecto \([^)]+\) \| Equipo del proyecto \|$/.test(row)) continue;
+    assert.match(row, /\| \[[^\]]+\]\(https:\/\/game-icons\.net\/1x1\/[a-z0-9-]+\/[a-z0-9-]+\.html\) \| [A-Za-z0-9][A-Za-z0-9 -]* \|$/, `${file}: falta enlace o autor`);
+  }
+});
+
+test('todo objeto del catálogo tiene icono propio, salvo los que documentan su emoji', async () => {
+  const { readFileSync, existsSync } = await import('node:fs');
+  const { hasItemArt, itemArtHTML } = await import('../src/ui/itemArt.js');
+  const credits = readFileSync(new URL('../docs/iconos.md', import.meta.url), 'utf8');
+  const withoutArt = Object.keys(ITEMS).filter((id) => !hasItemArt(id));
+  const section = credits.split('## Objetos sin icono')[1]?.split(/\n\n(?!- )/)[0] ?? '';
+  const documented = section.split('\n').filter((line) => line.startsWith('- '))
+    .flatMap((line) => [...line.split(':')[0].matchAll(/`([^`]+)`/g)].map((m) => m[1]));
+  assert.deepEqual(withoutArt.toSorted(), documented.toSorted(), 'solo los objetos listados en docs/iconos.md conservan su emoji');
+  for (const id of withoutArt) assert.ok(credits.includes(`\`${id}\``), `${id}: explicar en docs/iconos.md por qué usa emoji`);
+  for (const id of Object.keys(ITEMS).filter(hasItemArt)) {
+    const file = itemArtHTML(id).match(/item-art\/([^'"]+\.svg)/)?.[1];
+    assert.ok(file && existsSync(new URL(`../src/ui/item-art/${file}`, import.meta.url)), `${id}: falta ${file}`);
+    assert.ok(credits.includes(`\`${file}\``), `${id}: ${file} sin créditos`);
   }
 });

@@ -51,6 +51,7 @@ import { openRadioModal } from '../ui/RadioModal.js';
 
 import { HUD } from '../ui/HUD.js';
 import { InventoryUI } from '../ui/InventoryUI.js';
+import { createPanelDock } from '../ui/PanelDock.js';
 import { PerformanceHUD } from '../ui/PerformanceHUD.js';
 import { PhotoMode } from '../ui/PhotoMode.js';
 import { WaterEffects } from '../systems/WaterEffects.js';
@@ -156,10 +157,10 @@ export class Game {
     let quality = 'baja';
     try { quality = localStorage.getItem('bazuko.graphics_quality') || quality; } catch { /* sin almacenamiento */ }
     this.setGraphicsQuality(quality, false);
-    this.hud.audioBtn?.setAttribute('aria-label', this.audio.isMuted() ? 'Activar sonido' : 'Silenciar sonido');
-    if (this.hud.audioBtn) this.hud.audioBtn.textContent = this.audio.isMuted() ? '🔇' : '🔊';
+    this.hud.setMuted(this.audio.isMuted());
     this.creator = createCreator({ audio: null });
     this.inventoryUI = new InventoryUI(this.inventory, this);
+    this.panelDock = createPanelDock(this);
     this.cameraRig.canControl = () => this.photoMode?.active || (!this.paused && !this.isSleeping &&
       !this.hud._talentOpen && !this.hud._craftOpen && !this.hud._dealerOpen);
     this.cameraRig.allowPointerLock = () => !this.photoMode?.active;

@@ -124,7 +124,8 @@ test('creador visual adaptable y accesible con movimiento reducido', async ({ pa
 
 test('partida nueva, talentos, recetas y edición del personaje', async ({ page }) => {
   await startNewGame(page);
-  await expect(page.locator('#clock')).toHaveText(/Día 1 — \d{2}:\d{2}/);
+  await expect(page.locator('#clock')).toHaveText(/^\d{2}:\d{2}$/);
+  await expect(page.locator('#day-display')).toHaveText('Día 1');
   await page.keyboard.press('T');
   await expect(page.locator('#talent-panel')).toHaveClass(/open/);
   await expect(page.locator('#talent-panel')).toContainText('Árbol de Talentos');
@@ -172,6 +173,9 @@ test('ayuda bajo demanda, inventario y pausa sin abrir dos paneles al pulsar Esc
 
   await page.keyboard.press('I');
   await expect(page.locator('#inv-overlay')).toHaveClass(/open/);
+  // El foco acompaña a la casilla elegida y el banco muestra su detalle.
+  await expect(page.locator('#inv-overlay .inv-slot.selected')).toBeFocused();
+  await expect(page.locator('#inv-overlay .inv-bench .inv-name')).not.toBeEmpty();
   await page.keyboard.press('Escape');
   await expect(page.locator('#inv-overlay')).not.toHaveClass(/open/);
   await expect(page.locator('#menu')).toBeHidden();
@@ -179,6 +183,16 @@ test('ayuda bajo demanda, inventario y pausa sin abrir dos paneles al pulsar Esc
   await expect(page.locator('#menu')).toBeVisible();
   await expect(page.locator('#menu-title')).toHaveText('Partida en Pausa');
   await page.keyboard.press('Escape');
+  await expect(page.locator('#menu')).toBeHidden();
+
+  // Accesos visibles en el juego: hacen lo mismo que I y C.
+  await page.locator('#inventory-open').click();
+  await expect(page.locator('#inv-overlay')).toHaveClass(/open/);
+  await page.keyboard.press('Escape');
+  await page.locator('#craft-open').click();
+  await expect(page.locator('#craft-panel')).toHaveClass(/open/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#craft-panel')).not.toHaveClass(/open/);
   await expect(page.locator('#menu')).toBeHidden();
 });
 
