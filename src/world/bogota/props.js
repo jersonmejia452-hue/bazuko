@@ -268,77 +268,7 @@ export function busStation(length = 16) {
   return shadow(g);
 }
 
-export const ARTICULATED_BUS_SIZE = Object.freeze({ length: 18.2, width: 2.52 });
-
-/** Bus articulado rojo; el frente apunta hacia −Z local. */
-export function articulatedBus() {
-  const g = new THREE.Group();
-  const wheels = [];
-  const red = std('#b3261e', { roughness: 0.5, metalness: 0.3 });
-  const glass = std('#1a2430', { roughness: 0.1, metalness: 0.5, emissive: '#e6983b', emissiveIntensity: 0.18 });
-  for (const [z, len] of [[-4.6, 9], [4.6, 9]]) {
-    const body = new THREE.Mesh(new THREE.BoxGeometry(2.5, 2.8, len), red);
-    body.position.set(0, 1.75, z);
-    g.add(body);
-    for (const sx of [-1.26, 1.26]) {
-      const win = new THREE.Mesh(new THREE.PlaneGeometry(len - 1, 1), glass);
-      win.rotation.y = sx > 0 ? Math.PI / 2 : -Math.PI / 2;
-      win.position.set(sx, 2.3, z);
-      g.add(win);
-    }
-    for (const wz of [z - len / 2 + 1.5, z + len / 2 - 1.5]) {
-      for (const sx of [-1.15, 1.15]) {
-        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 14), std('#111111'));
-        w.rotation.z = Math.PI / 2;
-        w.position.set(sx, 0.5, wz);
-        g.add(w);
-        wheels.push(w);
-      }
-    }
-  }
-  const joint = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.4, 16), std('#222222'));
-  joint.rotation.x = Math.PI / 2;
-  joint.position.y = 1.8;
-  g.add(joint);
-  g.userData.wheels = wheels;
-
-  // Faros frontales hacia -Z y luces traseras hacia +Z
-  const headMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff4dc').multiplyScalar(2.5) });
-  const tailMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff1a12').multiplyScalar(2.0) });
-  for (const sx of [-0.85, 0.85]) {
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.08), headMat);
-    head.position.set(sx, 0.95, -9.11);
-    g.add(head);
-
-    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.08), tailMat);
-    tail.position.set(sx, 0.95, 9.11);
-    g.add(tail);
-  }
-
-  // Haz de luz frontal sobre el asfalto (-Z)
-  const busBeam = new THREE.Mesh(
-    new THREE.PlaneGeometry(6.5, 3.2),
-    new THREE.MeshBasicMaterial({ color: '#ffe8c8', transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false })
-  );
-  busBeam.rotation.x = -Math.PI / 2;
-  busBeam.position.set(0, 0.03, -12.5);
-  g.add(busBeam);
-
-  // Tablero digital de destino LED en el visor frontal (-Z)
-  let routeMap = null;
-  if (typeof document !== 'undefined') {
-    routeMap = signTexture({ title: 'B14 PORTAL NORTE', sub: 'TRONCAL CARACAS', bg: '#080c10', fg: '#ffb000', accent: '#ff8800', w: 512, h: 128 });
-  }
-  const routeSign = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.7, 0.35),
-    new THREE.MeshBasicMaterial({ map: routeMap, color: new THREE.Color('#ffb81c').multiplyScalar(1.5), side: THREE.DoubleSide })
-  );
-  routeSign.rotation.y = Math.PI;
-  routeSign.position.set(0, 2.9, -9.13);
-  g.add(routeSign);
-
-  return shadow(g);
-}
+export { articulatedBus, ARTICULATED_BUS_SIZE } from './ArticulatedBus.js';
 
 /** Cerros orientales con la iglesia de Monserrate en la cima y faro nocturno */
 export function cerros(width = 260) {
