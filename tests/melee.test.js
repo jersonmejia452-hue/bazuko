@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 import * as THREE from 'three';
+import { readFileSync } from 'node:fs';
 import { Player } from '../src/entities/Player.js';
 import { Npc } from '../src/entities/Npc.js';
 import { WEAPONS, comboStep, COMBO_WINDOW } from '../src/data/weapons.js';
 import { ITEMS, isUsable } from '../src/data/items.js';
 import { RECIPES } from '../src/data/recipes.js';
 import { InventorySystem } from '../src/systems/InventorySystem.js';
-import { attackExtension, createMeleeOverlay } from '../src/character/melee.js';
+import { attackExtension, attackSide, createMeleeOverlay } from '../src/character/melee.js';
 import { attachWeapon } from '../src/character/props.js';
 
 beforeEach(() => {
@@ -76,8 +77,19 @@ test('el último golpe del combo pega más fuerte y tarda más', () => {
   assert.equal(first.step, 0);
 });
 
-test('cuchillo y botella picada son objetos usables que se fabrican con materiales de la calle', () => {
-  for (const id of ['cuchillo', 'botella_picada']) {
+test('el arma casera es la más lenta, pero la que más pega, más alcanza y más empuja', () => {
+  const { arma, ...others } = WEAPONS;
+  const total = (w) => w.windup + w.active + w.recovery;
+  for (const w of Object.values(others)) {
+    assert.ok(arma.damage > w.damage, `pega más que ${w.id}`);
+    assert.ok(arma.range > w.range, `alcanza más que ${w.id}`);
+    assert.ok(arma.knockback > w.knockback, `empuja más que ${w.id}`);
+    assert.ok(total(arma) > total(w), `tarda más que ${w.id}`);
+  }
+});
+
+test('cuchillo, botella picada y arma casera son objetos usables que se fabrican con materiales de la calle', () => {
+  for (const id of ['cuchillo', 'botella_picada', 'arma']) {
     assert.ok(ITEMS[id], id);
     assert.equal(ITEMS[id].weapon, id);
     assert.ok(WEAPONS[ITEMS[id].weapon]);
@@ -187,6 +199,18 @@ test('equipar: alterna el arma, vuelve a puños si se pierde del inventario', ()
   player.syncWeapon(inv);
   assert.equal(player.equippedWeapon, 'punos');
   assert.equal(player.equipWeapon('no-existe'), false);
+});
+
+test('el arma casera fabricada se equipa y alcanza a quien la botella no llega', () => {
+  const { player, input, npc, tick } = arena();
+  assert.equal(player.toggleWeapon(ITEMS.arma.weapon), true);
+  assert.equal(player.weapon.id, 'arma');
+  const target = npc(10, 12); // a 2 m
+  assert.ok(WEAPONS.botella_picada.range < 2);
+  input.presses.add('KeyG');
+  tick(1, 0.01, [target]);
+  tick(1, WEAPONS.arma.windup + 0.001, [target]);
+  assert.equal(target.health, target.maxHealth - WEAPONS.arma.damage);
 });
 
 test('un aturdimiento cancela el golpe en curso', () => {
@@ -353,12 +377,45 @@ test('el efecto no depende de la velocidad: el cuerpo sigue en marcha y no hay e
   assert.ok(b.rHand.position.distanceTo(new THREE.Vector3(0, -0.3, 0)) < 1e-9);
 });
 
+test('el arma casera barre de lado a lado y remata desde arriba con la mano derecha, con el seguimiento y la guardia de los demás golpes', () => {
+  const handAt = (attack) => {
+    const sk = skeleton();
+    const overlay = createMeleeOverlay(sk.bones, sk.root);
+    overlay.apply(0.016, attack);
+    return worldPos(sk.rHand);
+  };
+  const arma = (step, phase, progress = 0.5) => ({ weapon: 'arma', step, phase, progress });
+  for (const step of [0, 1]) assert.equal(attackSide(arma(step, 'active')), 'R');
+  assert.ok(handAt(arma(0, 'windup')).x < handAt(arma(0, 'active')).x - 0.2, 'barrido: del lado derecho (−X) hacia el izquierdo (+X)');
+  assert.ok(handAt(arma(1, 'windup')).y > handAt(arma(1, 'active')).y + 0.2, 'garrotazo: de arriba hacia abajo');
+  for (const step of [0, 1]) {
+    assert.ok(handAt(arma(step, 'active', 1)).distanceTo(handAt(arma(step, 'active', 0))) > 0.03, 'sigue después del contacto');
+    assert.ok(handAt(arma(step, 'recovery', 0.35)).distanceTo(handAt(arma(step, 'active', 1))) > 0.15, 'la mano vuelve a la guardia antes de soltarse');
+  }
+
+  const sk = skeleton();
+  const overlay = createMeleeOverlay(sk.bones, sk.root);
+  const rest = worldPos(sk.rHand).clone();
+  for (const attack of [arma(1, 'windup', 0.2), arma(1, 'windup', 0.9), arma(1, 'active', 0), arma(1, 'active', 1), arma(1, 'recovery', 0.3), arma(1, 'recovery', 1)]) {
+    for (const b of sk.bones.values()) b.quaternion.identity();
+    overlay.apply(0.016, attack);
+    assert.ok(worldPos(sk.rHand).toArray().every(Number.isFinite), `${attack.phase} ${attack.progress}`);
+  }
+  for (let i = 0; i < 60; i++) {
+    for (const b of sk.bones.values()) b.quaternion.identity();
+    overlay.apply(0.016, null);
+  }
+  assert.ok(worldPos(sk.rHand).distanceTo(rest) < 1e-3, 'se desvanece sin dejar rastro');
+});
+
 test('extensión del ataque: se encoge al preparar, llega al máximo en el impacto y se relaja', () => {
   assert.equal(attackExtension(null), 0);
   const e = (phase, progress) => attackExtension({ phase, progress });
   assert.ok(e('windup', 0.5) < 0);
   assert.ok(e('windup', 1) > 0.95);
-  assert.equal(e('active', 0.5), 1);
+  assert.equal(e('active', 0), 1);
+  assert.ok(e('active', 1) < e('active', 0), 'cede después del contacto');
+  assert.equal(e('active', 1), e('recovery', 0), 'sin salto entre contacto y recuperación');
   assert.ok(e('recovery', 0.9) < e('recovery', 0.1));
 });
 
@@ -385,4 +442,100 @@ test('el arma se ata a la mano derecha, se cambia y libera sus materiales', () =
   assert.ok(bottle.object.parent === sk.rHand);
   assert.equal(attachWeapon(sk.root, sk.bones, 'puños'), null);
   bottle.dispose();
+
+  const club = attachWeapon(sk.root, sk.bones, 'arma');
+  assert.ok(club.object.parent === sk.rHand, 'el arma casera también va en la mano');
+  assert.equal(club.object.name, 'weapon-arma');
+  const box = new THREE.Box3().setFromObject(club.object);
+  assert.ok(box.max.y - box.min.y > 0.5 || box.max.x - box.min.x > 0.5 || box.max.z - box.min.z > 0.5, 'es una tabla larga');
+  club.dispose();
+});
+
+test('en el modelo liviano ningún arma atraviesa el piso, quieto, caminando ni corriendo', () => {
+  const box = new THREE.Box3();
+  for (const id of ['cuchillo', 'botella_picada', 'arma']) {
+    const scene = new THREE.Scene();
+    const input = makeInput();
+    const player = new Player(scene, input, { energia: 100, salud: 100, dinero: 0, higiene: 100 }, null, {});
+    player.position.set(0, 0, 0);
+    player.equipWeapon(id);
+    const weapon = player.character.group.getObjectByName(`weapon-${id}`);
+    for (const [z, running] of [[0, false], [-1, false], [-1, true]]) {
+      input.axis.z = z;
+      input.isRunning = running;
+      for (let frame = 0; frame < 120; frame++) {
+        player.update(1 / 60, null, null, () => 0, []);
+        scene.updateMatrixWorld(true);
+        box.setFromObject(weapon, true);
+        assert.ok(box.min.y >= 0, `${id} en z ${z}${running ? ' corriendo' : ''}: ${box.min.y.toFixed(3)} m`);
+      }
+    }
+  }
+});
+
+
+function realCombatRig() {
+  const json = JSON.parse(readFileSync(new URL('../public/models/personaje/hombre-adulto/cuerpo.gltf', import.meta.url)));
+  const nodes = json.nodes.map(node => {
+    const bone = new THREE.Bone(); bone.name = node.name ?? '';
+    if (node.translation) bone.position.fromArray(node.translation);
+    if (node.rotation) bone.quaternion.fromArray(node.rotation);
+    if (node.scale) bone.scale.fromArray(node.scale);
+    return bone;
+  });
+  json.nodes.forEach((node, i) => { for (const child of node.children ?? []) nodes[i].add(nodes[child]); });
+  const root = new THREE.Group();
+  for (const i of json.scenes[json.scene ?? 0].nodes) root.add(nodes[i]);
+  const bones = new Map(nodes.map(b => [b.name, b]));
+  const base = nodes.map(b => b.quaternion.clone());
+  return { root, bones, nodes, restore: () => nodes.forEach((b, i) => b.quaternion.copy(base[i])) };
+}
+
+test('cada arma enlaza preparación, contacto y recuperación sin saltos en el esqueleto real', () => {
+  for (const weapon of Object.values(WEAPONS)) for (let step = 0; step < weapon.combo; step++) {
+    const rig = realCombatRig();
+    const overlay = createMeleeOverlay(rig.bones, rig.root);
+    const sample = (phase, progress) => {
+      rig.restore();
+      overlay.apply(1 / 60, { id: 1, weapon: weapon.id, step, phase, progress });
+      return rig.nodes.map(b => b.quaternion.clone());
+    };
+    const before = sample('windup', .9999), impact = sample('active', 0);
+    const follow = sample('active', 1), recover = sample('recovery', 0);
+    before.forEach((q, i) => assert.ok(q.clone().normalize().angleTo(impact[i].clone().normalize()) < 1e-5, `${weapon.id}: entrada al contacto`));
+    follow.forEach((q, i) => assert.ok(q.clone().normalize().angleTo(recover[i].clone().normalize()) < 1e-6, `${weapon.id}: salida del contacto`));
+    assert.ok(follow.some((q, i) => q.clone().normalize().angleTo(impact[i].clone().normalize()) > .03), 'el cuerpo continúa después del impacto');
+    const end = sample('recovery', 1);
+    rig.restore();
+    end.forEach((q, i) => assert.ok(q.clone().normalize().angleTo(rig.nodes[i].quaternion.clone().normalize()) < 1e-6, 'retorna al clip base'));
+  }
+});
+
+test('el combate conserva apoyos y orienta la cabeza sin retrasar el impacto a distintos FPS', () => {
+  const poses = [30, 60, 144].map(fps => {
+    const rig = realCombatRig();
+    const overlay = createMeleeOverlay(rig.bones, rig.root);
+    const feet = [...rig.bones.values()].filter(b => /Foot|ToeBase/.test(b.name));
+    const before = feet.map(worldPos);
+    const head = [...rig.bones.values()].find(b => b.name.endsWith('Head'));
+    const headRest = head.quaternion.clone().normalize();
+    const attack = { id: 1, weapon: 'punos', step: 1, phase: 'active', progress: 0 };
+    overlay.apply(1 / fps, attack);
+    feet.forEach((foot, i) => assert.ok(worldPos(foot).distanceTo(before[i]) < 1e-9));
+    assert.deepEqual(rig.root.position.toArray(), [0, 0, 0]);
+    assert.ok(head.quaternion.clone().normalize().angleTo(headRest) > .1, 'la cabeza compensa el giro del torso');
+    return rig.nodes.map(b => b.quaternion.clone());
+  });
+  poses.forEach(pose => pose.forEach((q, i) => assert.ok(q.clone().normalize().angleTo(poses[0][i].clone().normalize()) < 1e-6)));
+});
+
+
+test('un combo comienza desde la recuperación anterior, sin cortar a brazos en reposo', () => {
+  const rig = realCombatRig();
+  const overlay = createMeleeOverlay(rig.bones, rig.root);
+  overlay.apply(1 / 60, { id: 1, weapon: 'punos', step: 0, phase: 'recovery', progress: .4 });
+  const before = rig.nodes.map(b => b.quaternion.clone().normalize());
+  rig.restore();
+  overlay.apply(1 / 60, { id: 2, weapon: 'punos', step: 1, phase: 'windup', progress: 0 });
+  rig.nodes.forEach((bone, i) => assert.ok(bone.quaternion.clone().normalize().angleTo(before[i]) < 1e-6));
 });

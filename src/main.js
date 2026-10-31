@@ -12,7 +12,10 @@ const loading = new LoadingScreen();
 try {
   await loading.stage('Preparando el juego…', 0);
   const { Game } = await import('./core/game.js');
-  const game = new Game(document.getElementById('game-canvas'));
+  const animaciones = new URLSearchParams(location.search).get('animaciones') === 'mixamo-preview'
+    ? 'mixamo-game-preview' : 'default';
+  const apariencia = new URLSearchParams(location.search).get('aspecto') === 'realista' ? 'street-preview' : 'default';
+  const game = new Game(document.getElementById('game-canvas'), { animaciones, apariencia });
   await game.start(loading);
   startControlsHelp();
   openDeveloperNote(game);

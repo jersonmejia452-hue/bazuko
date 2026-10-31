@@ -282,6 +282,25 @@ export class GpsNavigation {
     return Math.hypot(next.x - pos.x, next.z - pos.z) + this._suffix[this._progress + 1];
   }
 
+  /** Metros a pie hasta `to`, medidos como remainingDistance tras setWaypoint; null si no hay camino. No toca el destino activo. */
+  routeLengthTo(from, to) {
+    const path = this.findPath(from, to);
+    if (!path) return null;
+    if (path.length < 2) {
+      // Si el lugar no es transitable, el destino sería este mismo tile y no el interior del edificio.
+      const end = this.isRoutable(to.x, to.z) ? to : path[0] ?? to;
+      return Math.hypot(end.x - from.x, end.z - from.z);
+    }
+    let total = 0, prev = from;
+    for (let i = 1; i < path.length; i++) {
+      total += Math.hypot(path[i].x - prev.x, path[i].z - prev.z);
+      prev = path[i];
+    }
+    const tail = Math.hypot(prev.x - to.x, prev.z - to.z);
+    if (tail > .5 && this.isRoutable(to.x, to.z)) total += tail;
+    return total;
+  }
+
   /** Punto de la ruta a `ahead` metros del jugador, para indicar el giro siguiente. */
   lookAhead(pos, ahead = 10) {
     if (!this.waypoint) return null;

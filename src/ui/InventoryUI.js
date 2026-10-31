@@ -20,7 +20,7 @@ export function useVerb(def) {
   if (def.id === 'popo') return 'Lanzar';
   if (def.id === 'radioTransistor') return 'Sintonizar';
   if (def.id === 'pilas') return 'Cambiar pilas';
-  if (def.cure) return 'Curarse';
+  if (def.cure && !def.consumable) return 'Curarse';
   if (def.substance || def.consumable === 'vicio') return 'Consumir';
   if (def.consumable === 'salud') return 'Aplicar';
   if (def.consumable === 'higiene') return 'Asearse';
@@ -77,10 +77,10 @@ export class InventoryUI {
     const hotKeys = this.inv.hotbar.map((_, i) =>
       `<button type="button" class="inv-hot-key" tabindex="-1" data-hot="${i}" aria-pressed="false">${i + 1}</button>`).join('');
     root.innerHTML = `
-      <div class="inv-window" role="dialog" aria-label="Inventario">
+      <div class="inv-window" role="dialog" aria-modal="true" aria-labelledby="inv-title">
         <header class="inv-head">
           ${itemArtHTML('costal', 'inv-head-art')}
-          <h2>Inventario</h2>
+          <h2 id="inv-title">Inventario</h2>
           <div class="inv-load" title="Carga del costal">
             <span class="inv-load-text"></span>
             <span class="inv-load-bar" aria-hidden="true"><i></i></span>

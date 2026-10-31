@@ -11,6 +11,7 @@ mock.module('../src/character/RealisticCharacter.js', { namedExports: {
   optionsFor: () => [{ id: 'test' }]
 } });
 const { Bogota } = await import('../src/world/districts/Bogota.js');
+const { cityLandmarks } = await import('../src/world/bogota/CityMapRaster.js');
 
 const city = new Bogota();
 city.map = city._layout();
@@ -123,4 +124,55 @@ test('un destino transitable conserva la coordenada marcada y uno sin acceso no 
   const blocked = new GpsNavigation({ width: 20, zMin: 0, zMax: 20, cost: () => Infinity });
   assert.equal(blocked.setWaypoint(marked, { x: 0, z: 0 }, 0), false);
   assert.deepEqual(blocked.route, []);
+});
+
+test('routeLengthTo mide lo mismo que la ruta marcada', () => {
+  const places = [city.reserved.sell, city.reserved.shop, { x: 75, z: -30 }, { x: 81, z: 168 }, { x: 12.4, z: 80.3 }];
+  for (const place of places) {
+    const nav = city.createGpsNavigation();
+    const meters = nav.routeLengthTo(START, place);
+    assert.equal(nav.setWaypoint({ ...place, name: 'Prueba' }, START, 0), true);
+    assert.ok(Math.abs(meters - nav.remainingDistance(START)) < 1e-6, `${place.x}, ${place.z}: ${meters} y ${nav.remainingDistance(START)}`);
+  }
+});
+
+test('routeLengthTo no toca el destino activo', () => {
+  const nav = city.createGpsNavigation();
+  nav.setWaypoint({ ...city.reserved.sell, name: 'Activo', icon: '♻️' }, START, 0);
+  nav.update({ x: START.x - 8, z: START.z }, 100);
+  const state = () => structuredClone({ waypoint: nav.waypoint, route: nav.route, length: nav.routeLength, suffix: nav._suffix, progress: nav._progress });
+  const before = state();
+  for (const place of [city.reserved.shop, { x: 75, z: -30 }, { x: 81, z: 168 }, { x: 75, z: 262 }]) nav.routeLengthTo(START, place);
+  assert.deepEqual(state(), before);
+});
+
+test('a pie el orden cambia: desde la orilla del lago el D69 queda antes que Colpatria', () => {
+  const from = { x: 75, z: 226 };
+  const place = (name) => cityLandmarks().find(l => l.name === name);
+  const straight = (to) => Math.hypot(to.x - from.x, to.z - from.z);
+  const d69 = place('Supermercado D69'), colpatria = place('Torre Colpatria');
+  assert.ok(straight(colpatria) < straight(d69));
+  assert.ok(gps.routeLengthTo(from, d69) < gps.routeLengthTo(from, colpatria));
+});
+
+test('routeLengthTo devuelve null si no hay camino y mide en recta dentro de un mismo tile', () => {
+  assert.equal(gps.routeLengthTo({ x: 75, z: 262 }, city.reserved.shop), null, 'nadando lejos de la orilla');
+  const blocked = new GpsNavigation({ width: 20, zMin: 0, zMax: 20, cost: () => Infinity });
+  assert.equal(blocked.routeLengthTo({ x: 0, z: 0 }, { x: 6, z: 8 }), null);
+  const open = new GpsNavigation({ width: 20, zMin: 0, zMax: 20, tileSize: 2, cost: () => 1 });
+  assert.ok(Math.abs(open.routeLengthTo({ x: 6.2, z: 8 }, { x: 6.6, z: 8.3 }) - .5) < 1e-9);
+  assert.equal(open.routeLengthTo({ x: 6, z: 8 }, { x: 6, z: 8 }), 0);
+});
+
+test('routeLengthTo desde la acera de un edificio mide hasta esa acera, no hasta su interior', () => {
+  for (const name of ['Torre Colpatria', 'Supermercado D69']) {
+    const place = cityLandmarks().find(l => l.name === name);
+    const door = gps._point(gps._nearestOpen(place.x, place.z));
+    const from = { x: door.x + .3, z: door.z };
+    const nav = city.createGpsNavigation();
+    const meters = nav.routeLengthTo(from, place);
+    assert.equal(nav.setWaypoint({ ...place }, from, 0), true);
+    assert.ok(Math.abs(meters - nav.remainingDistance(from)) < 1e-6, `${name}: ${meters} y ${nav.remainingDistance(from)}`);
+    assert.ok(meters < 1, `${name}: ${meters}`);
+  }
 });

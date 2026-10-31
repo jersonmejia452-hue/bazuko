@@ -445,7 +445,7 @@
   box-shadow: 0 2px 0 var(--amarillo-hondo);
 }
 .pause-tab__icon { display: inline-grid; place-items: center; line-height: 1; }
-.pause-tab:focus-visible, .map-view__canvas:focus-visible, .map-view__place:focus-visible {
+.pause-tab:focus-visible, .map-view__canvas:focus-visible, .map-view__place:focus-visible, .map-view__filter:focus-visible, .map-view__nearest:focus-visible {
   outline: 3px solid var(--blanco); outline-offset: 2px;
 }
 
@@ -522,7 +522,7 @@
 }
 
 /* === Mapa grande === */
-.map-view { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 12px; }
+.map-view { display: grid; grid-template-columns: minmax(0, 1fr) 272px; gap: 12px; }
 .map-view__stage { position: relative; }
 .map-view__canvas {
   display: block; width: 100%; height: clamp(260px, calc(min(780px, 100dvh - 32px) - 290px), 560px);
@@ -563,10 +563,20 @@
 .map-view__dest strong { font-size: 16px; }
 .map-view__dest-meta { font-size: 13px; color: var(--azul-texto); font-weight: 700; }
 .map-view__dest .btn { margin-top: 4px; }
+.map-view__filters { display: flex; flex-wrap: wrap; gap: 3px; }
+.map-view__filter {
+  min-height: 32px; padding: 5px 7px 3px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .25);
+  background: rgba(255, 255, 255, .06); font-size: 11px; font-weight: 800;
+}
+@media (hover: hover) { .map-view__filter:hover { background: rgba(255, 255, 255, .14); } }
+.map-view__filter.is-active { background: var(--amarillo); border-color: var(--amarillo); color: var(--negro); }
+.map-view__filter.is-need:not(.is-active) { border-color: var(--amarillo); }
+.map-view__nearest { width: 100%; }
+.map-view__no-option { margin: 0; font-size: 12px; font-weight: 700; color: var(--azul-texto); }
 .map-view__list-title { margin: 4px 0 0; font-size: 12px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; color: var(--azul-texto); }
 .map-view__list { list-style: none; margin: 0; padding: 0 2px 0 0; display: grid; gap: 4px; overflow-y: auto; scrollbar-width: thin; }
 .map-view__place {
-  width: 100%; display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 8px;
+  width: 100%; display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 2px 8px;
   padding: 6px 8px 4px; border-radius: 6px; border: 2px solid transparent;
   background: rgba(255, 255, 255, .06); text-align: left; font-size: 14px; font-weight: 800;
 }
@@ -576,7 +586,23 @@
   display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
   background: var(--carcasa); border: 2px solid var(--c); font-size: 13px;
 }
+.map-view__place:has(.map-view__place-meta) .map-view__place-icon { grid-row: span 2; }
 .map-view__place-dist { font-size: 12px; color: var(--azul-texto); font-variant-numeric: tabular-nums; }
+.map-view__place-meta { grid-column: 2 / -1; font-size: 11px; font-weight: 700; color: var(--azul-texto); }
+.map-view__place.is-broke .map-view__place-meta { color: #ffb3a7; }
+/* Los cinco filtros en una fila: una segunda fila le quita a la lista casi un lugar entero. */
+#menu .map-view__filters .map-view__filter { flex: 1 1 auto; padding-inline: 2px; }
+/* El panel se desplaza y recortaría un aro de foco por fuera; sobre el amarillo, va oscuro y más adentro. */
+#menu .map-view__side button:focus-visible { outline-offset: -3px; }
+#menu .map-view__side :is(.map-view__nearest, .map-view__filter.is-active):focus-visible { outline-color: var(--urban-base, #101411); outline-offset: -6px; }
+@media (hover: hover) { #menu .map-view__tool:hover { border-color: #7c8978; background: #2a3329; } }
+@media (pointer: coarse) {
+  #menu .map-view__filters .map-view__filter { min-height: 44px; }
+}
+/* En una pantalla baja, lo primero que cede es lo que no es lista. */
+@media (max-height: 700px) and (min-width: 761px) {
+  .map-view__dest-label, .map-view__list-title { display: none; }
+}
 @media (max-width: 760px) {
   .map-view { grid-template-columns: 1fr; }
   .map-view__canvas { height: 48vh; }

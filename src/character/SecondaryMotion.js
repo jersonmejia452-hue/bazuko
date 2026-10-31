@@ -17,6 +17,7 @@ export class SecondaryMotion {
     this.time = phase;
     this.motion = 0;
     this.load = 0;
+    this.turn = 0;
     this.active = false;
     this.euler = new Euler();
     this.offset = new Quaternion();
@@ -28,7 +29,7 @@ export class SecondaryMotion {
     this.active = false;
   }
 
-  apply(dt, { speed = 0, load = 0, action = null, phase = 0 } = {}) {
+  apply(dt, { speed = 0, load = 0, action = null, phase = 0, turnRate = 0 } = {}) {
     this.restore();
     this.time += dt;
     const k = animationDamping(dt, 6);
@@ -36,6 +37,10 @@ export class SecondaryMotion {
     this.motion += (desiredMotion - this.motion) * k;
     const transfer = desiredMotion - this.motion;
     this.load += (Math.min(1, Math.max(0, load)) - this.load) * k;
+    // Un giro rápido produce una torsión breve y limitada; se desvanece al enderezarse.
+    // A velocidades bajas se reduce para no desplazar los pies de la pose de reposo.
+    const turn = Number.isFinite(turnRate) ? Math.min(1, Math.max(-1, turnRate / 5)) : 0;
+    this.turn += (turn * desiredMotion - this.turn) * animationDamping(dt, 10);
     // Los gestos, las acciones de cuerpo entero y su altura original tienen prioridad.
     if (action) return;
 
@@ -46,15 +51,15 @@ export class SecondaryMotion {
       base.copy(bone.quaternion);
       if (bone === this.chest) {
         this.euler.set(
-          breath * .009 * rest + this.motion * .014 + this.load * .035 + transfer * .045,
-          Math.sin(this.time * .61) * .009 * rest - stride * .018,
-          Math.sin(this.time * .79) * .008 * rest + stride * .009
+          breath * .012 * rest + this.motion * .024 + this.load * .035 + transfer * .09,
+          Math.sin(this.time * .61) * .009 * rest - stride * .018 - this.turn * .075,
+          Math.sin(this.time * .79) * .008 * rest + stride * .009 - this.turn * .035
         );
       } else {
         this.euler.set(
-          -breath * .006 * rest - this.load * .012 - transfer * .02,
-          Math.sin(this.time * .47) * .035 * rest + stride * .009,
-          Math.sin(this.time * .67) * .007 * rest - stride * .006
+          -breath * .008 * rest - this.load * .012 - transfer * .04,
+          Math.sin(this.time * .47) * .035 * rest + stride * .009 + this.turn * .045,
+          Math.sin(this.time * .67) * .007 * rest - stride * .006 + this.turn * .02
         );
       }
       bone.quaternion.multiply(this.offset.setFromEuler(this.euler));

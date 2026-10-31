@@ -45,7 +45,7 @@ export const TALENTS = {
   surv2: {
     id: 'surv2',
     name: 'Piel Dura',
-    desc: '-40% de riesgo de enfermedad en la basura',
+    desc: '-40% de riesgo de enfermedad en la basura y de sarna al dormir',
     branch: 'supervivencia',
     cost: 1,
     requires: ['surv1'],

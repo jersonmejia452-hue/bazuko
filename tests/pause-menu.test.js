@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 import { openPauseMenu } from '../src/ui/PauseMenu.js';
+import { Menu } from '../src/ui/Menu.js';
 
 beforeEach(() => {
   globalThis.window = new EventTarget();
@@ -79,4 +80,51 @@ test('la pausa tiene pestañas, abre en la pedida y Q/E/M cambian de sección', 
   assert.equal(closed, 1, 'M en la pestaña Mapa cierra la pausa');
   press('KeyE');
   assert.equal(game._pauseTab, 'mapa', 'el listener se retira al cerrar');
+});
+
+test('«+» no cambia de pestaña en teclado español, los atajos del navegador tampoco, y cada pestaña empieza arriba', () => {
+  const game = {
+    creator: { isOpen: false },
+    audio: { volume: 0.5, isMuted: () => false, setVolume() {}, toggleMute() {} },
+    stats: { dinero: 0, level: 1, xp: 0 }, clock: { day: 2, hour: 22 },
+    menu: {
+      isOpen: false, bodyEl: { scrollTop: 900 },
+      open(c) { this.isOpen = true; this._render = c.render; },
+      refresh() {},
+      close() {}
+    }
+  };
+  openPauseMenu(game, 'ajustes');
+  const press = (code, extra = {}) => window.dispatchEvent(Object.assign(new Event('keydown'), { code, ...extra }));
+
+  press('BracketRight', { key: '+' });
+  press('BracketLeft', { key: 'Dead' });
+  assert.equal(game._pauseTab, 'ajustes', 'en esos teclados, esas teclas físicas escriben «+» y un acento');
+  for (const modifier of ['metaKey', 'ctrlKey', 'altKey']) press('KeyE', { key: 'e', [modifier]: true });
+  assert.equal(game._pauseTab, 'ajustes');
+  assert.equal(game.menu.bodyEl.scrollTop, 900, 'quedarse en la pestaña no mueve nada');
+
+  press('BracketRight', { key: ']' });
+  assert.equal(game._pauseTab, 'controles');
+  assert.equal(game.menu.bodyEl.scrollTop, 0, 'en móvil, la pestaña nueva no aparece a media altura');
+  press('BracketLeft', { key: '[' });
+  assert.equal(game._pauseTab, 'ajustes');
+});
+
+test('Espacio pulsa los botones de cualquier menú, aunque Input lo cancele para el salto', () => {
+  const nodes = {};
+  document.getElementById = (id) => (nodes[id] ??= Object.assign(document.createElement('div'), {
+    listeners: {},
+    addEventListener(type, fn) { this.listeners[type] = fn; },
+    replaceChildren() {},
+  }));
+  new Menu();
+  let stopped = 0;
+  const key = (code, target) => ({ code, target, stopPropagation() { stopped++; } });
+  const inButton = { closest: (selector) => (selector === 'button' ? {} : null) };
+  nodes.menu.listeners.keydown(key('Space', inButton));
+  assert.equal(stopped, 1);
+  nodes.menu.listeners.keydown(key('Space', { closest: () => null }));
+  nodes.menu.listeners.keydown(key('KeyM', inButton));
+  assert.equal(stopped, 1, 'lo demás sigue hasta la pausa y el juego');
 });

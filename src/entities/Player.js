@@ -8,6 +8,7 @@ import {
 } from '../utils/constants.js';
 import { createCharacter } from '../character/character.js';
 import { createRealisticCharacter, REALISTIC_SCALE } from '../character/RealisticCharacter.js';
+import { resolveAppearanceProfile } from '../character/streetMaterials.js';
 import { PlayerRagdoll } from '../systems/PlayerRagdoll.js';
 import { MeleeCombat } from '../systems/MeleeCombat.js';
 import { WaterMovement } from '../systems/WaterMovement.js';
@@ -20,8 +21,10 @@ const emit = (type, detail) => {
 };
 
 export class Player {
-  constructor(scene, input, stats=null, audio=null) {
+  constructor(scene, input, stats=null, audio=null, { animaciones = 'default', apariencia = 'default' } = {}) {
     this.audio = audio;
+    this.realisticAnimationProfile = animaciones;
+    this.realisticAppearanceProfile = resolveAppearanceProfile(apariencia);
     this.jumpVelocity = 0;
     this.isGrounded = true;
     this.groundSurface = null;
@@ -296,14 +299,37 @@ export class Player {
     return this._realistic?.setLook(look);
   }
 
+  /** Materiales optativos, independientes del modelo y de las animaciones. */
+  async setAppearance(value) {
+    const next = resolveAppearanceProfile(value);
+    const previous = this.realisticAppearanceProfile;
+    this.realisticAppearanceProfile = next;
+    try {
+      const character = this._realistic ?? (this._realisticPromise ? await this._realisticPromise : null);
+      await character?.setAppearance(next);
+    } catch (error) {
+      if (this.realisticAppearanceProfile === next) this.realisticAppearanceProfile = previous;
+      throw error;
+    }
+  }
+
   /** Cambia entre el personaje realista (MakeHuman, por defecto) y el procedural (liviano) */
   async setModel(kind) {
     if (kind === this.modelKind) return;
     this.clearVehicleImpact();
+    const previousKind = this.modelKind;
     this.modelKind = kind;
     if (kind === 'realista') {
-      this._realisticPromise ??= createRealisticCharacter(this.look ?? {});
-      this._realistic = await this._realisticPromise;
+      this._realisticPromise ??= createRealisticCharacter(this.look ?? {}, {
+        animaciones: this.realisticAnimationProfile, apariencia: this.realisticAppearanceProfile
+      });
+      try {
+        this._realistic = await this._realisticPromise;
+      } catch (error) {
+        this._realisticPromise = null;
+        if (this.modelKind === kind) this.modelKind = previousKind;
+        throw error;
+      }
       if (this._realistic.look !== this.look && this.look) await this._realistic.setLook(this.look);
       if (this.modelKind !== 'realista') return; // se cambió mientras cargaba
       this.root.remove(this.character.group);
@@ -330,6 +356,29 @@ export class Player {
     this.actionTimer = duration;
     this.actionDuration = duration;
     this.actionProgress = 0;
+  }
+
+  /** Dormir congela la simulación, no el cuerpo: se acuesta y sigue así hasta que Game lo despierta. */
+  updateSleepPose(dt) {
+    if (this.action !== 'dormir' || !(dt > 0)) return;
+    this.time += dt;
+    this.actionTimer = Math.max(0, this.actionTimer - dt);
+    this.actionProgress = Math.min(1, 1 - this.actionTimer / (this.actionDuration || 1));
+    Object.assign(this.movement, { landing: 0, turnRate: 0 });
+    this.character.update(dt, {
+      speed: 0,
+      running: false,
+      action: 'dormir',
+      actionProgress: this.actionProgress,
+      movement: this.movement,
+      attack: null,
+      smoke: null,
+      basuco: null,
+      look: 0,
+      t: this.time,
+      load: this.load,
+      dirt: this.stats ? Math.max(0, (40 - this.stats.higiene) / 40) : 0
+    });
   }
 
 
@@ -544,6 +593,8 @@ export class Player {
     this.root.position.copy(this.position);
     this.airTime = !this.isGrounded && !this.isSwimming ? this.airTime + dt : 0;
 
+    // La velocidad angular se comunica a la capa visual sin modificar la física.
+    const previousYaw = this.root.rotation.y;
     // Rotación suave
     if (moving) {
       const targetAngle = Math.atan2(dir.x, dir.z);
@@ -588,7 +639,8 @@ export class Player {
     Object.assign(this.movement, {
       grounded: this.isGrounded, verticalVelocity: this.jumpVelocity, airTime: this.airTime,
       landing: this.landing, swimming: this.isSwimming, waterDepth: this.waterDepth,
-      surfaceY: this.waterFrame?.surfaceY
+      surfaceY: this.waterFrame?.surfaceY,
+      turnRate: dt > 0 ? (this.root.rotation.y - previousYaw) / dt : 0
     });
 
     // Animación del personaje (velocidad en metros del modelo, no del mundo)

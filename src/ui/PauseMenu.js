@@ -21,7 +21,7 @@ const CONTROL_GROUPS = [
   ['Movimiento', [['WASD', 'Caminar'], ['Shift', 'Correr'], ['Espacio', 'Saltar'], ['Ratón', 'Clic fija la cámara ∙ rueda acerca'], ['V', 'Vista tercera persona / isométrica']]],
   ['Acciones', [['E', 'Interactuar: basura, tiendas, cambuche, carros'], ['Q', 'Mantener para clasificar basura ∙ dealer'], ['B / L', 'Pedir limosna'], ['F', 'Boost de adrenalina'], ['G / Clic', 'Golpear'], ['X', 'Lanzar / recoger'], ['Z', 'Defecar']]],
   ['Paneles', [['I / Tab', 'Inventario ∙ 1-5 acceso rápido'], ['H', 'Estado y necesidades'], ['T', 'Talentos'], ['C', 'Fabricar'], ['P', 'Editar personaje'], ['R', 'Radio transistor'], ['K', 'Modelo realista / liviano'], ['F2', 'Modo foto ∙ guardar una postal'], ['F3', 'Panel de rendimiento'], ['Esc', 'Pausa ∙ cerrar panel']]],
-  ['Mapa y GPS', [['M', 'Abrir / cerrar el mapa'], ['N', 'Mostrar / ocultar radar'], ['+ / −', 'Zoom del radar'], ['Clic', 'Marcar destino en el mapa'], ['Clic der. / Supr', 'Quitar destino'], ['Q / E', 'Cambiar de pestaña en la pausa']]],
+  ['Mapa y GPS', [['M', 'Abrir / cerrar el mapa'], ['M, Enter', 'Ruta a lo que más necesitas'], ['N', 'Mostrar / ocultar radar'], ['+ / −', 'Zoom del radar'], ['Clic', 'Marcar destino en el mapa'], ['Clic der. / Supr', 'Quitar destino'], ['Q / E', 'Cambiar de pestaña en la pausa']]],
 ];
 
 export function openPauseMenu(game, tab = 'estado') {
@@ -38,6 +38,8 @@ export function openPauseMenu(game, tab = 'estado') {
     if (id === game._pauseTab) return;
     game._pauseTab = id;
     game.menu.refresh?.();
+    // `refresh` conserva el desplazamiento para comprar y vender; otra pestaña empieza desde arriba.
+    if (game.menu.bodyEl) game.menu.bodyEl.scrollTop = 0;
   };
   const cycle = (dir) => {
     const i = PAUSE_TABS.findIndex(t => t.id === game._pauseTab);
@@ -47,10 +49,11 @@ export function openPauseMenu(game, tab = 'estado') {
   const onKey = (e) => {
     // Si otro menú (p. ej. la radio) reemplazó a la pausa, el listener se retira.
     if (game.menu?._render && game.menu._render !== render) { window.removeEventListener('keydown', onKey); return; }
-    if (e._pauseOpened || e.repeat || !game.menu?.isOpen) return;
+    if (e._pauseOpened || e.repeat || !game.menu?.isOpen || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.target?.closest?.('input[type="text"], textarea, [contenteditable="true"]')) return;
-    if (e.code === 'KeyQ' || e.code === 'BracketLeft') cycle(-1);
-    else if (e.code === 'KeyE' || e.code === 'BracketRight') cycle(1);
+    // Por `key`: en teclados español y latinoamericano, la tecla física de «]» escribe «+».
+    if (e.code === 'KeyQ' || e.key === '[') cycle(-1);
+    else if (e.code === 'KeyE' || e.key === ']') cycle(1);
     else if (e.code === 'KeyM') { if (game._pauseTab === 'mapa') game.menu.close(); else select('mapa'); }
     else return;
     e.preventDefault?.();

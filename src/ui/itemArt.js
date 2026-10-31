@@ -4,6 +4,7 @@
 // los SVG pequeños en la compilación, así que no generan peticiones extra.
 // La mesa de fabricación y el inventario comparten iconos, familias y textos.
 import { ITEMS } from '../data/items.js';
+import { diseaseName } from '../data/diseases.js';
 import { NEEDS } from '../systems/StatsSystem.js';
 import { cop } from '../utils/money.js';
 
@@ -90,7 +91,7 @@ export function itemEffectLine(item, { weight = true, fallback = true } = {}) {
   for (const k of NEEDS) {
     if (k !== item.consumable && item[k]) parts.push(`${item[k] > 0 ? '+' : ''}${item[k]} ${NEED_LABELS[k]}`);
   }
-  if (item.cure) parts.push(`Cura: ${item.cure}`);
+  if (item.cure) parts.push(`Cura: ${diseaseName(item.cure)}`);
   if (!parts.length && fallback) parts.push(item.usable ? 'Se usa desde el inventario' : `Se vende por ${cop(item.value)}`);
   if (weight) parts.push(`${item.weight} kg`);
   return parts.join(' · ');

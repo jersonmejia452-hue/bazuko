@@ -1,13 +1,16 @@
 
 // src/data/items.js
 // Valores en pesos colombianos (COP): `value` es lo que pagan por el objeto.
+import { DEALER_MARKUP, SUBSTANCE_PRICE_MULT } from '../utils/constants.js';
+import { diseaseName } from './diseases.js';
 
 export const ITEMS = {
   // ===== BASURA =====
-  lata:     { id: 'lata',     name: 'Lata vacía',    weight: 0.2,  value: 250, rarity: 'common' },
+  // `sharp`: corta al escarbar, así que la bolsa que lo trae puede dar tétanos.
+  lata:     { id: 'lata',     name: 'Lata vacía',    weight: 0.2,  value: 250, rarity: 'common', sharp: true },
   botella:  { id: 'botella',  name: 'Botella PET',   weight: 0.3,  value: 150 },
   carton:   { id: 'carton',   name: 'Cartón',        weight: 0.5,  value: 200, rarity: 'common' },
-  chatarra: { id: 'chatarra', name: 'Chatarra',      weight: 1.0,  value: 900 },
+  chatarra: { id: 'chatarra', name: 'Chatarra',      weight: 1.0,  value: 900, sharp: true },
   cable:    { id: 'cable',    name: 'Cable cobre',   weight: 0.4,  value: 2400 },
 
   // ===== TESOROS =====
@@ -135,7 +138,10 @@ export const ITEMS = {
     consumable: 'vicio', amount: 25, salud: -1, substance: true
   },
   rifa:  { id: 'rifa', name: 'Cartón de rifa', weight: 0.02, value: 1500 },
-  arma:  { id: 'arma', name: 'Arma casera',    weight: 1.2,  value: 6000 },
+  arma: {
+    id: 'arma', name: 'Arma casera', weight: 1.2, value: 6000, usable: true, weapon: 'arma',
+    desc: 'Tabla con chatarra amarrada con cable: lenta, pero pega duro y alcanza más. Usar: equipar o guardar.'
+  },
   cuchillo: {
     id: 'cuchillo', name: 'Cuchillo', weight: 0.4, value: 2800, usable: true, weapon: 'cuchillo',
     desc: 'Arma cuerpo a cuerpo rápida. Usar: equipar o guardar.'
@@ -192,7 +198,7 @@ export function describeEffects(item) {
   for (const key of ['hambre', 'sed', 'energia', 'salud', 'higiene', 'animo', 'vicio']) {
     if (item[key]) lines.push(`${key}: ${item[key] > 0 ? '+' : ''}${item[key]}`);
   }
-  if (item.cure) lines.push(`Cura: ${item.cure}`);
+  if (item.cure) lines.push(`Cura: ${diseaseName(item.cure)}`);
   const rarity = itemRarityLabel(item.id);
   if (rarity) lines.push(`Rareza: ${rarity}`);
   return lines;
@@ -201,6 +207,9 @@ export function describeEffects(item) {
 /** La recicladora compra todo lo que no se come, no cura, no es sustancia ni sirve para construir */
 export const isRecyclable = (item) =>
   !!item && !item.consumable && !item.cure && !item.substance && !item.build && item.id !== 'popo' && item.id !== 'radioTransistor' && item.id !== 'pilas';
+
+/** Lo que la recicladora o un ladrón se llevan del costal: todo lo reciclable menos el arma que el jugador tiene en la mano. */
+export const isForSale = (item, equippedWeapon = null) => isRecyclable(item) && !(item.weapon && item.weapon === equippedWeapon);
 
 // Icono (lucide) para mostrar cada objeto en los menús
 const ICONS = {
@@ -259,7 +268,7 @@ export const SHOP_ITEMS = [
   { item: 'papaCriolla', price: 1000, desc: 'Papas criollas calientes.' },
   { item: 'lataComida', price: 6000 },
   { item: 'agua',       price: 2000 },
-  { item: 'aguapanela', price: 1200, desc: 'Aguapanela caliente con limón: cura el resfriado.' },
+  { item: 'aguapanela', price: 1200, desc: 'Aguapanela caliente con limón: cura la gripe.' },
   { item: 'refresco',   price: 3500 },
   { item: 'cafe',       price: 2000, desc: 'Un tinto caliente: quita el sueño.' },
   { item: 'cigarrillo', price: 500,  desc: 'Calma el vicio. Le quita un poquito a la salud.' },
@@ -281,3 +290,12 @@ export const SHOP_ITEMS = [
 ];
 
 export const COSTAL_BONUS = 20;
+
+// ===== DEALER (precios en COP) =====
+// Cobra más de lo que paga de noche, también con «Contactos»: comprarle para revenderle nunca deja ganancia.
+
+/** Lo que cobra el dealer por una unidad. */
+export const dealerPrice = (item) => Math.round(item.value * DEALER_MARKUP);
+
+/** Lo que paga el dealer, de noche, por una unidad que le traes. */
+export const dealerOffer = (item, priceMult = 1) => Math.round(item.value * SUBSTANCE_PRICE_MULT * priceMult);

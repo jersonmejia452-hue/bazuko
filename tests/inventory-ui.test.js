@@ -165,6 +165,7 @@ test('el verbo del botón principal sigue la lógica de uso', () => {
   assert.equal(useVerb(ITEMS.agua), 'Beber');
   assert.equal(useVerb(ITEMS.cafe), 'Beber');
   assert.equal(useVerb(ITEMS.vacuna), 'Curarse');
+  assert.equal(useVerb(ITEMS.aguapanela), 'Beber', 'también cura la gripe, pero se gasta aunque no la haya');
   assert.equal(useVerb(ITEMS.cigarrillo), 'Consumir');
   assert.equal(useVerb(ITEMS.jabon), 'Asearse');
   assert.equal(useVerb(ITEMS.vendaje), 'Aplicar');

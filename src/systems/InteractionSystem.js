@@ -12,7 +12,8 @@ import {
   XP_CRAFT,
   XP_BEG,
   STEAL_CAUGHT_PENALTY,
-  STEAL_CAUGHT_MONEY
+  STEAL_CAUGHT_MONEY,
+  SUBSTANCE_RISK_CHANCE
 } from '../utils/constants.js';
 import { cop } from '../utils/money.js';
 import { originEffect } from '../data/origins.js';
@@ -169,16 +170,10 @@ export class InteractionSystem {
         case 'car':
           this._stealCar(nearest);
           break;
-        case 'dealer': {
-          const hasSubstances = this.inventory.items.some((i) => ITEMS[i.id]?.substance);
-          if (hasSubstances && clock.isNight) {
-            this._sellSubstances(nearest, clock);
-          } else {
-            // Abre la tienda del dealer para comprar
-            window.dispatchEvent(new CustomEvent('dealer-toggle', { detail: { dealer: nearest } }));
-          }
+        case 'dealer':
+          // Abre su tienda: ahí se compra y, de noche, se elige qué venderle. Nunca vende sin preguntar.
+          window.dispatchEvent(new CustomEvent('dealer-toggle', { detail: { dealer: nearest } }));
           break;
-        }
       }
     }
 
@@ -282,10 +277,10 @@ export class InteractionSystem {
       this.audio?.play('treasure');
       this.stats.saludMental = Math.min(100, this.stats.saludMental + MENTAL_RESTORE_RARE);
     }
-    // Riesgo de enfermedad
-    const diseaseResist = this.talents.getEffect('diseaseResist', 1) * this._origin('diseaseResist');
+    // Riesgo de enfermedad; si la bolsa traía latas o chatarra, también de tétanos
     const sortDiseaseMult = this.talents.getEffect('sortDiseaseMult', 1);
-    this.disease.tryInfect(result.sorted, diseaseResist * (result.sorted ? sortDiseaseMult : 1));
+    const cut = result.items.some((itemId) => ITEMS[itemId]?.sharp);
+    this.disease.tryInfect(result.sorted, this.diseaseResistance() * (result.sorted ? sortDiseaseMult : 1), { cut });
 
     this.stats.addXP(XP_PICKUP, this.talents);
 
@@ -338,16 +333,47 @@ export class InteractionSystem {
     }));
   }
 
-  _sellSubstances(target, clock) {
-    const priceMult = this.talents.getEffect('substancePriceMult', 1);
-    const result = target.sellSubstances(this.inventory, clock.isNight, priceMult);
-    if (result.reason === 'day') {
+  /** Resistencia a enfermedades por talentos y origen (menos de 1 = menos riesgo). */
+  diseaseResistance() {
+    return this.talents.getEffect('diseaseResist', 1) * this._origin('diseaseResist');
+  }
+
+  /** Lo que el talento «Contactos» le saca de más al dealer. */
+  substancePriceMult() {
+    return this.talents.getEffect('substancePriceMult', 1);
+  }
+
+  /** Vende al dealer una sustancia (`itemId`) o todas; lo usa su tienda. */
+  sellSubstancesToDealer(itemId = null, clock = null) {
+    const dealer = this.targets.find((t) => typeof t.sellSubstances === 'function');
+    return dealer ? this._sellSubstances(dealer, clock, itemId) : null;
+  }
+
+  _sellSubstances(target, clock, itemId = null) {
+    if (!clock?.isNight) {
       window.dispatchEvent(new CustomEvent('substance-fail', {
         detail: { reason: 'day' }
       }));
       this.audio?.play('empty');
-      return;
+      return null;
     }
+    const lots = this.inventory.items
+      .filter((entry) => ITEMS[entry.id]?.substance && (!itemId || entry.id === itemId))
+      .map(({ id, qty }) => ({ id, qty }));
+    if (!lots.length) {
+      this.audio?.play('empty');
+      return null;
+    }
+    // Requisa: a veces cae la policía en plena venta y se lleva la mercancía sin pagar nada.
+    if (Math.random() < SUBSTANCE_RISK_CHANCE) {
+      for (const { id, qty } of lots) this.inventory.remove(id, qty);
+      window.dispatchEvent(new CustomEvent('substance-raid', {
+        detail: { lost: lots.map(({ id, qty }) => `${ITEMS[id].name} ×${qty}`) }
+      }));
+      this.audio?.play('empty');
+      return { earned: 0, raided: true };
+    }
+    const result = target.sellSubstances(this.inventory, true, this.substancePriceMult(), itemId);
     if (result.earned > 0) {
       this.stats.dinero += result.earned;
       this.stats.addXP(XP_SELL * 2, this.talents);
@@ -358,6 +384,7 @@ export class InteractionSystem {
     } else {
       this.audio?.play('empty');
     }
+    return result;
   }
 
   _buySubstance(target, itemId = null) {

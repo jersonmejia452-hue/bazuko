@@ -172,7 +172,8 @@ canvas { display: block; width: 100vw; height: 100vh; }
   color: #ddd; font-family: monospace;
   border-left: 3px solid #666;
   animation: fadeUp 2.5s forwards;
-  pointer-events: none; z-index: 100;
+  /* Sobre la tienda y el inventario (hasta 220), que dependen de estos avisos; bajo los menús (300). */
+  pointer-events: none; z-index: 250;
 }
 .loot-toast.rare {
   border-left-color: #c9a227; color: #c9a227;
@@ -345,13 +346,22 @@ body #interaction-prompt { bottom: 160px; max-width: calc(100vw - 40px); text-al
 .dealer-prod-desc { font-size: 11px; color: #bca0cb; margin-top: 3px; }
 .dealer-prod-action { display: flex; align-items: center; gap: 10px; }
 .dealer-prod-price { font-size: 13px; color: #ffd166; font-weight: bold; }
-.dealer-buy-btn {
+.dealer-buy-btn, .dealer-sell-btn {
   background: #8e44ad; color: #fff; border: 1px solid #be79df;
   padding: 6px 14px; cursor: pointer; font-family: monospace; font-size: 12px;
   transition: background 0.15s;
 }
-.dealer-buy-btn:hover { background: #9b59b6; }
-.dealer-buy-btn:disabled { background: #444; border-color: #555; cursor: not-allowed; }
+.dealer-buy-btn:hover, .dealer-sell-btn:hover { background: #9b59b6; }
+.dealer-buy-btn:disabled, .dealer-sell-btn:disabled { background: #444; border-color: #555; cursor: not-allowed; }
+.dealer-section {
+  color: #d783ff; font-size: 12px; font-weight: bold; text-transform: uppercase;
+  letter-spacing: 1px; margin: 4px 0 8px;
+}
+.dealer-section + .dealer-products + .dealer-section { margin-top: 16px; }
+.dealer-empty {
+  border: 1px dashed #4a2858; padding: 10px;
+  color: #bca0cb; font-size: 12px; text-align: center;
+}
 .dealer-hint { color: #887; font-size: 11px; margin-top: 14px; text-align: center; }
 
 /* === Items consumibles en inventario === */

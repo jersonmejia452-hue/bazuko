@@ -6,15 +6,19 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { ACTIONFORGE_CLIPS, buildCharacterClips } from './actionforge.js';
+import { buildMixamoPreviewClips, buildMixamoGameComplements, isMixamoProfile, resolveAnimationProfile } from './animationProfiles.js';
+import { groundMixamoClips, MixamoGroundContact } from './mixamoGrounding.js';
 import { locomotionBlend, locomotionRate, measureLocomotion } from './locomotion.js';
-import { PALETTES } from './look.js';
+import { DEFAULT_LOOK, PALETTES } from './look.js';
 import { addGrime, addHairTone } from './weathering.js';
+import { applyStreetMaterial, createStreetFrame, resolveAppearanceProfile, streetMaterialSeed } from './streetMaterials.js';
 import { attachAccessories, attachWeapon, FAR_ACCESSORIES } from './props.js';
 import { attachCigaretteToHand, emberGlow } from './smoking.js';
 import { attachBasucoProps } from './pipe.js';
 import { addHatClip, hatEdgeProfile } from './hatFit.js';
 import { animationDamping, SecondaryMotion } from './SecondaryMotion.js';
 import { ActionPose } from './ActionPose.js';
+import { preparePlayback, blendAnimationWeights } from './AnimationPlayback.js';
 
 const MODEL_BASE = `${import.meta.env?.BASE_URL ?? '/'}models/`;
 const BASE = `${MODEL_BASE}personaje/`;
@@ -38,6 +42,20 @@ export const REAL_DEFAULT = {
 };
 
 const loader = new GLTFLoader();
+let skinDetailPromise;
+function loadStreetSkinDetail() {
+  skinDetailPromise ??= new THREE.TextureLoader().loadAsync(`${MODEL_BASE}preview/skin/skin-micro-normal.png`).then(texture => {
+    texture.colorSpace = THREE.NoColorSpace;
+    texture.flipY = false;
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(18, 18);
+    return texture;
+  }).catch(error => {
+    console.warn('El detalle de piel no está disponible; se conservan los materiales de la apariencia.', error);
+    return null;
+  });
+  return skinDetailPromise;
+}
 const cache = new Map();
 const load = (url) => {
   if (!cache.has(url)) cache.set(url, loader.loadAsync(url));
@@ -98,10 +116,28 @@ function loadAnimations() {
 }
 
 const clipCache = new Map();
+const groundedClipCache = new Map();
 let actionforgePromise;
-async function clipsForBody(bodyId, bodyGltf) { // bodyId incluye el nivel de detalle
-  if (!clipCache.has(bodyId)) {
-    clipCache.set(bodyId, (async () => {
+let mixamoPreviewPromise;
+async function clipsForBody(bodyId, bodyGltf, profile) { // bodyId incluye el nivel de detalle
+  const key = `${profile.id}:${bodyId}`;
+  if (!clipCache.has(key)) {
+    clipCache.set(key, (async () => {
+      if (isMixamoProfile(profile.id)) {
+        mixamoPreviewPromise ??= loader.loadAsync(profile.url).catch(error => {
+          mixamoPreviewPromise = null;
+          throw new Error('No se pudo cargar el banco Mixamo + Blender de prueba.', { cause: error });
+        });
+        const clips = buildMixamoPreviewClips(bodyGltf, await mixamoPreviewPromise);
+        if (profile.id === 'mixamo-game-preview' && (!clips.comer || !clips.cagar)) {
+          let actionforge;
+          try { actionforge = await load(ACTIONFORGE_URL); }
+          catch (error) { throw new Error('Mixamo en juego: no se pudieron cargar los complementos para comer y agacharse.', { cause: error }); }
+          Object.assign(clips, buildMixamoGameComplements(bodyGltf, actionforge, clips));
+        }
+        clips.walk.userData.locomotion = measureLocomotion(bodyGltf.scene, clips.walk, clips.run);
+        return clips;
+      }
       actionforgePromise ??= load(ACTIONFORGE_URL).catch(error => {
         console.warn('No se pudo cargar ActionForge; se usarán las animaciones anteriores.', error);
         return null;
@@ -113,9 +149,12 @@ async function clipsForBody(bodyId, bodyGltf) { // bodyId incluye el nivel de de
       const clips = buildCharacterClips(bodyGltf, complete ? null : await loadAnimations(), actionforge);
       if (clips.walk) clips.walk.userData.locomotion = measureLocomotion(bodyGltf.scene, clips.walk, clips.run);
       return clips;
-    })());
+    })().catch(error => {
+      clipCache.delete(key);
+      throw error;
+    }));
   }
-  return clipCache.get(bodyId);
+  return clipCache.get(key);
 }
 
 // ---------- materiales ----------
@@ -190,7 +229,9 @@ function hideCovered(bodyMesh, baseIndex, hidden) {
 
 // ---------- instancia ----------
 
-async function buildInstance(catalog, look, lod = false) {
+async function buildInstance(catalog, look, lod = false, profile = resolveAnimationProfile(), appearance = 'default') {
+  const street = appearance === 'street-preview';
+  const detailPromise = street && !lod ? loadStreetSkinDetail() : Promise.resolve(null);
   const real = normalizeReal(catalog, look.real);
   const body = catalog.cuerpos.find((c) => c.sexo === real.sexo && c.edad === real.edad) ?? catalog.cuerpos[0];
   const folder = `${BASE}${body.id}/`;
@@ -201,11 +242,12 @@ async function buildInstance(catalog, look, lod = false) {
     .filter((p) => p.info?.file);
   // Las prendas no dependen de descargar el cuerpo: iniciar todo en paralelo.
   const bodyPromise = load(folder + (useLod ? 'lod/cuerpo.gltf' : 'cuerpo.gltf'));
-  const [bodyGltf, clips, ...partGltfs] = await Promise.all([
+  const [bodyGltf, sourceClips, ...partGltfs] = await Promise.all([
     bodyPromise,
-    bodyPromise.then(gltf => clipsForBody(body.id + (useLod ? ':lod' : ''), gltf)),
+    bodyPromise.then(gltf => clipsForBody(body.id + (useLod ? ':lod' : ''), gltf, profile)),
     ...parts.map((p) => load(folder + (useLod && p.info.lod ? p.info.lod : p.info.file)))
   ]);
+  const detailTexture = await detailPromise;
 
   const root = cloneSkinned(bodyGltf.scene);
   const bones = new Map();
@@ -219,12 +261,17 @@ async function buildInstance(catalog, look, lod = false) {
   });
 
   const skinTone = new THREE.Color(PALETTES.piel[look.piel] ?? PALETTES.piel[2]).lerp(new THREE.Color(1, 1, 1), 0.25);
-  const hairTone = new THREE.Color(PALETTES.pelo[look.peloColor] ?? PALETTES.pelo[0]).lerp(new THREE.Color(1, 1, 1), 0.15);
+  const hairTone = new THREE.Color(PALETTES.pelo[look.peloColor] ?? PALETTES.pelo[0]).lerp(new THREE.Color(1, 1, 1), street ? .04 : .15);
   const wear = look.desgaste ?? 0;
   const seed = Math.random() * 100;
+  const streetFrame = street ? createStreetFrame(root, bones, bodyMesh) : null;
+  const streetOptions = street ? {
+    frame: streetFrame, wear: look.desgaste ?? DEFAULT_LOOK.desgaste, seed: streetMaterialSeed(look), detailTexture
+  } : null;
   if (bodyMesh) {
     bodyMesh.material.color.copy(skinTone);
-    addGrime(bodyMesh.material, wear, { skin: true, seed });
+    if (street) applyStreetMaterial(bodyMesh.material, bodyMesh, { ...streetOptions, kind: 'skin' });
+    else addGrime(bodyMesh.material, wear, { skin: true, seed });
   }
 
   const hidden = new Set();
@@ -242,9 +289,13 @@ async function buildInstance(catalog, look, lod = false) {
       } else if (uniform && p.cat !== 'barba') {
         // uniforme: la prenda entera de un color (la textura conserva costuras y pliegues)
         mesh.material.color.copy(uniform);
-      } else {
+      } else if (!street) {
         addGrime(mesh.material, wear, { seed });
       }
+      if (street) applyStreetMaterial(mesh.material, mesh, {
+        ...streetOptions,
+        kind: p.cat === 'pelo' ? 'hair' : p.cat === 'barba' ? 'beard' : p.cat === 'calzado' ? 'shoes' : 'fabric'
+      });
       if (p.cat === 'cabeza') for (const v of mesh.geometry.attributes.position.array) hatPositions.push(v);
     });
   });
@@ -258,10 +309,27 @@ async function buildInstance(catalog, look, lod = false) {
     if (!o.isSkinnedMesh || !/eyebrow/.test(o.name.toLowerCase())) return;
     o.material.color.copy(hairTone);
     addHairTone(o.material);
+    if (street) applyStreetMaterial(o.material, o, { ...streetOptions, kind: 'hair' });
+  });
+  if (street) root.traverse(mesh => {
+    if (mesh.isSkinnedMesh && /(?:low-poly|eyes?)(?:_|\.|$)/i.test(mesh.name) && !/eyebrow|eyelash/i.test(mesh.name)) {
+      applyStreetMaterial(mesh.material, mesh, { ...streetOptions, kind: 'eyes' });
+    }
   });
   const worn = (look.accesorios ?? []).filter((id) => !useLod || FAR_ACCESSORIES.has(id));
   const accessories = worn.length ? attachAccessories(root, bones, worn, wear) : null;
   if (bodyMesh) hideCovered(bodyMesh, bodyGltf.scene.getObjectByName(bodyMesh.name)?.geometry.index ?? bodyMesh.geometry.index, hidden);
+
+  let clips = sourceClips;
+  if (isMixamoProfile(profile.id)) {
+    const key = `${profile.id}:${body.id}:${!!useLod}:${parts.map(part => part.info.file).join('|')}`;
+    if (!groundedClipCache.has(key)) {
+      const grounded = groundMixamoClips(root, sourceClips);
+      grounded.walk.userData.locomotion = measureLocomotion(bodyGltf.scene, grounded.walk, grounded.run);
+      groundedClipCache.set(key, grounded);
+    }
+    clips = groundedClipCache.get(key);
+  }
 
   const mixer = new THREE.AnimationMixer(root);
   const actions = {};
@@ -280,13 +348,15 @@ async function buildInstance(catalog, look, lod = false) {
   // Los NPC lejanos conservan su ruta liviana, incluso si el catálogo carece de proxy.
   const secondaryMotion = lod ? null : new SecondaryMotion(bones, seed);
   const actionPose = new ActionPose(bones, { lod, frame: root });
-  return { root, bones, mixer, actions, real, accessories, secondaryMotion, actionPose, phase: 0, runShare: 0, ownedGeometries: bodyMesh ? [bodyMesh.geometry] : [] };
+  const groundContact = isMixamoProfile(profile.id) ? new MixamoGroundContact(root) : null;
+  return { root, bones, mixer, actions, real, appearanceProfile: appearance, accessories, secondaryMotion, actionPose, groundContact, playback: {}, phase: 0, runShare: 0, ownedGeometries: bodyMesh ? [bodyMesh.geometry] : [] };
 }
 
 /** Solo recursos de instancia; los modelos y texturas del banco siguen compartidos. */
 export function disposeRealisticInstance(instance) {
   if (!instance || instance.disposed) return;
   instance.disposed = true;
+  instance.groundContact?.restore();
   instance.actionPose?.restore();
   instance.secondaryMotion?.restore();
   instance.weapon?.dispose();
@@ -310,7 +380,9 @@ export function disposeRealisticInstance(instance) {
  * Crea el personaje. `look` es la apariencia compartida con el procedural (nombre, piel, peloColor…)
  * más `look.real` con las piezas realistas.
  */
-export async function createRealisticCharacter(look = {}, { lod = false } = {}) {
+export async function createRealisticCharacter(look = {}, { lod = false, animaciones = 'default', apariencia = 'default' } = {}) {
+  const profile = resolveAnimationProfile(animaciones, MODEL_BASE);
+  let appearance = resolveAppearanceProfile(apariencia);
   const catalog = await loadCatalog();
   const group = new THREE.Group();
   group.scale.setScalar(REALISTIC_SCALE);
@@ -345,7 +417,7 @@ export async function createRealisticCharacter(look = {}, { lod = false } = {}) 
   async function setLook(l) {
     if (disposed) return;
     const my = ++token;
-    const next = await buildInstance(catalog, l, lod);
+    const next = await buildInstance(catalog, l, lod, profile, appearance);
     if (my !== token || disposed) { disposeRealisticInstance(next); return; }
     disposeRealisticInstance(inst);
     inst = next;
@@ -361,6 +433,25 @@ export async function createRealisticCharacter(look = {}, { lod = false } = {}) 
 
   return {
     group,
+    animationProfile: profile.id,
+    get appearanceProfile() { return inst?.appearanceProfile ?? appearance; },
+    async setAppearance(value) {
+      const next = resolveAppearanceProfile(value);
+      if (next === appearance && inst?.appearanceProfile === next) return;
+      const previous = appearance;
+      appearance = next;
+      try { await setLook(look); }
+      catch (error) { if (appearance === next) appearance = previous; throw error; }
+    },
+    get animationStatus() {
+      const actions = Object.entries(inst?.actions ?? {});
+      return {
+        profile: profile.id, source: profile.url, clips: actions.map(([name]) => name),
+        clipSources: Object.fromEntries(actions.map(([name, action]) => [name, action.getClip().userData.source ?? 'default'])),
+        durations: Object.fromEntries(actions.map(([name, action]) => [name, action.getClip().duration])),
+        loops: Object.fromEntries(actions.map(([name, action]) => [name, action.getClip().userData.loop]))
+      };
+    },
     get look() { return look; },
     setLook(l) { look = l; return setLook(l); },
     /** Arma visible en la mano derecha; null para ir con las manos vacías */
@@ -384,13 +475,15 @@ export async function createRealisticCharacter(look = {}, { lod = false } = {}) 
     update(dt, { speed = 0, running = false, action = null, load = 0, movement = {}, actionProgress, attack = null, smoke = null, basuco: pipeT = null, look: glance = 0, point = 0 } = {}) {
       if (!inst) return;
       const a = inst.actions;
+      const sourceCadence = isMixamoProfile(profile.id) && movement.previewCadence === 'source';
       const detached = movement.swimming || movement.grounded === false;
-      const poseAction = action === 'saltar' || action === 'golpear' || action === 'recibirGolpe';
+      const previewClip = isMixamoProfile(profile.id) && !!a[action];
+      const poseAction = action === 'saltar' || action === 'golpear' || action === 'recibirGolpe' || (action === 'saludo' && !previewClip);
       const gaitSpeed = detached ? 0 : speed;
       const handsBlocked = detached || movement.landing > 0 || action === 'recibirGolpe' || action === 'dormir';
       const pipeAllowed = !handsBlocked && !attack && action !== 'golpear' && speed < .15 && pipeT != null;
       const smokeAllowed = !handsBlocked && !attack && action !== 'golpear' && !pipeAllowed;
-      if (inst.weapon) inst.weapon.object.visible = !detached && !pipeAllowed;
+      if (inst.weapon) inst.weapon.object.visible = !detached && !pipeAllowed && action !== 'dormir';
       if (inst.cigarette) inst.cigarette.object.visible = smokeAllowed;
       if (inst.basucoProps) {
         inst.basucoProps.pipe.object.visible = pipeAllowed;
@@ -400,36 +493,34 @@ export async function createRealisticCharacter(look = {}, { lod = false } = {}) 
       let target = gaitSpeed < 0.15 ? 'idle' : a.walk ? LOCOMOTION : 'idle';
       let scale = 1;
       if (action && !poseAction && !detached && speed < 0.15) {
-        const [clip, clipScale = 1] = a[action] ? [action] : ACTION_FALLBACKS[action] ?? [];
+        const [clip, clipScale = 1] = a[action] ? [action] : profile.id === 'default' ? ACTION_FALLBACKS[action] ?? [] : [];
         if (a[clip]) { target = clip; scale = clipScale; }
       }
       if (inst?.root) {
         const targetY = action === 'cagar' && !a.cagar ? -0.3 : 0;
         inst.root.position.y += (targetY - inst.root.position.y) * animationDamping(dt, 10);
       }
-      if (target !== inst.previousTarget) {
-        if (target !== 'idle' && target !== LOCOMOTION) a[target].reset().setEffectiveTimeScale(scale).play();
-        inst.previousTarget = target;
-      }
+      preparePlayback(a, inst.playback, { target, action, progress: actionProgress, scale,
+        loop: isMixamoProfile(profile.id) ? a[target]?.getClip().userData.loop : undefined });
+      blendAnimationWeights(weights, target, dt, inst.playback.rate);
       const k = animationDamping(dt, 8);
-      for (const key of Object.keys(weights)) {
-        weights[key] += ((key === target ? 1 : 0) - weights[key]) * k;
-        if (key !== target && weights[key] < .001) weights[key] = 0;
-      }
       // Caminar y correr comparten fase; su mezcla depende de la velocidad para que los pies no deslicen.
       const locomotion = a.walk?.getClip().userData.locomotion;
       if (locomotion) {
-        const blend = locomotionBlend(gaitSpeed, locomotion);
+        const blend = sourceCadence ? { run: running && a.run ? 1 : 0 } : locomotionBlend(gaitSpeed, locomotion);
         inst.runShare += (blend.run - inst.runShare) * k;
         // La cadencia corresponde al reparto suavizado, no al reparto futuro: evita
         // que el pie patine mientras se acelera de caminar a correr (o al frenar).
-        inst.phase = (inst.phase + locomotionRate(gaitSpeed, locomotion, inst.runShare) * dt) % 1;
+        const rate = sourceCadence
+          ? (gaitSpeed < .15 ? 0 : 1 / THREE.MathUtils.lerp(locomotion.walkDuration, locomotion.runDuration ?? locomotion.walkDuration, inst.runShare))
+          : locomotionRate(gaitSpeed, locomotion, inst.runShare);
+        inst.phase = (inst.phase + rate * dt) % 1;
         a.walk.time = inst.phase * locomotion.walkDuration;
         if (a.run) a.run.time = inst.phase * locomotion.runDuration;
       } else {
         inst.runShare += ((running && a.run ? 1 : 0) - inst.runShare) * k;
-        if (a.walk) a.walk.timeScale = THREE.MathUtils.clamp(gaitSpeed / 1.4, 0.6, 1.6);
-        if (a.run) a.run.timeScale = THREE.MathUtils.clamp(gaitSpeed / 3.5, 0.7, 1.4);
+        if (a.walk) a.walk.timeScale = sourceCadence ? 1 : THREE.MathUtils.clamp(gaitSpeed / 1.4, 0.6, 1.6);
+        if (a.run) a.run.timeScale = sourceCadence ? 1 : THREE.MathUtils.clamp(gaitSpeed / 3.5, 0.7, 1.4);
       }
       const share = { walk: 1 - inst.runShare, run: inst.runShare };
       for (const key of Object.keys(a)) {
@@ -439,14 +530,19 @@ export async function createRealisticCharacter(look = {}, { lod = false } = {}) 
       }
       // Las capas se retiran en orden inverso al de composición; ningún frame deja
       // offsets sobre la base que evaluará el mezclador o leerá un futuro ragdoll.
+      inst.groundContact?.restore();
       inst.actionPose.restore();
       inst.secondaryMotion?.restore();
       inst.mixer.update(dt);
       inst.secondaryMotion?.apply(dt, {
-        speed: gaitSpeed, load, phase: inst.phase,
+        speed: gaitSpeed, load, phase: inst.phase, turnRate: movement.turnRate,
         action: handsBlocked || attack || smoke || pipeAllowed || point ? 'gesture' : action
       });
-      inst.actionPose.apply(dt, { speed, running, action, actionProgress, movement, attack, smoke: smokeAllowed ? smoke : null, basuco: pipeAllowed ? pipeT : null, look: glance, point });
+      // Un saludo o descanso horneado es dueño de la pose; no sumar encima el
+      // gesto procedural. Las acciones sin clip conservan su capa identificable.
+      const overlayAction = previewClip && target === action ? 'clip' : action;
+      inst.actionPose.apply(dt, { speed, running, action: overlayAction, actionProgress, movement, attack, smoke: smokeAllowed ? smoke : null, basuco: pipeAllowed ? pipeT : null, look: glance, point });
+      inst.groundContact?.apply(!detached);
       inst.cigarette?.setGlow(emberGlow(smokeAllowed ? smoke?.puff : null));
       if (pipeAllowed) inst.basucoProps?.update(pipeT);
       inst.accessories?.update();

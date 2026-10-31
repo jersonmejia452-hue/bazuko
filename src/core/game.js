@@ -10,6 +10,8 @@ import { World } from '../world/World.js';
 import { Dog, DOG_DEFAULT_LOOK, legacyPetLook } from '../entities/Dog.js';
 import { CompanionNavigation } from '../systems/CompanionNavigation.js';
 import { Minimap } from '../ui/Minimap.js';
+import { servicePlaces, needContext, SHOP_PRICES, SHOP_OFFERS } from '../ui/mapServices.js';
+import { originEffect } from '../data/origins.js';
 import { WaypointBeacon } from '../entities/WaypointBeacon.js';
 import { buildCityMapRaster, cityLandmarks } from '../world/bogota/CityMapRaster.js';
 import { WeatherSystem } from '../world/WeatherSystem.js';
@@ -66,7 +68,7 @@ import { Menu } from '../ui/Menu.js';
 import { createCreator } from '../ui/Creator.js';
 import { openRecycler, openShop, openCambuche } from '../ui/placeMenus.js';
 import { DEFAULT_LOOK, normalizeLook } from '../character/look.js';
-import { ITEMS, COSTAL_BONUS, isRecyclable } from '../data/items.js';
+import { ITEMS, COSTAL_BONUS, isForSale } from '../data/items.js';
 import { SLEEP } from '../data/cambuche.js';
 import { cop } from '../utils/money.js';
 
@@ -75,8 +77,11 @@ import {
   INVENTORY_MAX_WEIGHT, WITHDRAWAL
 } from '../utils/constants.js';
 
+// Destinos de partidas guardadas antes de que el mapa usara el nombre de cada letrero.
+const RENAMED_PLACES = { Recicladora: 'Recicladora El Progreso', Tienda: 'Tienda La Esquinita' };
+
 export class Game {
-  constructor(canvas) {
+  constructor(canvas, { animaciones = 'default', apariencia = 'default' } = {}) {
     this.canvas = canvas;
     this.renderer = new Renderer(canvas);
     this.sceneMgr = new SceneManager();
@@ -102,7 +107,7 @@ export class Game {
 
     // Mundo + jugador
     this.world = new World(this.sceneMgr.scene);
-    this.player = new Player(this.sceneMgr.scene, this.input, this.stats, this.audio);
+    this.player = new Player(this.sceneMgr.scene, this.input, this.stats, this.audio, { animaciones, apariencia });
     this.waterEffects = new WaterEffects(this.sceneMgr.scene);
     this.contactShadows = new ContactShadows(this.sceneMgr.scene);
     this._contactShadowFrame = {
@@ -183,8 +188,8 @@ export class Game {
       if (e.code === 'KeyM' && !this.paused && !this.isSleeping) { e._pauseOpened = true; openPauseMenu(this, 'mapa'); }
       if (e.code === 'KeyK' && !this.paused) this._toggleModel();
       if (e.code === 'F3') { e.preventDefault(); this.performanceHUD.toggle(); }
-      if ((e.code === 'Equal' || e.code === 'NumpadAdd') && !this.paused) this.minimap.zoomStep(1);
-      if ((e.code === 'Minus' || e.code === 'NumpadSubtract') && !this.paused) this.minimap.zoomStep(-1);
+      if ((e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+') && !this.paused) this.minimap.zoomStep(1);
+      if ((e.code === 'Minus' || e.code === 'NumpadSubtract' || e.key === '-') && !this.paused) this.minimap.zoomStep(-1);
       if (e.code === 'KeyR') {
         if (this._radioModalOpen) this.menu.close();
         else if (!this.paused) openRadioModal(this);
@@ -262,6 +267,9 @@ export class Game {
     await loading.stage('Cargando personajes, vehículos y ciudad…', 2);
     let modelo = null;
     try { modelo = localStorage.getItem('bazuko.modelo'); } catch { /* sin almacenamiento */ }
+    // La vista explícita de animaciones requiere el rig realista. La preferencia
+    // guardada sigue disponible cuando se abre el juego con su URL habitual.
+    if (this.player.realisticAnimationProfile === 'mixamo-game-preview' || this.player.realisticAppearanceProfile === 'street-preview') modelo = 'realista';
     const importedEntities = [
       ...(this.cars ?? []),
       ...(this.traffic?.vehicles ?? []).map(vehicle => vehicle.car),
@@ -556,6 +564,7 @@ export class Game {
     this.interaction.register(this.dealer);
 
     // ===== Mesa de crafteo =====
+    // No es objetivo de E: se abre con C, y ganaría el empate con la fogata que comparte su punto.
     this.craftingStation = new CraftingStation(
       this.sceneMgr.scene,
       new THREE.Vector3(
@@ -563,7 +572,6 @@ export class Game {
         district.reserved?.craft?.z ?? 8
       )
     );
-    this.interaction.register(this.craftingStation);
 
     // ===== Carreta de balineras de reciclaje =====
     this.cart = new Cart(this.sceneMgr.scene, new THREE.Vector3(25, 0, 31));
@@ -643,7 +651,7 @@ export class Game {
       if (data.cart && this.cart) {
         this.cart.loadState(data.cart, this.player, this.inventory);
       }
-      if (data.gps && this.gps) this.setGpsWaypoint(data.gps, { silent: true });
+      if (data.gps && this.gps) this.setGpsWaypoint({ ...data.gps, name: RENAMED_PLACES[data.gps.name] ?? data.gps.name }, { silent: true });
 
     }
   }
@@ -681,6 +689,8 @@ export class Game {
     this.psychosis?.clearInduced?.();
     window.dispatchEvent(new CustomEvent('sleep-start'));
     this.dog?.restAt(this.player.position);
+    this.player.stopSmoking?.();
+    this.player.stopBasuco?.();
     this.player.playAction('dormir', 1.6);
 
     const night = this.clock.isNight;
@@ -708,20 +718,33 @@ export class Game {
       const lost = Math.floor(st.dinero * SLEEP.roboDinero);
       st.dinero -= lost;
       for (const it of [...this.inventory.items]) {
-        if (isRecyclable(ITEMS[it.id] ?? it)) this.inventory.remove(it.id, Math.ceil(it.qty * SLEEP.roboMaterial));
+        if (isForSale(ITEMS[it.id] ?? it, this.player.equippedWeapon)) this.inventory.remove(it.id, Math.ceil(it.qty * SLEEP.roboMaterial));
       }
       robbed = lost;
     }
+
+    // Dormir sucio en un colchón de la calle puede pegar sarna.
+    const sarna = this.diseases?.tryInfectWhileSleeping?.(st.higiene, this.interaction?.diseaseResistance?.() ?? 1);
 
     this._save();
 
     setTimeout(() => {
       this.isSleeping = false;
+      // Despierta y se levanta: lo que quedaba de la acción no debe tenerlo acostado con el juego en marcha.
+      if (this.player.action === 'dormir') {
+        this.player.action = null;
+        this.player.actionTimer = this.player.actionProgress = 0;
+      }
       this.dog?.wake();
       window.dispatchEvent(new CustomEvent('sleep-end', { detail: { hours: Math.round(hours) } }));
       if (robbed !== null) {
         window.dispatchEvent(new CustomEvent('toast', {
           detail: { text: `🚨 Te robaron mientras dormías (${cop(robbed)} y material). Unas paredes ayudarían.`, type: 'death' }
+        }));
+      }
+      if (sarna) {
+        window.dispatchEvent(new CustomEvent('toast', {
+          detail: { text: '🐜 Dormiste sucio y te pegó la sarna. Báñate antes de acostarte; la pomada la quita.', type: 'warn' }
         }));
       }
     }, 1200);
@@ -829,6 +852,7 @@ export class Game {
 
   /** Muerte y arresto comparten la limpieza de acciones, agua y persecuciones. */
   _resetAfterRelocation() {
+    if (this.hud?._dealerOpen) this.hud.toggleDealerPanel();
     this.player.stopSmoking?.();
     this.player.stopBasuco?.();
     this.player.clearVehicleImpact?.();
@@ -933,6 +957,8 @@ export class Game {
       return;
     }
     if (this.isSleeping || this.paused || globalThis.document?.hidden) {
+      // La tienda del Dealer pausa la simulación, así que InteractionSystem ya no oye Q ni E.
+      if (this.hud._dealerOpen && (this.input.consumePress('KeyE') || this.input.consumePress('KeyQ'))) this.hud.toggleDealerPanel();
       this.cameraRig.releaseControls();
       this.audio.setPaused(true);
       this.audio.updateSteps(false, false);
@@ -940,7 +966,9 @@ export class Game {
       // del monitor. Una pestaña oculta no envía trabajo a la GPU.
       this.performanceHUD.metrics.sample(now, false);
       this.renderer.resolution.resetWindow();
-      if (!globalThis.document?.hidden && now >= (this._nextPausedRender ?? 0)) {
+      // Dormir sí se ve: el cuerpo se acuesta aunque la simulación esté quieta.
+      if (this.isSleeping && !globalThis.document?.hidden) this.player.updateSleepPose?.(dt);
+      if (!globalThis.document?.hidden && (this.isSleeping || now >= (this._nextPausedRender ?? 0))) {
         this._nextPausedRender = now + 1000 / 15;
         this._renderFrame(now, false);
       }
@@ -1110,7 +1138,7 @@ export class Game {
     }
     this.gpsBeacon?.update(dt, this.player.position);
     this.minimap?.update(this.player.position, this._cameraYaw(), this._getPOIs(now), now,
-      { gps: this.gps, running: this.input.isRunning && (this.input.axis.x !== 0 || this.input.axis.z !== 0) });
+      { gps: this.gps, needs: this._needs, running: this.input.isRunning && (this.input.axis.x !== 0 || this.input.axis.z !== 0) });
 
     // 13. UI
     this.hud.setMovementState?.(this.player);
@@ -1172,20 +1200,28 @@ export class Game {
   _getPOIs(now = performance.now()) {
     const friend = !!this.dog?.isFriend;
     if (!this._poiCache || now - this._poiCacheTime >= 350 || this._poiDogFriend !== friend) {
-      const reserved = this.world?.active?.reserved ?? {};
-      this._poiCache = [[this.cambuche, reserved.bed, 'Cambuche', '⛺', '#ffd166'],
-        [this.sellPoint, reserved.sell, 'Recicladora', '♻️', '#2ab7ca'],
-        [this.shop, reserved.shop, 'Tienda', '🏪', '#2ecc71'],
+      const district = this.world?.active;
+      const reserved = district?.reserved ?? {};
+      // Puestos y fogatas van primero para que los lugares fijos queden encima (la fogata del callejón comparte punto con el Crafteo).
+      const services = district?.vendors ? (this._services ??= servicePlaces(district)) : [];
+      this._poiCache = [...services, ...[[this.cambuche, reserved.bed, 'Cambuche', '⛺', '#ffd166'],
+        [this.sellPoint, reserved.sell, 'Recicladora El Progreso', '♻️', '#2ab7ca', { prices: { vender: 0 } }],
+        [this.shop, reserved.shop, 'Tienda La Esquinita', '🏪', '#2ecc71', { prices: SHOP_PRICES, offers: SHOP_OFFERS }],
         [this.craftingStation, reserved.craft, 'Crafteo', '🔨', '#e67e22'],
-        [this.dealer, reserved.dealer, 'Dealer', '💀', '#9b59b6']]
-        .flatMap(([entity, fallback, name, icon, color]) => {
+        [this.dealer, reserved.dealer, 'Dealer', '💀', '#9b59b6', { dealer: true }]]
+        .flatMap(([entity, fallback, name, icon, color, extra]) => {
           const pos = entity?.position ?? fallback;
-          return pos ? [{ name, icon, color, x: pos.x, z: pos.z }] : [];
-        });
+          return pos ? [{ name, icon, color, x: pos.x, z: pos.z, ...extra }] : [];
+        })];
       if (this.world?.active?.tileTypeAt) this._poiCache.push(...(this._landmarks ??= cityLandmarks()));
       if (this.cart) this._poiCache.push({ name: 'Carreta', icon: '🛒', x: this.cart.position.x, z: this.cart.position.z, color: '#f39c12' });
       this._dogPOI = friend ? { name: 'El Chato', icon: '🐕', color: '#e6b566' } : null;
       if (this._dogPOI) this._poiCache.push(this._dogPOI);
+      this._needs = needContext({
+        stats: this.stats, inventory: this.inventory, load: this.player?.load, night: this.clock?.isNight,
+        sellMult: originEffect(this.look?.origen, 'sellMult'), substanceMult: this.talents?.getEffect?.('substancePriceMult', 1),
+        equippedWeapon: this.player?.equippedWeapon,
+      });
       this._poiCacheTime = now;
       this._poiDogFriend = friend;
     }

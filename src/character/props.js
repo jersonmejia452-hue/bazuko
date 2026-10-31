@@ -254,7 +254,44 @@ function pistol() {
   return group;
 }
 
-const WEAPON_BUILDERS = { cuchillo: knife, botella_picada: brokenBottle, pistola: pistol };
+/** Arma casera: tabla con láminas de chatarra y puntillas, amarradas con cable de cobre */
+function club() {
+  const g = weaponGeometries();
+  g.plank ??= new THREE.BoxGeometry(0.05, 0.7, 0.024).translate(0, 0.29, 0);
+  g.wrap ??= new THREE.CylinderGeometry(0.031, 0.031, 0.15, 6).translate(0, 0.015, 0);
+  g.plate ??= new THREE.BoxGeometry(0.07, 0.15, 0.006);
+  g.nail ??= new THREE.CylinderGeometry(0.0035, 0.0035, 0.09, 4).rotateZ(Math.PI / 2);
+  g.wire ??= new THREE.TorusGeometry(0.04, 0.003, 4, 10).rotateX(Math.PI / 2).scale(1, 1, 0.7);
+  const wood = new THREE.MeshStandardMaterial({ color: '#6b4a2b', roughness: 0.9 });
+  const tape = new THREE.MeshStandardMaterial({ color: '#262626', roughness: 1 });
+  const rust = new THREE.MeshStandardMaterial({ color: '#7a4526', metalness: 0.55, roughness: 0.75 });
+  const steel = new THREE.MeshStandardMaterial({ color: '#8a8f94', metalness: 0.8, roughness: 0.4 });
+  const copper = new THREE.MeshStandardMaterial({ color: '#b8733a', metalness: 0.8, roughness: 0.35 });
+  const group = new THREE.Group();
+  group.name = 'weapon-arma';
+  group.add(new THREE.Mesh(g.plank, wood), new THREE.Mesh(g.wrap, tape));
+  // láminas a cada lado de la punta, torcidas como quedaron al amarrarlas
+  for (const [z, y, tilt] of [[0.015, 0.5, 0.12], [-0.015, 0.55, -0.18]]) {
+    const plate = new THREE.Mesh(g.plate, rust);
+    plate.position.set(0, y, z);
+    plate.rotation.z = tilt;
+    group.add(plate);
+  }
+  for (const [y, turn] of [[0.6, 0.1], [0.45, -0.15]]) {
+    const nail = new THREE.Mesh(g.nail, steel);
+    nail.position.y = y;
+    nail.rotation.y = turn;
+    group.add(nail);
+  }
+  for (const y of [0.42, 0.5, 0.62]) {
+    const wire = new THREE.Mesh(g.wire, copper);
+    wire.position.y = y;
+    group.add(wire);
+  }
+  return group;
+}
+
+const WEAPON_BUILDERS = { cuchillo: knife, botella_picada: brokenBottle, arma: club, pistola: pistol };
 
 const _wp = new THREE.Vector3();
 const _wq = new THREE.Quaternion();

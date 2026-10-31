@@ -12,6 +12,10 @@ npm run build
 
 Las regresiones de jugabilidad comprueban el salto y el recorrido de ambas rampas del viaducto, la resistencia a enfermedades de Piel Dura, el peso final al fabricar con el costal lleno y la llegada del GPS a destinos marcados sobre edificios. En este último caso, ruta, marcador y guardado comparten el punto transitable cercano al edificio.
 
+`map-services.test.js` y `map-view.test.js` comprueban precios, espacio en el costal, prioridad de necesidades, sugerencias y filas del mapa.
+
+`cures.test.js` comprueba que cada remedio cure una enfermedad que existe y no se gaste sin ella, que la aguapanela cure la gripe y se tome aunque no la haya, que solo la basura con metal traiga tétanos y dormir sucio traiga sarna, y que las partidas viejas conserven la intoxicación. `dealer.test.js` verifica que comprarle al dealer para revenderle nunca deje ganancia, ni con Contactos; que `E` abra su tienda sin vender; que se venda solo la sustancia elegida, y que la requisa se lleve la mercancía sin pagar.
+
 `inventory-actions.test.js` verifica que vaciar el inventario notifique a sus suscriptores, desequipe el arma y cancele su ataque pendiente. También comprueba que intentar fumar nadando, en el aire o aturdido conserve objeto, necesidades, audio y efectos, y que un consumo permitido gaste una sola unidad.
 
 En C++, `bazuko_playerstate_test` comprueba que la carga conserve los objetos permitidos por el costal grande y los talentos, y que la regeneración no reviva al jugador durante una caída mortal. Se ejecuta con `ctest --test-dir cpp/build --output-on-failure` después de configurar y compilar los objetivos nativos. Estas pruebas de lógica no requieren abrir la ventana del juego.
@@ -19,6 +23,14 @@ En C++, `bazuko_playerstate_test` comprueba que la carga conserve los objetos pe
 ## Sala de pruebas
 
 `sala.html` (solo en `npm run dev`) prueba piezas sueltas sin cargar la ciudad: el jugador sobre un piso plano con la misma cámara, controles y render del juego. Las pruebas viven en `src/sala/pruebas.js`; cada una es `{ id, nombre, descripcion, montar(sala) }` y `montar` devuelve sus botones (`acciones`) y, si quiere, un texto de `estado` que se refresca en el panel. Se abre una en concreto con `sala.html?prueba=<id>`. `sala.timeScale` acelera la simulación para lo que tarda (un cigarrillo dura 10 minutos) y `sala.updaters`, `beforeRender` y `afterRender` permiten colgar sistemas como los efectos de consumo. No reemplaza las pruebas de navegador ni comprueba la ciudad, el tráfico o el guardado.
+
+El perfil `sala.html?prueba=personaje&animaciones=mixamo-preview` permite comparar el banco Mixamo preparado en Blender. `tests/e2e/mixamo-room.spec.js` recorre sus nueve clips, verifica poses finitas, apoyos de geometría sobre el piso, raíz fija, pausa, avance por fotograma y errores de carga. También comprueba que la selección de la sala conserve la preferencia de modelo del juego. Las capturas sirven para revisar la calidad visual además de las aserciones numéricas.
+
+Para ejecutar únicamente las pruebas de animaciones en la sala (con el puerto 5188 libre):
+
+```sh
+PLAYWRIGHT_GPU=1 npx playwright test tests/e2e/mixamo-room.spec.js tests/e2e/animation-room.spec.js
+```
 
 ## Integración continua
 
@@ -84,17 +96,24 @@ La captura del modo foto conserva la resolución del canvas (según calidad/DPR)
 
 Los E2E `actions.spec.js` recorren caminar/correr, congelan un salto y un impacto real para capturarlos, se lanzan al lago, nadan con estela y salen andando. `upgrade.spec.js` comprueba HUD compacto, alertas sin abrir el detalle, objetivos de 44 px y agua congelada durante foto. Para conservar capturas de las acciones, añadir `UPGRADE_SHOTS=work/visual-review` a la ejecución de navegador. Estas capturas deben revisarse visualmente; la lógica sola no confirma la calidad de una animación.
 
-`integration.spec.js` reúne cinco escenarios en el bucle real de la ciudad:
+`integration.spec.js` reúne diez escenarios en el bucle real de la ciudad:
 
 - Combo con cuchillo, KO con botella y recuperación del NPC sin renovar la recompensa.
 - Entrada al agua que cancela el contacto pendiente, el cigarrillo y la pipa.
 - Modo foto que congela patrulla, agresores, sustancias y radio, y reanuda la simulación al salir.
 - Arresto desde el agua y recuperación sin movimiento, amenazas ni efectos pendientes.
 - Mando simulado para usar el inventario sin descartar objetos y operar el modo foto.
+- Arma casera equipada desde el inventario: barrido, remate con más daño, esqueleto con matrices finitas y «Vender todo» sin tocar el arma de la mano.
+- La misma arma y dormir con el perfil `mixamo-game-preview`, que comparte esas poses con el banco Mixamo: acostado mientras duerme y sin arma visible, de pie al despertar.
+- Sin plata de noche: radar y mapa llevan al Dealer, `E` abre la tienda sin vender nada, solo se vende lo elegido, la fila de venta cabe a 375 y 1280 px, el aviso de requisa queda encima de la tienda, `Q` y `E` cierran sin reabrir y de día no compra.
+- Tienda con mando simulado: vender deja el foco en la fila que queda y sin ventas no se compra por inercia.
+- Dormir sucio en la pose nueva: se acuesta mientras duerme y se levanta al despertar, la sarna llega con su aviso y queda guardada; la pomada no se gasta sin la enfermedad, con el aviso encima del inventario, y después la cura.
 
 ## Materiales, barrios y sombras de contacto
 
 `texture-materials.test.js` verifica separación entre albedo y datos físicos, espacios de color y límites de tamaño. `neighborhood-identity.test.js` conserva el plan urbano y su geometría; `architecture-determinism.test.js` comprueba que crear más materiales no cambie las casas ni las colisiones. `contact-shadows.test.js` cubre suelo, viaducto, salto, agua, rampas, capacidad y liberación. `lake-shore-materials.test.js` verifica la mezcla de ribera sin alterar el terreno.
+
+`street-materials.test.js` comprueba las marcas en reposo, aislamiento de materiales, normales y transparencia conservadas y semilla estable. La integración en `mixamo-preview.test.js` alterna las apariencias sin cambiar el look ni los clips y verifica que el desgaste explícito 0 siga respetándose. `PLAYWRIGHT_GPU=1 npx playwright test tests/e2e/street-appearance.spec.js` recorre el selector **Apariencia del personaje**, detecta errores de shaders y guarda capturas comparables de rostro y cuerpo. Se revisan visualmente por separado; esta prueba no es una medición de FPS.
 
 `tools/review-bogota-route.mjs` toma las mismas vistas de día y noche y registra renderer, resolución y tiempos de cuadro. Las capturas se inspeccionan visualmente; las cifras solo describen ese equipo y recorrido. El detalle y los límites están en [recorrido-bogota.md](recorrido-bogota.md).
 

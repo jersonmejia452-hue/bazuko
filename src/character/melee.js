@@ -31,7 +31,17 @@ function flat(p, side) {
   return out;
 }
 
-const step = (side, cock, strike) => ({ side, cock: flat(cock, side), strike: flat(strike, side) });
+const step = (side, cock, strike) => {
+  const hit = flat(strike, side);
+  const follow = hit.slice();
+  // El cuerpo termina el giro después del contacto; el codo empieza a ceder.
+  // No se prolonga ni desplaza el alcance físico del ataque.
+  follow[TY] += (hit[TY] - flat(cock, side)[TY]) * .12;
+  follow[TX] += .025;
+  follow[side === 'L' ? LF : RF] -= .14;
+  return { side, cock: flat(cock, side), strike: hit, follow,
+    guard: flat(pose(0, .025, GUARD_A, GUARD_F), side) };
+};
 
 const POSES = {
   // jab (izq.), cruzado (der.), gancho (izq.)
@@ -52,6 +62,8 @@ const POSES = {
     step('R', pose(-0.3, 0.05, [-0.6, 0.2, 0], [-1.6, 0, 0]), pose(0.45, 0.25, [-1.4, 0.2, 0], [-0.1, 0, 0]))
   ]
 };
+// arma casera: barrido horizontal y, para rematar, garrotazo desde arriba
+POSES.arma = [POSES.cuchillo[0], POSES.botella_picada[0]];
 
 const poseFor = (attack) => {
   const list = POSES[attack.weapon] ?? POSES.punos;
@@ -61,7 +73,6 @@ const poseFor = (attack) => {
 /** Lado ('L' | 'R') del brazo que golpea en este ataque. */
 export const attackSide = (attack) => (attack ? poseFor(attack).side : 'R');
 
-const easeOut = (x) => 1 - (1 - x) * (1 - x) * (1 - x);
 const smooth = (x) => x * x * (3 - 2 * x);
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const COCK_AMOUNT = -0.35;
@@ -74,11 +85,11 @@ export function attackExtension(attack) {
   if (!attack) return 0;
   const p = clamp01(attack.progress ?? 0);
   if (attack.phase === 'windup') {
-    if (p < COCK) return COCK_AMOUNT * easeOut(p / COCK);
-    return COCK_AMOUNT + (1 - COCK_AMOUNT) * easeOut((p - COCK) / (1 - COCK));
+    if (p < COCK) return COCK_AMOUNT * smooth(p / COCK);
+    return COCK_AMOUNT + (1 - COCK_AMOUNT) * smooth((p - COCK) / (1 - COCK));
   }
-  if (attack.phase === 'active') return 1;
-  return 1 - smooth(p);
+  if (attack.phase === 'active') return 1 - .1 * smooth(p);
+  return .9 * (1 - smooth(p));
 }
 
 // Cuánto del giro del torso toma cada vértebra
@@ -115,17 +126,32 @@ export function createMeleeOverlay(bones, frame) {
   const arms = ARMS.map(([name, at]) => ({ bone: findBone(bones, name), at })).filter((a) => a.bone);
   const cur = new Float32Array(SIZE);
   const goal = new Float32Array(SIZE);
+  const initial = new Float32Array(SIZE);
+  const head = findBone(bones, 'Head');
+  const neck = findBone(bones, 'Neck');
+  let attackKey = null;
 
   function target(attack) {
-    if (!attack) { goal.fill(0); return; }
-    const { cock, strike } = poseFor(attack);
+    if (!attack) { goal.fill(0); attackKey = null; return; }
+    const key = attack.id ?? `${attack.weapon}:${attack.step ?? 0}`;
+    if (key !== attackKey) { initial.set(cur); attackKey = key; }
+    const { cock, strike, follow, guard } = poseFor(attack);
     const p = clamp01(attack.progress ?? 0);
     let from, to, k;
     if (attack.phase === 'windup') {
-      if (p < COCK) { from = null; to = cock; k = easeOut(p / COCK); }
-      else { from = cock; to = strike; k = easeOut((p - COCK) / (1 - COCK)); }
-    } else if (attack.phase === 'active') { from = strike; to = strike; k = 1; }
-    else { from = strike; to = null; k = smooth(p); }
+      if (p < COCK) { from = initial; to = cock; k = smooth(p / COCK); }
+      else { from = cock; to = strike; k = smooth((p - COCK) / (1 - COCK)); }
+    } else if (attack.phase === 'active') { from = strike; to = follow; k = smooth(p); }
+    else {
+      // Las manos regresan a guardia antes de que el torso termine de recuperarse.
+      const retract = smooth(clamp01(p / .6));
+      const release = 1 - smooth(clamp01((p - .35) / .65));
+      for (let i = 0; i < SIZE; i++) {
+        goal[i] = i < RA ? follow[i] * (1 - smooth(p))
+          : (follow[i] + (guard[i] - follow[i]) * retract) * release;
+      }
+      return;
+    }
     for (let i = 0; i < SIZE; i++) {
       const a = from ? from[i] : 0, b = to ? to[i] : 0;
       goal[i] = a + (b - a) * k;
@@ -136,11 +162,12 @@ export function createMeleeOverlay(bones, frame) {
 
   const overlay = {
     active: false,
-    reset() { cur.fill(0); goal.fill(0); overlay.active = false; },
+    reset() { cur.fill(0); goal.fill(0); initial.fill(0); attackKey = null; overlay.active = false; },
     apply(dt, attack) {
       target(attack);
-      // La fase activa coincide con el daño del controlador: el puño ya debe llegar.
-      const k = attack?.phase === 'active' ? 1 : 1 - Math.exp(-FOLLOW * dt);
+      // La curva de fase ya suaviza el gesto. Filtrarla otra vez retrasaba el puño
+      // y obligaba a saltar a la extensión al comenzar el intervalo de daño.
+      const k = attack ? 1 : 1 - Math.exp(-FOLLOW * Math.max(0, dt));
       let energy = 0;
       for (let i = 0; i < SIZE; i++) {
         cur[i] += (goal[i] - cur[i]) * k;
@@ -150,6 +177,9 @@ export function createMeleeOverlay(bones, frame) {
       if (!overlay.active) { cur.fill(0); return; }
       for (const t of torso) rotate(t.bone, cur[TX] * t.share, cur[TY] * t.share, 0);
       for (const a of arms) rotate(a.bone, cur[a.at], cur[a.at + 1], cur[a.at + 2]);
+      // Mantener la mirada en el objetivo mientras los hombros giran.
+      if (neck) rotate(neck, -cur[TX] * .2, -cur[TY] * .25, 0);
+      if (head) rotate(head, -cur[TX] * .35, -cur[TY] * (neck ? .4 : .65), 0);
     }
   };
   return overlay;

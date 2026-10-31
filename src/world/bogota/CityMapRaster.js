@@ -93,11 +93,11 @@ export function streetLabels(tileSize = 2) {
 export function cityLandmarks(tileSize = 2) {
   const center = (o) => ({ x: (o.x0 + o.x1) / 2, z: (o.z0 + o.z1) / 2 });
   return [
-    { name: 'Gasolinera', icon: '⛽', color: '#f25b5b', ...center(GAS_STATION) },
+    { name: 'Gasolinera', icon: '⛽', color: '#f25b5b', decor: true, ...center(GAS_STATION) },
     { name: 'Portal del Centro', icon: '🚏', color: '#e45960', x: TERMINAL.x, z: TERMINAL.z },
     { name: 'Torre Colpatria', icon: '🏙️', color: '#ffcb45', x: COLPATRIA.x, z: COLPATRIA.z },
     { name: 'Parque del Lago', icon: '🌊', color: '#5ed4dc', x: LAKE_PARK.lakeX, z: LAKE_PARK.z0 + 6 },
-    { name: 'Supermercado D69', icon: '🏬', color: '#3cc47c', ...center(D69_STORE) },
+    { name: 'Supermercado D69', icon: '🏬', color: '#3cc47c', decor: true, ...center(D69_STORE) },
     ...EXTENSION_PARKS.map(p => ({ name: p.name, icon: '🌳', color: '#6fcf6a',
       x: (p.x0 + p.x1) / 2 * tileSize, z: (p.z0 + p.z1) / 2 * tileSize })),
   ];

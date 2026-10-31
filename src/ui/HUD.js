@@ -1,9 +1,10 @@
 // src/ui/HUD.js
 import { TALENTS, BRANCHES } from '../data/talents.js';
-import { XP_PER_LEVEL, XP_CRAFT } from '../utils/constants.js';
+import { XP_PER_LEVEL, XP_CRAFT, SUBSTANCE_PRICE_MULT, SUBSTANCE_RISK_CHANCE } from '../utils/constants.js';
 import { NEEDS } from '../systems/StatsSystem.js';
 import { cop } from '../utils/money.js';
-import { ITEMS, itemRarityLabel } from '../data/items.js';
+import { ITEMS, itemRarityLabel, dealerPrice, dealerOffer } from '../data/items.js';
+import { diseaseName } from '../data/diseases.js';
 import { SMOKABLES, smokable } from '../character/smoking.js';
 import { itemArtHTML, itemCategory, itemEffectLine } from './itemArt.js';
 import { NEED_META, needLevel } from './needsMeta.js';
@@ -11,6 +12,8 @@ import { describeWeather } from '../world/Climate.js';
 import { icon, setIcon } from './icons.js';
 
 const PRIMARY_NEEDS = new Set(['salud', 'energia']);
+/** Cuántas veces el valor paga el Dealer: 1,8×, o 2,34× con Contactos. */
+const dealerSellMult = (priceMult = 1) => String(+(SUBSTANCE_PRICE_MULT * priceMult).toFixed(2)).replace('.', ',');
 
 export class HUD {
   constructor() {
@@ -242,7 +245,11 @@ export class HUD {
       if (this._dealerOpen) this.renderDealer();
     });
     window.addEventListener('substance-fail', (e) => {
-      if (e.detail.reason === 'day') this._toast('☀️ El dealer no compra de día (1.8x de noche)', 'warn');
+      if (e.detail.reason === 'day') this._toast(`☀️ El dealer no compra de día (de noche paga ${dealerSellMult(window.__game?.interaction?.substancePriceMult?.())}×)`, 'warn');
+    });
+    window.addEventListener('substance-raid', (e) => {
+      this._toast(`🚓 ¡Requisa! La policía se llevó: ${e.detail.lost.join(', ')}`, 'death');
+      if (this._dealerOpen) this.renderDealer();
     });
     window.addEventListener('substance-buy-fail', (e) => {
       if (e.detail?.reason === 'insufficient_money') {
@@ -485,7 +492,7 @@ else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] So
     for (const k of NEEDS) {
       if (k !== i.consumable && i[k]) parts.push(`${i[k] > 0 ? '+' : ''}${i[k]} ${k}`);
     }
-    if (i.cure) parts.push(`Cura: ${i.cure}`);
+    if (i.cure) parts.push(`Cura: ${diseaseName(i.cure)}`);
     if (i.value) parts.push(`$${i.value}`);
     if (i.weight) parts.push(`${i.weight}kg`);
     const details = parts.length ? ` (${parts.join(' · ')})` : '';
@@ -582,22 +589,30 @@ else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] So
         game.stats.calor = Math.min(300, (game.stats.calor || 0) + item.calor);
       }
       inv.remove(itemId, 1);
+      // Lo que alimenta y además cura (la aguapanela con la gripe) también quita la enfermedad.
+      const cured = !!item.cure && !!game.diseases?.cure?.(item.cure);
       game.audio?.play('pickup');
       const isDrink = item.consumable === 'sed' || item.id === 'cafe' || item.id === 'refresco' || item.id === 'aguapanela';
       const verb = isDrink ? '🥤 Bebiste' : item.substance ? '🚬 Consumiste' : item.consumable === 'salud' ? '🩹 Te aplicaste' : '🍴 Comiste';
       // el cigarrillo y el porro no se comen: se quedan en la mano y se fuman caminando
       if (!smokes && !pipe) game.player?.playAction?.(isDrink ? 'beber' : 'comer', 1.2);
       const lit = smokable(item.id);
-      this._toast(smokes ? `${lit.emoji} Prendiste un ${lit.name}` : pipe ? '💨 Prendiste la pipa' : `${verb}: ${item.name}`, 'info');
+      const curedText = cured ? ` ∙ ✨ Curado: ${diseaseName(item.cure)}` : '';
+      this._toast(smokes ? `${lit.emoji} Prendiste un ${lit.name}` : pipe ? '💨 Prendiste la pipa' : `${verb}: ${item.name}${curedText}`, 'info');
       this._renderInventory(inv);
       // lo que se fuma pega al aspirar: el jugador avisa en cada calada o al soltar la pipa
       const smokedLater = (smokes || pipe) && game.player?.startSmoking;
       if (item.substance && !smokedLater) window.dispatchEvent(new CustomEvent('substance-consumed', { detail: { id: itemId } }));
     } else if (item.cure) {
-      game.diseases?.cure?.(item.cure);
+      // Sin la enfermedad, el remedio no se gasta.
+      if (!game.diseases?.cure?.(item.cure)) {
+        game.audio?.play('empty');
+        this._toast(`💊 No tienes ${diseaseName(item.cure).toLowerCase()}. Guarda el remedio para cuando lo necesites.`, 'info');
+        return;
+      }
       inv.remove(itemId, 1);
       game.audio?.play('pickup');
-      this._toast(`✨ Curaste: ${item.cure} con ${item.name}`, 'info');
+      this._toast(`✨ Curado: ${diseaseName(item.cure)} con ${item.name}`, 'info');
       this._renderInventory(inv);
     }
   }
@@ -793,13 +808,15 @@ else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] So
 
   renderDealer(dealer = null) {
     if (!this.dealerPanel) return;
-    const d = dealer || window.__game?.dealer;
-    const stats = window.__game?.stats;
-    const inv = window.__game?.inventory;
+    const game = window.__game;
+    const d = dealer || game?.dealer;
+    const stats = game?.stats;
+    const inv = game?.inventory;
     const products = d?.getProducts ? d.getProducts() : [];
 
     const itemsHtml = products.map((p) => {
-      const canAfford = (stats?.dinero ?? 0) >= p.value;
+      const price = dealerPrice(p);
+      const canAfford = (stats?.dinero ?? 0) >= price;
       const weightOk = inv ? (inv.totalWeight + p.weight <= inv.maxWeight) : true;
       const canBuy = canAfford && weightOk;
       const effectDesc = p.id === 'tintico' ? `☕ +${p.amount} vicio, +${p.animo} ánimo, +${p.energia} energía`
@@ -813,7 +830,7 @@ else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] So
             <div class="dealer-prod-desc">${effectDesc} · Peso: ${p.weight}kg</div>
           </div>
           <div class="dealer-prod-action">
-            <div class="dealer-prod-price">${cop(p.value)}</div>
+            <div class="dealer-prod-price">${cop(price)}</div>
             <button class="dealer-buy-btn" data-id="${p.id}" ${canBuy ? '' : 'disabled'}>
               ${canAfford ? (weightOk ? 'Comprar' : 'Lleno') : 'Sin Dinero'}
             </button>
@@ -822,25 +839,73 @@ else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] So
       `;
     }).join('');
 
+    // Venta: de noche, una fila por sustancia del inventario; nada se vende sin pulsar su botón.
+    const priceMult = game?.interaction?.substancePriceMult?.() ?? 1;
+    const lots = (inv?.items ?? []).filter((entry) => ITEMS[entry.id]?.substance);
+    const sellHtml = !game?.clock?.isNight
+      ? `<div class="dealer-empty">☀️ De día no compra nada. Vuelve de noche.</div>`
+      : !lots.length
+        ? '<div class="dealer-empty">No llevas nada que venderle.</div>'
+        : lots.map(({ id, qty }) => {
+          const item = ITEMS[id];
+          const offer = dealerOffer(item, priceMult);
+          return `
+            <div class="dealer-product" data-id="${id}">
+              <div class="dealer-prod-info">
+                <div class="dealer-prod-name">${item.name} ×${qty}</div>
+                <div class="dealer-prod-desc">Te paga ${cop(offer)} por unidad</div>
+              </div>
+              <div class="dealer-prod-action">
+                <div class="dealer-prod-price">${cop(offer * qty)}</div>
+                <button class="dealer-sell-btn" data-id="${id}">Vender</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
     if (!this._setHTML(this.dealerPanel, `
       <div class="dealer-header">
         <h2>🟣 Rincón del Dealer</h2>
         <span class="dealer-money">Tu dinero: ${cop(stats?.dinero)}</span>
       </div>
+      <div class="dealer-section">Comprar</div>
       <div class="dealer-products">${itemsHtml}</div>
+      <div class="dealer-section">Vender</div>
+      <div class="dealer-products">${sellHtml}</div>
       <div class="dealer-hint">
-        🌙 De noche puedes vender sustancias aquí (1.8x precio base).<br>
-        Pulsa Q o ESC para cerrar.
+        🌙 De noche te paga ${dealerSellMult(priceMult)}× el valor de lo que le traes, pero en cada venta
+        hay un ${Math.round(SUBSTANCE_RISK_CHANCE * 100)} % de que caiga la policía y se lleve la mercancía.<br>
+        Pulsa Q, E o ESC para cerrar.
       </div>
     `)) return;
 
-    this.dealerPanel.querySelectorAll('.dealer-buy-btn').forEach((btn) => {
+    // El mando pulsa con click() (detail 0) y reescribir el panel le borra el foco: sigue en la misma fila o en la
+    // última de esa lista. Nunca salta de Vender a Comprar, y con el ratón no hay foco que Espacio pueda volver a pulsar.
+    const keepFocus = (selector, index, e) => {
+      if (e.detail) return;
+      const rows = this.dealerPanel.querySelectorAll(selector);
+      const next = rows[Math.min(index, rows.length - 1)];
+      next?.focus({ preventScroll: true });
+      next?.scrollIntoView({ block: 'nearest' });
+    };
+    this.dealerPanel.querySelectorAll('.dealer-buy-btn').forEach((btn, index) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const id = btn.dataset.id;
         if (window.__game?.interaction) {
           window.__game.interaction.buySubstanceFromDealer(id);
           this.renderDealer(d);
+          keepFocus('.dealer-buy-btn', index, e);
+        }
+      });
+    });
+    this.dealerPanel.querySelectorAll('.dealer-sell-btn').forEach((btn, index) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.__game?.interaction) {
+          window.__game.interaction.sellSubstancesToDealer(btn.dataset.id, window.__game.clock);
+          this.renderDealer(d);
+          keepFocus('.dealer-sell-btn', index, e);
         }
       });
     });

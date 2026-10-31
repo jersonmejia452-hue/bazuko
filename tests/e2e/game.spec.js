@@ -217,7 +217,7 @@ test('mapa con M, destino por clic y por la lista, ruta en el radar y pestañas 
   // Lista «Ir a…»: la recicladora reemplaza el destino y tiene ruta a pie.
   await page.locator('.map-view__place', { hasText: 'Recicladora' }).click();
   const route = await page.evaluate(() => ({ name: window.__game.gps.waypoint.name, points: window.__game.gps.route.length }));
-  expect(route.name).toBe('Recicladora');
+  expect(route.name).toBe('Recicladora El Progreso');
   expect(route.points).toBeGreaterThan(1);
   if (process.env.GPS_SHOTS) await page.screenshot({ path: `${process.env.GPS_SHOTS}/mapa-ruta.png` });
 
@@ -247,6 +247,95 @@ test('mapa con M, destino por clic y por la lista, ruta en el radar y pestañas 
   await expect.poll(() => page.evaluate(() => window.__game.gps.waypoint)).toBeNull();
   await page.keyboard.press('Escape');
   await expect(page.locator('#menu')).toBeHidden();
+});
+
+test('radar y mapa señalan lo que necesitas: M + Enter traza la ruta a la fogata gratis', async ({ page }) => {
+  await startNewGame(page);
+  // Cada sesión empieza a las 22:00 con llovizna: sin plata ni comida, lo que queda es la fogata.
+  await page.evaluate(() => {
+    const { stats, inventory } = window.__game;
+    stats.dinero = 0; stats.calor = 0;
+    inventory.items.length = 0;
+  });
+  await expect(page.locator('#minimap-info')).toContainText('Fogata de caneca');
+  await expect(page.locator('#minimap-info')).toContainText('Calor gratis');
+  await expect(page.locator('#minimap-info')).toHaveClass(/is-need/);
+  if (process.env.GPS_SHOTS) await page.screenshot({ path: `${process.env.GPS_SHOTS}/radar-necesidad.png` });
+
+  await page.keyboard.press('m');
+  const nearest = page.locator('.map-view__nearest');
+  await expect(nearest).toHaveText('Ir al calor más cercano');
+  await expect(nearest).toBeFocused();
+  await expect(page.locator('.map-view__place', { hasText: 'Fogata de caneca' })).toHaveCount(1);
+  await expect(page.locator('.map-view__place', { hasText: 'Gasolinera' })).toContainText('Solo referencia');
+  const filterRows = await page.locator('.map-view__filter').evaluateAll(list => new Set(list.map(b => Math.round(b.getBoundingClientRect().top))).size);
+  expect(filterRows).toBe(1);
+  if (process.env.GPS_SHOTS) await page.screenshot({ path: `${process.env.GPS_SHOTS}/mapa-necesidad.png` });
+  await page.keyboard.press('Enter');
+  await expect.poll(() => page.evaluate(() => window.__game.gps.waypoint?.name)).toBe('Fogata de caneca');
+  await expect(page.locator('.map-view__dest strong')).toContainText('Fogata de caneca');
+  await expect(nearest).toHaveCount(0);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.map-view__dest strong')).toContainText('Fogata de caneca');
+
+  // Los filtros dejan solo lo que sirve y explican por qué no hay opción.
+  await page.locator('.map-view__filter', { hasText: 'Agua' }).click();
+  await expect(page.locator('.map-view__no-option')).toContainText('No te alcanza: agua desde');
+  await expect(page.locator('.map-view__place', { hasText: 'Fritanga La Mona' })).toContainText('sin plata');
+  await page.locator('.map-view__filter', { hasText: 'Todo' }).click();
+  await expect(page.locator('.map-view__no-option')).toHaveCount(0);
+
+  // Espacio pulsa los botones del panel, aunque Input lo cancele para el salto.
+  const heat = page.locator('.map-view__filter', { hasText: 'Calor' });
+  await heat.focus();
+  await page.keyboard.press('Space');
+  await expect(heat).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('.map-view__filter', { hasText: 'Todo' }).click();
+
+  // Y también las pestañas, que están en el mismo menú.
+  await page.getByRole('tab', { name: /Estado/ }).focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('tab', { name: /Estado/ })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: /Mapa/ }).click();
+
+  // Marcar un lugar no mueve el panel, que a esta altura se desplaza entero.
+  const side = page.locator('.map-view__side');
+  const fire = page.locator('.map-view__place', { hasText: 'Fogata de caneca' });
+  await fire.scrollIntoViewIfNeeded();
+  const scrolled = await side.evaluate(node => node.scrollTop);
+  expect(scrolled).toBeGreaterThan(0);
+  await fire.click();
+  expect(await side.evaluate(node => node.scrollTop)).toBe(scrolled);
+
+  // En teclado español, «+» es la tecla física de «]»: acerca el mapa y no cambia de pestaña.
+  const mapZoom = () => page.evaluate(() => window.__game.mapView.zoom);
+  const zoomBefore = await mapZoom();
+  await page.locator('.map-view__canvas').dispatchEvent('keydown', { code: 'BracketRight', key: '+', bubbles: true });
+  expect(await mapZoom()).toBeGreaterThan(zoomBefore);
+  await expect(page.getByRole('tab', { name: /Mapa/ })).toHaveAttribute('aria-selected', 'true');
+
+  await page.keyboard.press('m');
+  await expect(page.locator('#menu')).toBeHidden();
+  await expect(page.locator('#minimap-info')).toContainText('Fogata de caneca');
+  await expect(page.locator('#minimap-info')).toHaveClass(/is-route/);
+
+  // Y con el juego andando, «-» aleja el radar.
+  const radarBase = () => page.evaluate(() => window.__game.minimap.zoomBase);
+  const baseBefore = await radarBase();
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Slash', key: '-' })));
+  expect(await radarBase()).not.toBe(baseBefore);
+
+  // La fogata del callejón comparte punto con la mesa de crafteo, y E debe seguir calentando ahí.
+  await page.evaluate(() => {
+    const { player, world, stats } = window.__game;
+    const { x, z } = world.active.reserved.craft;
+    player.position.set(x + 1, player.position.y, z);
+    stats.calor = 0;
+  });
+  await expect.poll(() => page.evaluate(() => window.__game.interaction.currentTargetType)).toBe('fireBarrel');
+  await page.locator('#game-canvas').click();
+  await page.keyboard.press('e');
+  await expect.poll(() => page.evaluate(() => window.__game.stats.calor)).toBeGreaterThan(0);
 });
 
 test('volumen por categoría en Ajustes y pisadas al caminar', async ({ page }) => {

@@ -8,8 +8,8 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.clear());
 });
 
-async function start(page) {
-  await page.goto('/', { waitUntil: 'commit' });
+async function start(page, url = '/') {
+  await page.goto(url, { waitUntil: 'commit' });
   await expect(page.locator('#creator-modal')).toBeVisible({ timeout: 120_000 });
   await page.locator('#cr-name').fill('Integración QA');
   await page.locator('#creator-done').click();
@@ -32,6 +32,44 @@ function collectErrors(page) {
     if (message.type() === 'error' && /shader|WebGLProgram/i.test(message.text())) errors.push(message.text());
   });
   return errors;
+}
+
+// Cada aviso dura 2,5 s: se anota al aparecer para no depender de los cuadros que tarde cada paso.
+async function recordToasts(page) {
+  await page.evaluate(() => {
+    window.__toasts = [];
+    new MutationObserver(changes => {
+      for (const { addedNodes } of changes) for (const node of addedNodes) {
+        if (node.classList?.contains('loot-toast')) window.__toasts.push(node.textContent);
+      }
+    }).observe(document.body, { childList: true });
+  });
+  return text => expect.poll(() => page.evaluate(() => window.__toasts)).toContainEqual(expect.stringContaining(text));
+}
+
+// Los avisos no reciben clics: se les permite un instante para preguntar qué queda encima en su centro.
+const lastToastOnTop = page => page.evaluate(() => {
+  const toast = [...document.querySelectorAll('.loot-toast')].at(-1);
+  if (!toast) return false;
+  const box = toast.getBoundingClientRect();
+  toast.style.pointerEvents = 'auto';
+  const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+  toast.style.pointerEvents = '';
+  return top === toast;
+});
+
+async function simulatedPad(page) {
+  await page.addInitScript(() => {
+    window.__testPad = { index: 0, mapping: 'standard', connected: true, axes: [0, 0, 0, 0],
+      buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })) };
+    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [window.__testPad] });
+  });
+  return async index => {
+    await page.evaluate(index => { window.__testPad.buttons[index] = { pressed: true, touched: true, value: 1 }; }, index);
+    await frames(page, 3);
+    await page.evaluate(index => { window.__testPad.buttons[index] = { pressed: false, touched: false, value: 0 }; }, index);
+    await frames(page, 3);
+  };
 }
 
 test('cuchillo encadena tres golpes, botella noquea y recuperar al NPC no renueva el dinero', async ({ page }) => {
@@ -309,17 +347,7 @@ test('arresto desde el agua limpia movimiento, amenazas y efectos antes de recup
 
 test('mando simulado navega inventario sin tirar objetos y activa controles del modo foto', async ({ page }) => {
   const errors = collectErrors(page);
-  await page.addInitScript(() => {
-    window.__testPad = { index: 0, mapping: 'standard', connected: true, axes: [0, 0, 0, 0],
-      buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })) };
-    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [window.__testPad] });
-  });
-  const press = async index => {
-    await page.evaluate(index => { window.__testPad.buttons[index] = { pressed: true, touched: true, value: 1 }; }, index);
-    await frames(page, 3);
-    await page.evaluate(index => { window.__testPad.buttons[index] = { pressed: false, touched: false, value: 0 }; }, index);
-    await frames(page, 3);
-  };
+  const press = await simulatedPad(page);
   await start(page);
   await page.evaluate(async () => {
     const game = window.__game, { ITEMS } = await import('/src/data/items.js');
@@ -347,5 +375,332 @@ test('mando simulado navega inventario sin tirar objetos y activa controles del 
   await press(1);
   await expect(page.locator('#photo-mode')).toBeHidden();
   await expect.poll(() => page.evaluate(() => window.__game.paused)).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+// Equipa el arma casera desde el inventario y encadena sus dos golpes contra un NPC quieto.
+async function swingHomemadeWeapon(page) {
+  await page.evaluate(async () => {
+    const game = window.__game, player = game.player;
+    const { ITEMS } = await import('/src/data/items.js');
+    game.inventory.clear();
+    game.inventory.add(ITEMS.arma, 1);
+    game.stats.energia = game.stats.salud = 100;
+    game.clock.hour = 12;
+    player.position.set(112.98, game.world.active.getMovementGroundHeight(112.98, 97.84, 0), 97.84);
+    player.root.position.copy(player.position); player.root.rotation.set(0, Math.PI, 0);
+    player.velocity.set(0, 0, 0); player.resetGrounding(); player.action = null;
+    const npc = game.world.active.npcs.find(npc => npc.character && !npc._disposed);
+    npc.position.set(112.98, player.position.y, 96.34); npc.root.position.copy(npc.position);
+    npc.isWalkable = () => false; npc.walkSpeed = 0;
+    npc.health = npc.maxHealth;
+    window.__clubProbe = { steps: [], hits: [], queued: [], complete: false, finite: true, seen: false, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
+    window.addEventListener('street-fight', event => {
+      if (event.detail?.attacker === player) window.__clubProbe.hits.push(npc.health);
+    });
+    window.__clubNpc = npc;
+  });
+  await page.keyboard.press('i');
+  await expect(page.locator('#inv-overlay')).toHaveClass(/open/);
+  await page.locator('.inv-slot[data-i="0"]').click();
+  await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => window.__game.player.equippedWeapon)).toBe('arma');
+  await page.keyboard.press('Escape');
+
+  await page.evaluate(() => {
+    const game = window.__game, player = game.player, probe = window.__clubProbe;
+    probe.deadline = performance.now() + 10_000;
+    const sample = () => {
+      const attack = player.attack, club = player.character.group.getObjectByName('weapon-arma');
+      if (attack && club) {
+        let shown = true;
+        for (let node = club; node; node = node.parent) shown &&= node.visible;
+        probe.seen ||= shown;
+        club.updateWorldMatrix(true, false);
+        const e = club.matrixWorld.elements, p = player.position;
+        probe.finite &&= e.every(Number.isFinite);
+        [e[12] - p.x, e[13] - p.y, e[14] - p.z].forEach((value, axis) => {
+          probe.min[axis] = Math.min(probe.min[axis], value);
+          probe.max[axis] = Math.max(probe.max[axis], value);
+        });
+      }
+      if (attack && !probe.steps.includes(attack.step)) probe.steps.push(attack.step);
+      if (attack?.phase === 'recovery' && attack.step < 1 && !probe.queued.includes(attack.step)) {
+        probe.queued.push(attack.step);
+        document.body.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyG', key: 'g', bubbles: true }));
+        document.body.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyG', key: 'g', bubbles: true }));
+      }
+      if (probe.steps.includes(1) && !attack) { probe.complete = true; return; }
+      if (performance.now() < probe.deadline) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  await page.keyboard.press('g');
+  await expect.poll(() => page.evaluate(() => window.__clubProbe.complete)).toBe(true);
+  const combo = await page.evaluate(() => window.__clubProbe);
+  expect(combo.steps).toEqual([0, 1]);
+  expect(combo.hits).toEqual([66, 15]);
+  expect(combo.seen, 'el arma se ve en la mano').toBe(true);
+  expect(combo.finite).toBe(true);
+  const travel = Math.hypot(...combo.max.map((value, axis) => value - combo.min[axis]));
+  expect(travel, 'el arma recorre el golpe').toBeGreaterThan(.5);
+}
+
+const skeletonIsFinite = page => page.evaluate(() => {
+  let finite = true;
+  window.__game.player.root.traverse(node => { finite &&= node.matrixWorld.elements.every(Number.isFinite); });
+  return finite;
+});
+
+// Altura del nodo más alto del cuerpo sobre los pies: de pie ronda la estatura; acostado queda cerca del piso.
+const bodyHeight = page => page.evaluate(() => {
+  const player = window.__game.player;
+  let top = -Infinity;
+  player.character.group.traverse(node => { top = Math.max(top, node.matrixWorld.elements[13]); });
+  return top - player.position.y;
+});
+
+// Mira cada cuadro del sueño y vuelve al despertar: la simulación está quieta, el cuerpo no.
+const watchSleep = page => page.evaluate(() => new Promise(resolve => {
+  const game = window.__game, player = game.player, seen = { frames: 0, lowest: Infinity, weaponShown: false };
+  const sample = () => {
+    if (!game.isSleeping) { resolve(seen); return; }
+    let top = -Infinity;
+    player.character.group.traverse(node => {
+      top = Math.max(top, node.matrixWorld.elements[13]);
+      if (node.name.startsWith('weapon-') && node.visible) seen.weaponShown = true;
+    });
+    seen.frames++;
+    seen.lowest = Math.min(seen.lowest, top - player.position.y);
+    requestAnimationFrame(sample);
+  };
+  requestAnimationFrame(sample);
+}));
+
+test('arma casera: se equipa del inventario, barre, remata con más daño y la recicladora no la vende de la mano', async ({ page }) => {
+  const errors = collectErrors(page);
+  await start(page);
+  await swingHomemadeWeapon(page);
+  expect(await skeletonIsFinite(page)).toBe(true);
+  await page.evaluate(async () => {
+    const { ITEMS } = await import('/src/data/items.js');
+    const { openRecycler } = await import('/src/ui/placeMenus.js');
+    window.__game.inventory.add(ITEMS.lata, 1);
+    openRecycler(window.__game);
+  });
+  await page.getByRole('button', { name: /Vender todo/ }).click();
+  expect(await page.evaluate(() => {
+    const { inventory, player } = window.__game;
+    return [inventory.count('arma'), inventory.count('lata'), player.equippedWeapon];
+  })).toEqual([1, 0, 'arma']);
+  await page.keyboard.press('Escape');
+  expect(errors).toEqual([]);
+});
+
+test('con las animaciones Mixamo, el arma casera golpea y al dormir se acuesta, la suelta y se levanta', async ({ page }) => {
+  const errors = collectErrors(page);
+  await start(page, '/?animaciones=mixamo-preview');
+  expect(await page.evaluate(() => window.__game.player.character.animationStatus.profile)).toBe('mixamo-game-preview');
+  await swingHomemadeWeapon(page);
+  await frames(page, 30);
+  const standing = await bodyHeight(page);
+  await page.evaluate(() => {
+    const game = window.__game;
+    Object.assign(game.built, { base: true, paredes: true });
+    game.stats.higiene = 90;
+    game.sleep();
+  });
+  expect(await page.evaluate(() => window.__game.player.action)).toBe('dormir');
+  const asleep = await watchSleep(page);
+  expect(asleep.lowest, `de pie mide ${standing}`).toBeLessThan(standing * .6);
+  expect(asleep.weaponShown, 'no duerme con el arma en la mano').toBe(false);
+  expect(await skeletonIsFinite(page)).toBe(true);
+  expect(await page.evaluate(() => window.__game.player.action), 'despierto no sigue acostado').toBe(null);
+  await expect.poll(() => bodyHeight(page)).toBeGreaterThan(standing * .9);
+  expect(await page.evaluate(() => window.__game.diseases.hasAny), 'dormir bañado no pega nada').toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test('sin plata de noche: radar y mapa llevan al Dealer, E abre su tienda y solo se vende lo elegido', async ({ page }) => {
+  const errors = collectErrors(page);
+  await start(page);
+  const offer = await page.evaluate(async () => {
+    const game = window.__game;
+    const { ITEMS, dealerOffer } = await import('/src/data/items.js');
+    const { cop } = await import('/src/utils/money.js');
+    game.inventory.clear();
+    game.inventory.add(ITEMS.pegante, 1);
+    game.inventory.add(ITEMS.hierba, 2);
+    game.stats.dinero = 0; game.stats.hambre = 15; game.stats.sed = 80; game.stats.calor = 100;
+    return { value: dealerOffer(ITEMS.pegante), label: cop(dealerOffer(ITEMS.pegante)) };
+  });
+  const radar = page.locator('#minimap-info');
+  await expect(radar).toContainText('Dealer');
+  await expect(radar).toContainText('Sin plata: vende');
+
+  await page.keyboard.press('m');
+  const go = page.locator('.map-view__nearest');
+  await expect(go).toHaveText('Ir a vender');
+  await expect(go).toBeFocused();
+  await expect(page.locator('.map-view__no-option')).toContainText('Vende sustancias');
+  await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => window.__game.gps.waypoint?.name)).toBe('Dealer');
+  await page.keyboard.press('m');
+  await expect.poll(() => page.evaluate(() => window.__game.paused)).toBe(false);
+
+  await page.evaluate(() => {
+    const game = window.__game, player = game.player, at = game.dealer.position;
+    player.position.set(at.x + .6, game.world.active.getMovementGroundHeight(at.x + .6, at.z, 0), at.z);
+    player.root.position.copy(player.position); player.velocity.set(0, 0, 0); player.resetGrounding();
+  });
+  await expect(page.locator('#interaction-prompt')).toContainText('Dealer');
+  await page.keyboard.press('e');
+  const panel = page.locator('#dealer-panel');
+  await expect(panel).toHaveClass(/open/);
+  const toastShown = await recordToasts(page);
+  expect(await page.evaluate(() => [window.__game.stats.dinero, window.__game.inventory.count('pegante')]), 'E no vende nada').toEqual([0, 1]);
+  await expect(panel.locator('.dealer-sell-btn')).toHaveCount(2);
+  const sell = panel.locator('.dealer-sell-btn[data-id="pegante"]');
+  await expect(sell).toHaveCSS('min-height', '46px');
+  await page.evaluate(() => { window.__realRandom = Math.random; Math.random = () => .99; }); // sin requisa
+  await sell.click();
+  await page.evaluate(() => { Math.random = window.__realRandom; });
+  expect(await page.evaluate(() => [window.__game.stats.dinero, window.__game.inventory.count('pegante'), window.__game.inventory.count('hierba')])).toEqual([offer.value, 0, 2]);
+  await expect(panel.locator('.dealer-money')).toContainText(offer.label);
+  await expect(panel.locator('.dealer-sell-btn')).toHaveCount(1);
+
+  for (const size of [{ width: 375, height: 667 }, { width: 1280, height: 800 }]) {
+    await page.setViewportSize(size);
+    const fit = await page.evaluate(() => {
+      const box = document.getElementById('dealer-panel'), button = box.querySelector('.dealer-sell-btn');
+      button.scrollIntoView({ block: 'center' });
+      const rect = button.getBoundingClientRect(), outer = box.getBoundingClientRect();
+      return { spill: box.scrollWidth - box.clientWidth, left: outer.left, right: outer.right, top: rect.top, bottom: rect.bottom };
+    });
+    expect(fit.spill, `${size.width} px`).toBeLessThanOrEqual(0);
+    expect(fit.left, `${size.width} px`).toBeGreaterThanOrEqual(0);
+    expect(fit.right, `${size.width} px`).toBeLessThanOrEqual(size.width);
+    expect(fit.top, `${size.width} px`).toBeGreaterThanOrEqual(0);
+    expect(fit.bottom, `${size.width} px`).toBeLessThanOrEqual(size.height);
+  }
+
+  // La requisa se lleva lo que se quería vender y sin pagar: el aviso tiene que verse sobre la tienda abierta.
+  await panel.locator('.dealer-sell-btn[data-id="hierba"]').evaluate(button => {
+    const random = Math.random;
+    Math.random = () => 0;
+    button.click();
+    Math.random = random;
+  });
+  await toastShown('Requisa');
+  expect(await lastToastOnTop(page), 'el aviso queda encima de la tienda').toBe(true);
+  expect(await page.evaluate(() => [window.__game.stats.dinero, window.__game.inventory.count('hierba')])).toEqual([offer.value, 0]);
+  await expect(panel.locator('.dealer-sell-btn')).toHaveCount(0);
+
+  for (const key of ['e', 'q']) {
+    await page.keyboard.press(key);
+    await expect(panel, `${key} cierra la tienda`).not.toHaveClass(/open/);
+    await frames(page, 5);
+    await expect(panel, 'la misma pulsación no la vuelve a abrir').not.toHaveClass(/open/);
+    if (key === 'e') {
+      await page.keyboard.press('q');
+      await expect(panel, 'q también la abre').toHaveClass(/open/);
+    }
+  }
+  await expect(radar).not.toContainText('Sin plata');
+  await expect(radar).not.toContainText('Dealer');
+  await expect(radar).toContainText('$');
+
+  await page.evaluate(() => { window.__game.clock.hour = 12; });
+  await page.keyboard.press('e');
+  await expect(panel.locator('.dealer-empty')).toContainText('De día');
+  await expect(panel.locator('.dealer-sell-btn')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(panel).not.toHaveClass(/open/);
+  expect(errors).toEqual([]);
+});
+
+test('con el mando, vender en la tienda no pierde la fila y nunca salta a comprar', async ({ page }) => {
+  const errors = collectErrors(page);
+  const press = await simulatedPad(page);
+  await start(page);
+  await page.evaluate(async () => {
+    const game = window.__game, { ITEMS } = await import('/src/data/items.js');
+    game.inventory.clear();
+    game.inventory.add(ITEMS.pegante, 1);
+    game.inventory.add(ITEMS.hierba, 2);
+    game.stats.dinero = 0;
+    game.clock.hour = 22;
+    window.__realRandom = Math.random;
+    Math.random = () => .99; // sin requisa
+    game.hud.toggleDealerPanel();
+  });
+  const panel = page.locator('#dealer-panel'), sellers = panel.locator('.dealer-sell-btn');
+  await expect(panel).toHaveClass(/open/);
+  await frames(page, 3); // El mando ignora lo que ya venía pulsado al abrir: primero tiene que ver la tienda.
+  await sellers.first().focus();
+  await press(0); // A
+  await expect(sellers).toHaveCount(1);
+  await expect(sellers.first(), 'sigue en la venta que queda').toBeFocused();
+  await press(0);
+  await expect(sellers).toHaveCount(0);
+  const sold = await page.evaluate(() => window.__game.stats.dinero);
+  expect(sold).toBeGreaterThan(0);
+  await press(0); // Sin ventas, esta pulsación solo enfoca: comprar requiere otra.
+  expect(await page.evaluate(() => window.__game.stats.dinero), 'A no compra por inercia').toBe(sold);
+  await press(1); // B
+  await expect(panel).not.toHaveClass(/open/);
+  await page.evaluate(() => { Math.random = window.__realRandom; });
+  expect(errors).toEqual([]);
+});
+
+test('dormir sucio en la pose nueva puede pegar sarna y la pomada la cura; sin la enfermedad no se gasta', async ({ page }) => {
+  const errors = collectErrors(page);
+  await start(page);
+  await page.evaluate(async () => {
+    const game = window.__game;
+    const { ITEMS } = await import('/src/data/items.js');
+    game.inventory.clear();
+    game.inventory.add(ITEMS.pomada, 1);
+    Object.assign(game.built, { base: true, paredes: true });
+    game.stats.higiene = 10;
+  });
+  const toastShown = await recordToasts(page);
+  const usePomada = async () => {
+    await page.keyboard.press('i');
+    await expect(page.locator('#inv-overlay')).toHaveClass(/open/);
+    await page.locator('.inv-slot[data-i="0"]').click();
+    await page.keyboard.press('Enter');
+    const onTop = await lastToastOnTop(page);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#inv-overlay')).not.toHaveClass(/open/);
+    return onTop;
+  };
+  expect(await usePomada(), 'el aviso queda encima del inventario').toBe(true);
+  await toastShown('No tienes sarna');
+  expect(await page.evaluate(() => window.__game.inventory.count('pomada'))).toBe(1);
+
+  await frames(page, 10);
+  const standing = await bodyHeight(page);
+  const action = await page.evaluate(() => {
+    const game = window.__game, random = Math.random;
+    Math.random = () => 0;
+    game.sleep();
+    Math.random = random;
+    return game.player.action;
+  });
+  expect(action).toBe('dormir');
+  const asleep = await watchSleep(page);
+  expect(asleep.frames, 'el sueño se dibuja cuadro a cuadro').toBeGreaterThan(1);
+  expect(asleep.lowest, `de pie mide ${standing}`).toBeLessThan(standing * .6);
+  expect(await skeletonIsFinite(page)).toBe(true);
+  await toastShown('Dormiste sucio');
+  expect(await page.evaluate(() => window.__game.player.action), 'despierto no sigue acostado').toBe(null);
+  await expect.poll(() => bodyHeight(page)).toBeGreaterThan(standing * .9);
+  await expect(page.locator('#disease-panel')).toContainText('Sarna');
+  expect(await page.evaluate(() => !!JSON.parse(localStorage.getItem('habitante-de-calle-save-v1')).diseases.active.sarna), 'queda guardada').toBe(true);
+
+  await usePomada();
+  await toastShown('Curado: Sarna');
+  expect(await page.evaluate(() => [window.__game.diseases.hasAny, window.__game.inventory.count('pomada')])).toEqual([false, 0]);
   expect(errors).toEqual([]);
 });

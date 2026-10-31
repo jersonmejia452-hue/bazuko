@@ -173,3 +173,22 @@ test('NPC LOD conserva arma y gesto de señalar; el golpe por fases llega al imp
   assert.ok(hand.z - shoulder.z > .3, 'el impacto no espera el filtro de suavizado');
   npc.dispose();
 });
+
+test('las acciones cortas del cuerpo real conservan la fase y pueden repetirse sin mover el jugador', async () => {
+  const character = await createRealisticCharacter();
+  const hand = joint(character.group, 'RightHand');
+  for (const action of ['comer', 'beber', 'lanzar']) {
+    for (let frame = 0; frame < 120; frame++) character.update(1 / 60, { action, actionProgress: .4 });
+    const atPhase = hand.getWorldPosition(new THREE.Vector3());
+    for (let frame = 0; frame < 180; frame++) character.update(1 / 60, { action, actionProgress: .4 });
+    assert.ok(hand.getWorldPosition(new THREE.Vector3()).distanceTo(atPhase) < .001,
+      `${action}: la mano no avanza por otro reloj después de alcanzar su fase`);
+    character.update(1 / 60, { action, actionProgress: .95 });
+    const finished = hand.getWorldPosition(new THREE.Vector3());
+    character.update(1 / 60, { action, actionProgress: .1 });
+    assert.ok(hand.getWorldPosition(new THREE.Vector3()).distanceTo(finished) > .01,
+      `${action}: repetir la acción no deja el último fotograma congelado`);
+    assert.deepEqual(character.group.position.toArray(), [0, 0, 0]);
+  }
+  character.dispose();
+});

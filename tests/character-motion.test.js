@@ -111,3 +111,39 @@ test('el peso de carrera y carga se conserva al cambiar de frecuencia de animaci
   });
   for (const pose of poses) pose.forEach((rotation, index) => assert.ok(rotation.angleTo(poses[0][index]) < 1e-7));
 });
+
+test('los giros mueven torso y cabeza en sentidos opuestos sin alterar los apoyos', () => {
+  const sample = turnRate => {
+    const { root, bones } = bodyRig();
+    const original = transforms(root);
+    const motion = new SecondaryMotion(bones);
+    for (let i = 0; i < 60; i++) motion.apply(1 / 60, { speed: 4, phase: 0, turnRate });
+    const pose = transforms(root);
+    for (const name of Object.keys(original).filter(name => /Hips|UpLeg|Leg|Foot|ToeBase/.test(name) || name === '')) {
+      assert.deepEqual(pose[name], original[name], name);
+    }
+    motion.restore();
+    assert.deepEqual(transforms(root), original);
+    return { chest: pose[motion.chest.name].quaternion, head: pose[motion.head.name].quaternion };
+  };
+  const left = sample(-5), straight = sample(0), right = sample(5);
+  assert.ok(left.chest[1] > straight.chest[1] && right.chest[1] < straight.chest[1]);
+  assert.ok(left.head[1] < straight.head[1] && right.head[1] > straight.head[1]);
+  assert.deepEqual(sample(500), right, 'el giro está limitado');
+  assert.deepEqual(sample(NaN), straight, 'los datos inválidos no contaminan la pose');
+});
+
+test('la torsión de giro converge igual con distintas frecuencias y se retira al terminar', () => {
+  const values = [30, 60, 144].map(fps => {
+    const { bones } = bodyRig();
+    const motion = new SecondaryMotion(bones);
+    for (let i = 0; i < fps; i++) motion.apply(1 / fps, { speed: 4, turnRate: 3 });
+    const turning = motion.turn;
+    for (let i = 0; i < fps; i++) motion.apply(1 / fps, { speed: 4, turnRate: 0 });
+    return [turning, motion.turn];
+  });
+  for (const [turning, stopped] of values) {
+    assert.ok(Math.abs(turning - values[0][0]) < 1e-12);
+    assert.ok(stopped < .0001);
+  }
+});

@@ -194,3 +194,56 @@ test('agua, vuelo e impacto anulan combos y gestos incluso durante su desvanecim
     assert.equal(pose.pipe?.active ?? false, false);
   }
 });
+
+
+test('saludar articula mano y antebrazo y vuelve al clip sin arrastrar los pies', () => {
+  const { root, bones } = bodyRig(), pose = new ActionPose(bones, { frame: root });
+  const base = snapshot(root), support = lowest(pose);
+  for (let i = 0; i < 60; i++) pose.apply(1 / 60, { action: 'saludo' });
+  assert.ok(direction(pose, 'rightForeArm').y > .9, 'mano elevada al lado de la cabeza');
+  const wrist = pose.joints.rightHand.quaternion.clone();
+  pose.apply(.3, { action: 'saludo' });
+  assert.ok(wrist.angleTo(pose.joints.rightHand.quaternion) > .03, 'la muñeca acompaña el saludo');
+  assert.equal(lowest(pose), support);
+  for (let i = 0; i < 100; i++) pose.apply(1 / 60);
+  assert.deepEqual(snapshot(root), base);
+});
+
+test('un golpe nuevo cancela el saludo anterior y la reacción absorbe sin perder suelo', () => {
+  const a = bodyRig(), b = bodyRig();
+  const pose = new ActionPose(a.bones), clean = new ActionPose(b.bones);
+  const support = lowest(pose);
+  pose.apply(.3, { action: 'saludo' });
+  const attack = { weapon: 'punos', step: 0, phase: 'active', progress: .5 };
+  pose.apply(.1, { attack }); clean.apply(.1, { attack });
+  assert.deepEqual(snapshot(a.root), snapshot(b.root));
+  pose.apply(.1, { action: 'recibirGolpe', actionProgress: .25 });
+  assert.ok(Math.abs(lowest(pose) - support) < 1e-7);
+  assert.notEqual(direction(pose, 'leftUpLeg').z, 0, 'las piernas participan en la absorción');
+  pose.restore();
+  assert.deepEqual(a.root.position.toArray(), [0, 0, 0]);
+});
+
+test('tobillos de salto y nado se restauran junto con la pose de cuerpo entero', () => {
+  const { root, bones } = bodyRig(), pose = new ActionPose(bones);
+  const base = snapshot(root), ankle = pose.joints.leftFoot.quaternion.clone();
+  pose.apply(.2, { movement: { grounded: false, verticalVelocity: 5, airTime: .2 } });
+  assert.ok(ankle.angleTo(pose.joints.leftFoot.quaternion) > .01);
+  pose.restore(); assert.deepEqual(snapshot(root), base);
+  pose.apply(.3, { speed: 2, movement: { swimming: true } });
+  pose.restore(); assert.deepEqual(snapshot(root), base);
+});
+
+test('dormir realista se restaura antes del mezclador y se cancela al saltar', () => {
+  const a = bodyRig(), b = bodyRig();
+  const pose = new ActionPose(a.bones, { frame: a.root }), clean = new ActionPose(b.bones, { frame: b.root });
+  const before = snapshot(a.root);
+  for (let i = 0; i < 90; i++) pose.apply(1 / 60, { action: 'dormir', movement: { grounded: true } });
+  assert.ok(pose.sleep.weight > .99);
+  assert.notDeepEqual(snapshot(a.root), before);
+  pose.restore(); assert.deepEqual(snapshot(a.root), before);
+  const airborne = { action: 'saltar', movement: { grounded: false, verticalVelocity: 4, airTime: .3 } };
+  pose.apply(.1, airborne); clean.apply(.1, airborne);
+  assert.equal(pose.sleep.weight, 0);
+  assert.deepEqual(snapshot(a.root), snapshot(b.root));
+});

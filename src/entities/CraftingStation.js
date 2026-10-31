@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { COLORS } from '../utils/constants.js';
 
 /**
- * Mesa de crafteo. El jugador interactúa para abrir el menú de crafteo.
+ * Mesa de crafteo, solo visible: el menú se abre con C, sin acercarse.
  */
 export class CraftingStation {
   constructor(scene, position) {

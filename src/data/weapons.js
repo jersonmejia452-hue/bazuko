@@ -18,6 +18,12 @@ export const WEAPONS = {
     id: 'botella_picada', name: 'Botella picada', hitVerb: 'Botellazo',
     damage: 20, range: 1.9, arc: 0.3, windup: 0.16, active: 0.08, recovery: 0.28,
     combo: 2, knockback: 1.2, hitAll: true
+  },
+  // Tabla con chatarra: la más lenta, pero la que más pega, más alcanza y más empuja.
+  arma: {
+    id: 'arma', name: 'Arma casera', hitVerb: 'Garrotazo',
+    damage: 34, range: 2.1, arc: 0.25, windup: 0.24, active: 0.1, recovery: 0.36,
+    combo: 2, knockback: 1.6, hitAll: true
   }
 };
 

@@ -31,7 +31,7 @@ export class Input {
 
       window.addEventListener('mousedown', (e) => {
         if (this.locked) return;
-        if (e.target?.closest?.('input, textarea, select, button, [contenteditable="true"], .menu, .creator, #hud, #topbar, #controls-help')) return;
+        if (e.target?.closest?.('input, textarea, select, button, [contenteditable="true"], .menu, .creator, #hud, #topbar, #controls-help, #quickbar')) return;
         if (e.button === 0) {
           this.pressedThisFrame.add('Mouse0');
         }

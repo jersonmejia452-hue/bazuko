@@ -3,10 +3,15 @@
 import { el, button } from './dom.js';
 import { streetLabels, MAP_COLORS } from '../world/bogota/CityMapRaster.js';
 import { formatDistance } from './Minimap.js';
+import { FILTERS, NEED_COPY, hasTag, noOptionText, placeMeta, rankPlaces, sellFirstPlaces } from './mapServices.js';
 
+const PRESS_KEYS = new Set(['Enter', 'NumpadEnter', 'Space']); // las teclas que pulsan un botón
 const PAN_STEP = 24;
 const HIT_RADIUS = 14;
-const LEGEND = [['Andén', 'sidewalk'], ['Calle', 'road'], ['Parque', 'grass'], ['Agua', 'water'], ['Edificio', 'building']];
+const SERVICE_MIN_ZOOM = 1.6; // por debajo, «Ver toda la ciudad» se saturaría de puestos
+const FRAME_MARGIN = 60;
+const SAME_PLACE_METERS = 4; // el destino puede moverse a la acera más cercana al lugar
+const LEGEND =[['Andén', 'sidewalk'], ['Calle', 'road'], ['Parque', 'grass'], ['Agua', 'water'], ['Edificio', 'building']];
 
 export class MapView {
   constructor(game) {
@@ -15,8 +20,12 @@ export class MapView {
     this.centerX = 0;
     this.centerZ = 0;
     this.hover = null;
+    this.filter = 'todo';   // dura toda la sesión; nunca cambia solo
     this._drag = null;
     this._labels = streetLabels();
+    this._walkCache = new Map();
+    this._focusCta = null;
+    this._panned = false;   // Enter marca el centro solo si el jugador movió la vista
 
     this.canvas = el('canvas', {
       class: 'map-view__canvas', tabindex: '0',
@@ -49,8 +58,11 @@ export class MapView {
   mount({ recenter = true } = {}) {
     const p = this.game.player?.position;
     if (recenter && p) { this.centerX = p.x; this.centerZ = p.z; }
+    this._panned = false;
+    this._drag = null; // un arrastre cortado al cambiar de pestaña no sigue al volver
+    this._walkCache.clear();
     this._renderSidebar();
-    requestAnimationFrame?.(() => { this._resize(); this.draw(); this.canvas.focus?.({ preventScroll: true }); });
+    requestAnimationFrame?.(() => { this._resize(); this.draw(); (this._focusCta ?? this.canvas).focus?.({ preventScroll: true }); });
   }
 
   _resize() {
@@ -67,7 +79,7 @@ export class MapView {
 
   centerOnPlayer() {
     const p = this.game.player?.position;
-    if (p) { this.centerX = p.x; this.centerZ = p.z; this.draw(); }
+    if (p) { this.centerX = p.x; this.centerZ = p.z; this._panned = false; this.draw(); }
   }
 
   fitCity() {
@@ -76,6 +88,7 @@ export class MapView {
     this.centerX = r.originX + r.worldWidth / 2;
     this.centerZ = r.originZ + r.worldHeight / 2;
     this.zoom = this._clampZoom(0);
+    this._panned = false;
     this.draw();
   }
 
@@ -97,14 +110,48 @@ export class MapView {
 
   _pois() { return this.game._getPOIs?.() ?? []; }
 
+  /** Lo que el lienzo dibuja y deja marcar, de abajo arriba: con filtro, lo que coincide queda encima. */
+  _visiblePois() {
+    const pois = this._pois();
+    if (this.filter === 'todo') return this.zoom >= SERVICE_MIN_ZOOM ? pois : pois.filter(poi => !poi.service);
+    return [...pois.filter(poi => !hasTag(poi, this.filter)), ...pois.filter(poi => hasTag(poi, this.filter))];
+  }
+
   _hit(sx, sy) {
     let best = null, bestD = HIT_RADIUS;
-    for (const poi of this._pois()) {
+    for (const poi of this._visiblePois()) {
       const [px, py] = this._toScreen(poi.x, poi.z);
       const d = Math.hypot(px - sx, py - sy);
-      if (d < bestD) { bestD = d; best = poi; }
+      // En un empate gana lo que está dibujado encima.
+      if (d <= bestD) { bestD = d; best = poi; }
     }
     return best;
+  }
+
+  /** Metros a pie desde el jugador; null si no hay camino. Vale mientras dure la pestaña: en pausa nadie se mueve. */
+  _walk(poi) {
+    const p = this.game.player?.position, gps = this.game.gps;
+    if (!p) return 0;
+    if (!gps?.routeLengthTo) return Math.hypot(poi.x - p.x, poi.z - p.z);
+    const key = `${poi.x}|${poi.z}`;
+    if (!this._walkCache.has(key)) this._walkCache.set(key, gps.routeLengthTo(p, poi));
+    return this._walkCache.get(key);
+  }
+
+  /** Centra la vista entre el jugador y el lugar, y aleja solo si hace falta para ver ambos. */
+  _frame(poi) {
+    const p = this.game.player?.position;
+    if (!p || !this.cssWidth) { this.centerX = poi.x; this.centerZ = poi.z; return; }
+    this.centerX = (p.x + poi.x) / 2;
+    this.centerZ = (p.z + poi.z) / 2;
+    const fit = Math.min((this.cssWidth - 2 * FRAME_MARGIN) / Math.max(1, Math.abs(poi.x - p.x)),
+      (this.cssHeight - 2 * FRAME_MARGIN) / Math.max(1, Math.abs(poi.z - p.z)));
+    this.zoom = this._clampZoom(Math.min(this.zoom, fit));
+  }
+
+  _go(poi) {
+    this._frame(poi);
+    this._mark(poi);
   }
 
   _local(e) {
@@ -121,6 +168,7 @@ export class MapView {
       c.setPointerCapture?.(e.pointerId);
     });
     c.addEventListener('pointermove', (e) => {
+      if (e.buttons === 0) this._drag = null; // el botón se soltó donde el lienzo no lo vio
       const [sx, sy] = this._local(e);
       const d = this._drag;
       if (d) {
@@ -128,18 +176,20 @@ export class MapView {
         if (d.moved) {
           this.centerX = d.cx - (sx - d.sx) / this.zoom;
           this.centerZ = d.cz - (sy - d.sy) / this.zoom;
+          this._panned = true;
         }
       }
       const hover = this._hit(sx, sy);
       const w = this._toWorld(sx, sy);
-      this.coords.textContent = `X ${Math.round(w.x)} · Z ${Math.round(w.z)}`;
+      this.coords.textContent = `X ${Math.round(w.x)} ∙ Z ${Math.round(w.z)}`;
       if (d?.moved || hover !== this.hover) { this.hover = hover; this.draw(); }
       c.style.cursor = d?.moved ? 'grabbing' : hover ? 'pointer' : 'crosshair';
     });
     c.addEventListener('pointerup', (e) => {
       const d = this._drag;
       this._drag = null;
-      if (!d || d.moved) return;
+      // Con el menú cerrado a mitad del clic, soltar no debe marcar nada en un mapa que ya no se ve.
+      if (!d || d.moved || !(c.getClientRects?.().length ?? 1)) return;
       const [sx, sy] = this._local(e);
       const poi = this._hit(sx, sy);
       this._mark(poi ?? { ...this._toWorld(sx, sy), name: 'Punto marcado', icon: '📍' });
@@ -151,22 +201,34 @@ export class MapView {
       const [sx, sy] = this._local(e);
       this._zoomAt(sx, sy, e.deltaY < 0 ? 1.18 : 1 / 1.18);
     }, { passive: false });
-    c.addEventListener('keydown', (e) => {
-      const pan = PAN_STEP * 2.2 / this.zoom;
-      const moves = { ArrowLeft: [-pan, 0], ArrowRight: [pan, 0], ArrowUp: [0, -pan], ArrowDown: [0, pan] };
-      if (moves[e.code]) { this.centerX += moves[e.code][0]; this.centerZ += moves[e.code][1]; }
-      else if (e.code === 'Equal' || e.code === 'NumpadAdd') this._zoomAt(this.cssWidth / 2, this.cssHeight / 2, 1.25);
-      else if (e.code === 'Minus' || e.code === 'NumpadSubtract') this._zoomAt(this.cssWidth / 2, this.cssHeight / 2, 1 / 1.25);
-      else if (e.code === 'Enter' || e.code === 'Space') this._mark({ x: this.centerX, z: this.centerZ, name: 'Punto marcado', icon: '📍' });
-      else if (e.code === 'Delete' || e.code === 'Backspace') this._clear();
-      else return;
-      e.preventDefault();
-      e.stopPropagation();
-      this.draw();
+    c.addEventListener('keydown', (e) => { this._onKey(e); });
+    // Con el foco en el panel el teclado sigue manejando el mapa; las teclas que pulsan son del botón enfocado.
+    this.root.addEventListener('keydown', (e) => {
+      if (e.target === c || PRESS_KEYS.has(e.code)) return;
+      if (this._onKey(e)) c.focus?.({ preventScroll: true });
     });
     if (typeof ResizeObserver !== 'undefined') {
       new ResizeObserver(() => { this._resize(); this.draw(); }).observe(c);
     }
+  }
+
+  /** Teclado del mapa. Devuelve true si la tecla era suya. */
+  _onKey(e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return false; // los atajos del navegador siguen su camino
+    const pan = PAN_STEP * 2.2 / this.zoom;
+    const moves = { ArrowLeft: [-pan, 0], ArrowRight: [pan, 0], ArrowUp: [0, -pan], ArrowDown: [0, pan] };
+    if (moves[e.code]) { this.centerX += moves[e.code][0]; this.centerZ += moves[e.code][1]; this._panned = true; }
+    // También por `key`: en teclados español y latinoamericano, «+» y «-» están en otras teclas físicas.
+    else if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+') this._zoomAt(this.cssWidth / 2, this.cssHeight / 2, 1.25);
+    else if (e.code === 'Minus' || e.code === 'NumpadSubtract' || e.key === '-') this._zoomAt(this.cssWidth / 2, this.cssHeight / 2, 1 / 1.25);
+    // Solo tras mover la vista: M + Enter sin botón, o mantener Enter, no deben reemplazar la ruta con el centro.
+    else if (PRESS_KEYS.has(e.code)) { if (!e.repeat && this._panned) this._mark({ x: this.centerX, z: this.centerZ, name: 'Punto marcado', icon: '📍' }); }
+    else if (e.code === 'Delete' || e.code === 'Backspace') this._clear();
+    else return false;
+    e.preventDefault();
+    e.stopPropagation();
+    this.draw();
+    return true;
   }
 
   _zoomAt(sx, sy, factor) {
@@ -181,6 +243,7 @@ export class MapView {
   _mark(target) {
     const { name, icon, x, z } = target;
     this.game.setGpsWaypoint?.({ name, icon: icon || '📍', x, z });
+    this._panned = false;
     this._renderSidebar();
     this.draw();
   }
@@ -191,10 +254,20 @@ export class MapView {
     this.draw();
   }
 
-  _renderSidebar() {
+  _renderSidebar({ keepScroll = true } = {}) {
     const gps = this.game.gps;
     const p = this.game.player?.position;
     const wp = gps?.waypoint;
+    const pois = this._pois();
+    const needs = this.game._needs ?? {};
+    const need = needs.need ?? null;
+    const carried = need ? needs.carried?.[need] : null;
+    const filter = this.filter !== 'todo' ? this.filter : null;
+    // `replaceChildren` quita el control enfocado: sin esto, el mando pierde su sitio.
+    const focused = globalThis.document?.activeElement;
+    const hadFocus = !!focused && !!this.sidebar.contains?.(focused);
+    const scroll = keepScroll ? this.sidebar.querySelector?.('.map-view__list')?.scrollTop ?? 0 : 0;
+
     const current = wp
       ? el('div', { class: 'map-view__dest' },
         el('span', { class: 'map-view__dest-label', text: 'Destino' }),
@@ -204,23 +277,70 @@ export class MapView {
         button('Quitar destino', { onClick: () => this._clear() }))
       : el('div', { class: 'map-view__dest is-empty' },
         el('span', { class: 'map-view__dest-label', text: 'Sin destino' }),
-        el('span', { class: 'map-view__dest-meta', text: 'Haz clic en el mapa o elige un lugar.' }));
-    const distance = (poi) => p ? Math.hypot(poi.x - p.x, poi.z - p.z) : 0;
-    const pois = this._pois().filter(poi => poi.name !== 'El Chato').sort((a, b) => distance(a) - distance(b));
-    const list = el('ul', { class: 'map-view__list' }, pois.map(poi => {
-      const dist = p ? formatDistance(distance(poi)) : '';
-      const active = wp && wp.name === poi.name;
+        need ? el('strong', { text: NEED_COPY[need].alert })
+          : el('span', { class: 'map-view__dest-meta', text: 'Haz clic en el mapa o elige un lugar.' }),
+        carried ? el('span', { class: 'map-view__dest-meta', text: `Llevas: ${carried} ∙ cierra el mapa y úsalo con I` }) : null);
+
+    const filters = el('div', { class: 'map-view__filters', role: 'group', 'aria-label': 'Filtrar lugares' },
+      FILTERS.map(([id, label]) => el('button', {
+        type: 'button', 'data-focus': `filtro-${id}`, 'aria-pressed': String(id === this.filter), text: label,
+        class: `map-view__filter${id === this.filter ? ' is-active' : ''}${id === need ? ' is-need' : ''}`,
+        onclick: () => { this.filter = id; this._renderSidebar({ keepScroll: false }); this.draw(); },
+      })));
+
+    const rank = (tag) => rankPlaces(pois, { tag, walk: (poi) => this._walk(poi), needs, from: p });
+    const rows = rank(filter);
+    // Lo urgente manda sobre el filtro, que dura toda la sesión: M + Enter siempre lleva a lo que más se necesita.
+    const urgent = !wp && need && !carried ? need : null;
+    const tag = urgent ?? filter;
+    const goButton = (label, poi) => el('button', {
+      type: 'button', class: 'btn btn--primary btn--small map-view__nearest', 'data-focus': 'cta', text: label,
+      onclick: () => this._go(poi),
+    });
+    let cta = null, noOption = null;
+    if (tag) {
+      const options = tag === filter ? rows : rank(tag);
+      // Igual que en el radar: el Dealer no compra reciclaje, así que no alivia el costal.
+      const best = options.find(tag === 'vender' && need === 'vender' ? (row) => row.usable && !row.poi.dealer : (row) => row.usable);
+      const sellers = best ? [] : sellFirstPlaces(pois, tag, needs);
+      const sell = sellers.length ? rank('vender').find(row => sellers.includes(row.poi)) : null;
+      if (best) cta = goButton(NEED_COPY[tag].cta, best.poi);
+      else {
+        if (sell) cta = goButton(NEED_COPY.vender.cta, sell.poi);
+        const text = noOptionText(tag, options, needs, sell?.poi);
+        if (text) noOption = el('p', { class: 'map-view__no-option', text });
+      }
+    }
+    this._focusCta = urgent ? cta : null;
+
+    const list = el('ul', { class: 'map-view__list' }, rows.map(({ poi, meters, usable }, i) => {
+      const dist = !p ? '' : meters === null ? 'sin ruta' : formatDistance(meters);
+      // Las fogatas se llaman igual: su fila solo es el destino si es esa misma fogata.
+      const active = wp && wp.name === poi.name && (!poi.service || Math.hypot(wp.x - poi.x, wp.z - poi.z) < SAME_PLACE_METERS);
+      const broke = filter && filter !== 'vender' && !usable;
+      const meta = placeMeta(poi, filter, needs);
       return el('li', {},
-        el('button', { type: 'button', class: `map-view__place${active ? ' is-active' : ''}`,
-          onclick: () => { this.centerX = poi.x; this.centerZ = poi.z; this._mark(poi); } },
+        el('button', { type: 'button', 'data-focus': `lugar-${i}`,
+          class: `map-view__place${active ? ' is-active' : ''}${broke ? ' is-broke' : ''}`,
+          onclick: () => this._go(poi) },
         el('span', { class: 'map-view__place-icon', style: `--c:${poi.color || '#ffd166'}`, text: poi.icon }),
         el('span', { class: 'map-view__place-name', text: poi.name }),
-        el('span', { class: 'map-view__place-dist', text: dist })));
+        el('span', { class: 'map-view__place-dist', text: dist }),
+        // Si no cabe, baja «desde $ 1.000» completo y no parte el precio en dos líneas.
+        meta ? el('span', { class: 'map-view__place-meta', text: meta.replace('desde $ ', 'desde $ ') }) : null));
     }));
-    this.sidebar.replaceChildren(
-      current,
-      el('h4', { class: 'map-view__list-title', text: 'Ir a… (más cerca primero)' }),
-      list);
+
+    this.sidebar.replaceChildren(...[
+      current, filters, cta, noOption,
+      el('h4', { class: 'map-view__list-title', text: filter ? 'Ir a… (primero lo que puedes usar)' : 'Ir a… (más cerca a pie primero)' }),
+      list].filter(Boolean));
+    list.scrollTop = scroll;
+    if (!keepScroll) this.sidebar.scrollTop = 0; // con la identidad urbana se desplaza el panel entero, no la lista
+    if (hadFocus) {
+      const key = focused.dataset?.focus;
+      const next = key ? this.sidebar.querySelector?.(`[data-focus="${key}"]`) : null;
+      (next ?? this.canvas).focus?.({ preventScroll: true });
+    }
   }
 
   draw() {
@@ -280,21 +400,25 @@ export class MapView {
     }
 
     // Lugares
-    for (const poi of this._pois()) {
+    const filter = this.filter !== 'todo' ? this.filter : null;
+    for (const poi of this._visiblePois()) {
       const [sx, sy] = this._toScreen(poi.x, poi.z);
       if (sx < -20 || sy < -20 || sx > w + 20 || sy > h + 20) continue;
-      const big = poi === this.hover;
+      const match = !filter || hasTag(poi, filter), big = poi === this.hover;
+      const base = poi.service && !(filter && match) ? 7 : 10;
+      ctx.globalAlpha = match ? 1 : .35;
       ctx.beginPath();
-      ctx.arc(sx, sy, big ? 12 : 10, 0, Math.PI * 2);
+      ctx.arc(sx, sy, base + (big ? 2 : 0), 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(14,15,18,.85)';
       ctx.fill();
       ctx.lineWidth = 2;
       ctx.strokeStyle = poi.color || '#ffd166';
       ctx.stroke();
-      ctx.font = `${big ? 13 : 11}px sans-serif`;
+      ctx.font = `${base + (big ? 3 : 1)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(poi.icon, sx, sy + 1);
+      ctx.globalAlpha = 1;
       if (big || this.zoom > 3.5) this._tag(poi.name, sx, sy - 18);
     }
 

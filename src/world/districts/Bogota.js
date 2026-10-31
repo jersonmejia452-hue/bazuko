@@ -949,7 +949,7 @@ export class Bogota {
     this.npcs.push(new Npc(this.scene, new THREE.Vector3(x + back.x, this.getGroundHeight(x, z), z + back.z), {
       facing: rotY, isWalkable: () => false
     }));
-    this.vendors.push({ kind: 'shop', title, items, position: new THREE.Vector3(x, 0, z) });
+    this.vendors.push({ kind: 'shop', stall: kind, title, items, position: new THREE.Vector3(x, 0, z) });
   }
 
   /** El Cartucho: humo, fuego, carretas, cambuches, ropa colgada y basura */

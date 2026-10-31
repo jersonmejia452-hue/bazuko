@@ -1,5 +1,6 @@
 // src/ui/Minimap.js
 // Radar urbano con plano de la ciudad, ruta del GPS y zoom dinámico.
+import { suggestPlace, suggestionText } from './mapServices.js';
 
 const ZOOM_KEY = 'bazuko.minimap_zoom';
 const SIZE_KEY = 'bazuko.minimap_size';
@@ -138,17 +139,20 @@ export class Minimap {
    * Actualiza el radar
    * @param {Object} playerPos Vector { x, z }
    * @param {number} cameraYaw Ángulo yaw de la cámara (arriba en radar = al frente en pantalla)
-   * @param {Array} pois Lista de { name, icon, x, z, color }
+   * @param {Array} pois Lista de { name, icon, x, z, color, service?, prices? }
    * @param {number} now Timestamp de performance.now()
-   * @param {{gps?: import('../systems/GpsNavigation.js').GpsNavigation, running?: boolean}} [opts]
+   * @param {{gps?: import('../systems/GpsNavigation.js').GpsNavigation, running?: boolean, needs?: Object}} [opts] `needs` viene de needContext (mapServices.js)
    */
-  update(playerPos, cameraYaw = 0, pois = [], now = performance.now(), { gps = null, running = false } = {}) {
+  update(playerPos, cameraYaw = 0, pois = [], now = performance.now(), { gps = null, running = false, needs = null } = {}) {
     if (!this.visible || !this.ctx || !this.canvas || !playerPos) return;
 
     // Actualizar a ~20 FPS para eficiencia
     if (now - this._lastUpdate < 50) return;
     const dt = Math.min(.25, (now - this._lastUpdate) / 1000);
     this._lastUpdate = now;
+
+    const suggestion = !gps?.waypoint && needs?.need ? suggestPlace(pois, playerPos, needs) : null;
+    const suggested = suggestion?.poi ?? null;
 
     const target = this.zoomBase * (running ? RUN_ZOOM : 1);
     this.range += (target - this.range) * Math.min(1, dt * 2.5);
@@ -229,10 +233,14 @@ export class Minimap {
     let nearestPoi = null;
     for (const poi of pois) {
       const dist = Math.hypot(poi.x - playerPos.x, poi.z - playerPos.z);
-      if (dist < nearestDist) { nearestDist = dist; nearestPoi = poi; }
+      // En un empate gana el último: los lugares fijos van después de puestos y fogatas.
+      if (dist <= nearestDist) { nearestDist = dist; nearestPoi = poi; }
+      if (poi === suggested) continue;
       const [px, py, clamped] = clamp(...project(poi.x, poi.z));
+      // Puestos y fogatas lejanos no se anclan al borde, para no saturarlo.
+      if (clamped && poi.service) continue;
       ctx.beginPath();
-      ctx.arc(px, py, (clamped ? 3.5 : 5) * u, 0, Math.PI * 2);
+      ctx.arc(px, py, (clamped ? 3.5 : poi.service ? 4 : 5) * u, 0, Math.PI * 2);
       ctx.fillStyle = poi.color || '#ffd166';
       ctx.fill();
       ctx.strokeStyle = '#000';
@@ -242,6 +250,21 @@ export class Minimap {
         ctx.font = `${10 * u}px sans-serif`;
         ctx.fillText(poi.icon, px, py - 10 * u);
       }
+    }
+
+    // Lugar sugerido: aro amarillo encima de los demás, anclado al borde si está lejos
+    if (suggested) {
+      const [px, py] = clamp(...project(suggested.x, suggested.z));
+      ctx.beginPath();
+      ctx.arc(px, py, 7 * u, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(14,15,18,.9)';
+      ctx.fill();
+      ctx.strokeStyle = '#f6c400';
+      ctx.lineWidth = 2 * u;
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = `${9 * u}px sans-serif`;
+      ctx.fillText(suggested.icon, px, py + .5 * u);
     }
 
     // Destino del GPS: chincheta amarilla, anclada al borde si está lejos
@@ -289,16 +312,17 @@ export class Minimap {
     ctx.fillText(`${Math.round(this.range)} m`, 8 * u, h - 7 * u);
 
     if (this.infoEl) {
-      const text = this._infoText(playerPos, cameraYaw, gps, nearestPoi, nearestDist);
+      const text = this._infoText(playerPos, cameraYaw, gps, nearestPoi, nearestDist, suggestion);
       if (text !== this._cachedNearest) {
         this._cachedNearest = text;
         this.infoEl.textContent = text;
         this.infoEl.classList?.toggle('is-route', !!gps?.waypoint);
+        this.infoEl.classList?.toggle('is-need', !!suggestion);
       }
     }
   }
 
-  _infoText(playerPos, yaw, gps, nearestPoi, nearestDist) {
+  _infoText(playerPos, yaw, gps, nearestPoi, nearestDist, suggestion = null) {
     const sector = (x, z) => {
       const dx = x - playerPos.x, dz = z - playerPos.z;
       const forward = -(dx * Math.sin(yaw) + dz * Math.cos(yaw));
@@ -311,6 +335,11 @@ export class Minimap {
       const ahead = gps.lookAhead(playerPos, 12);
       return `${icon} ${name}\n${formatDistance(gps.remainingDistance(playerPos))} ∙ ${sector(ahead.x, ahead.z)}`;
     }
+    if (suggestion?.poi) {
+      const hint = suggestion.dist < 2 ? '📍 Aquí' : sector(suggestion.poi.x, suggestion.poi.z);
+      return suggestionText(suggestion, this.size === 's' ? hint.split(' ')[0] : hint, formatDistance(suggestion.dist));
+    }
+    if (suggestion) return suggestionText(suggestion);
     if (!nearestPoi) return 'Sin puntos cercanos';
     const hint = nearestDist < 2 ? '📍 Aquí' : sector(nearestPoi.x, nearestPoi.z);
     return `${nearestPoi.icon} ${nearestPoi.name}\n${Math.round(nearestDist)}m ∙ ${hint}`;

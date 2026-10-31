@@ -264,6 +264,7 @@ button:focus-visible, input:focus-visible, select:focus-visible,
 #app .minimap-info { padding: 7px 10px; border: 0; border-radius: 0; background: var(--hud-panel); color: var(--hud-muted); font-size: 12px; line-height: 1.4; }
 #app .minimap-info::first-line { color: var(--hud-ink); font-size: 12px; }
 #app .minimap-info.is-route { border-left: 3px solid var(--hud-route); }
+#app .minimap-info.is-need { border-left: 3px solid #ff9f43; }
 #app .radar__show { min-height: 44px; padding: 8px 12px; border-radius: 2px; background: var(--hud-panel); color: var(--hud-ink); font: 700 12px var(--font); }
 #app .radar__show kbd { font: inherit; margin-left: 12px; color: var(--hud-muted); }
 #app #hud { order: 3; display: flex; flex-direction: column; padding: 0; gap: 0; background: #171b1df0; border: 0; border-radius: 0 0 3px 3px; box-shadow: none; backdrop-filter: none; }
@@ -341,7 +342,7 @@ body #interaction-prompt { bottom: calc(var(--hud-bottom) + 45px); max-width: mi
 .menu .pause-meter, .menu .pause-meter__fill { border-radius: 0; }
 .menu .pause-row__label, .menu .pause-gps-summary { color: var(--hud-muted); }
 .menu .pause-value, .menu .pause-level__badge { color: var(--hud-route); }
-.menu .map-view__tool, .menu .map-view__place { border-radius: 1px; }
+.menu .map-view__tool, .menu .map-view__place, .menu .map-view__filter { border-radius: 1px; }
 .menu .pause-need { min-height: 32px; }
 
 @media (hover: hover) and (min-width: 821px) {

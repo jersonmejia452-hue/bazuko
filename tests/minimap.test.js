@@ -126,3 +126,114 @@ test('el tamaño del radar se limita a s, m o l, se guarda y se refleja en la co
   assert.equal(new Minimap().size, 'l');
   assert.equal(map.setSize('xl'), 'm');
 });
+
+const HERE = { x: 0, z: 0 };
+const CHAZA = { name: 'Dulces y minutos', icon: '🍬', x: 6, z: 0, color: '#f78fb3', service: 'chaza', prices: { comida: 1200, agua: 2000, calor: 1200 } };
+const FOGATA = { name: 'Fogata de caneca', icon: '🔥', x: -75, z: 0, color: '#ff6b35', service: 'fogata', prices: { calor: 0 } };
+const COLD = { need: 'calor', money: 0, carriesRecyclables: false, carried: {} };
+const arcs = (map) => map.ctx.calls.filter(([name]) => name === 'arc').length;
+const painted = (map, text) => map.ctx.calls.some(([name, args]) => name === 'fillText' && args[0] === text);
+
+test('con frío y sin plata el radar nombra la fogata aunque haya una chaza más cerca; con plata, la chaza', () => {
+  const map = new Minimap();
+  map.update(HERE, 0, [CHAZA, FOGATA], 1000, { needs: COLD });
+  assert.equal(map.infoEl.textContent, '🔥 Fogata de caneca\nCalor gratis ∙ 75m ∙ ← Izquierda');
+  map.update(HERE, 0, [CHAZA, FOGATA], 2000, { needs: { ...COLD, money: 1200 } });
+  assert.equal(map.infoEl.textContent, '🍬 Dulces y minutos\nCalor $ 1.200 ∙ 6m ∙ → Derecha');
+  map.update(HERE, 0, [CHAZA, FOGATA], 3000, { needs: { ...COLD, need: 'agua' } });
+  assert.equal(map.infoEl.textContent, '💸 Sin plata para agua\nDesde $ 2.000 ∙ pide limosna (B)');
+  map.update(HERE, 0, [CHAZA, FOGATA], 4000, { needs: { ...COLD, carried: { calor: 'Empanada con ají' } } });
+  assert.equal(map.infoEl.textContent, '🎒 Llevas: Empanada con ají\nUsar desde el inventario (I)');
+  map.update({ x: -74, z: 0 }, 0, [CHAZA, FOGATA], 5000, { needs: COLD });
+  assert.equal(map.infoEl.textContent, '🔥 Fogata de caneca\nCalor gratis ∙ 1m ∙ 📍 Aquí');
+  const stall = { ...CHAZA, offers: { agua: [{ price: 2000, weight: .5 }] } };
+  map.update(HERE, 0, [stall], 6000, { needs: { ...COLD, need: 'agua', money: 5000, kg: 19.9, maxKg: 20 } });
+  assert.equal(map.infoEl.textContent, '🎒 Sin espacio para agua\nTira algo del inventario (I)');
+});
+
+test('con destino gana la ruta y sin necesidad se muestra el lugar más cercano, también si es un puesto', () => {
+  const gps = {
+    waypoint: { name: 'Recicladora', icon: '♻️', x: 0, z: -300 },
+    route: [{ x: 0, z: 0 }, { x: 0, z: -300 }],
+    remainingRoute: (p) => [{ x: p.x, z: p.z }, { x: 0, z: -300 }],
+    remainingDistance: () => 1234,
+    lookAhead: () => ({ x: 0, z: -12 })
+  };
+  const map = new Minimap();
+  map.update(HERE, 0, [CHAZA, FOGATA], 1000, { gps, needs: COLD });
+  assert.equal(map.infoEl.textContent, '♻️ Recicladora\n1.2km ∙ ↑ Al frente');
+  assert.ok(!painted(map, FOGATA.icon), 'con destino no hay aro de sugerencia');
+  map.update(HERE, 0, [CHAZA, FOGATA], 2000);
+  assert.equal(map.infoEl.textContent, '🍬 Dulces y minutos\n6m ∙ → Derecha');
+  map.update(HERE, 0, [CHAZA, FOGATA], 3000, { needs: { ...COLD, need: null } });
+  assert.equal(map.infoEl.textContent, '🍬 Dulces y minutos\n6m ∙ → Derecha');
+});
+
+test('los puestos lejanos no se anclan al borde, salvo el lugar sugerido', () => {
+  const baseline = new Minimap();
+  baseline.update(HERE, 0, [], 1000);
+  const empty = arcs(baseline);
+
+  const far = new Minimap();
+  far.update(HERE, 0, [FOGATA], 1000);
+  assert.equal(arcs(far), empty, 'fuera de alcance no suma nada');
+
+  const fixed = new Minimap();
+  fixed.update(HERE, 0, [{ name: 'Recicladora', icon: '♻️', x: -300, z: 0 }], 1000);
+  assert.equal(arcs(fixed), empty + 1, 'los lugares fijos siguen anclados');
+
+  const near = new Minimap();
+  near.update(HERE, 0, [CHAZA], 1000);
+  assert.equal(arcs(near), empty + 1);
+  assert.ok(painted(near, CHAZA.icon));
+
+  const suggested = new Minimap();
+  suggested.update(HERE, 0, [FOGATA], 1000, { needs: COLD });
+  assert.equal(arcs(suggested), empty + 1);
+  assert.ok(painted(suggested, FOGATA.icon), 'el sugerido se ancla con su icono');
+  // El aro queda dentro del lienzo aunque el lugar esté mucho más lejos que el alcance.
+  const [, [, x, y]] = suggested.ctx.calls.find(([name, args]) => name === 'fillText' && args[0] === FOGATA.icon);
+  assert.ok(x > 0 && y > 0 && x < suggested.canvas.width && y < suggested.canvas.height, `${x}, ${y}`);
+});
+
+test('el lugar sugerido se dibuja encima de los demás', () => {
+  const map = new Minimap();
+  const crafteo = { name: 'Crafteo', icon: '🔨', x: -10, z: 0 };
+  map.update(HERE, 0, [{ ...FOGATA, x: -10 }, crafteo], 1000, { needs: COLD });
+  const texts = map.ctx.calls.filter(([name]) => name === 'fillText').map(([, [text]]) => text);
+  assert.ok(texts.indexOf('🔥') > texts.indexOf('🔨'), texts.join(' '));
+});
+
+test('si dos lugares están en el mismo punto, el radar nombra el fijo', () => {
+  const map = new Minimap();
+  map.update(HERE, 0, [{ ...FOGATA, x: 10 }, { name: 'Crafteo', icon: '🔨', x: 10, z: 0 }], 1000);
+  assert.match(map.infoEl.textContent, /Crafteo/);
+});
+
+test('en tamaño Pequeño la dirección se reduce a la flecha', () => {
+  const map = new Minimap();
+  map.setSize('s');
+  map.update(HERE, 0, [FOGATA], 1000, { needs: COLD });
+  assert.equal(map.infoEl.textContent, '🔥 Fogata de caneca\nCalor gratis ∙ 75m ∙ ←');
+  map.update({ x: -74, z: 0 }, 0, [FOGATA], 2000, { needs: COLD });
+  assert.equal(map.infoEl.textContent, '🔥 Fogata de caneca\nCalor gratis ∙ 1m ∙ 📍');
+});
+
+test('la línea del radar se marca como necesidad solo mientras dura', () => {
+  const map = new Minimap();
+  const classes = {};
+  map.infoEl.classList = { toggle(name, on) { classes[name] = on; } };
+  map.update(HERE, 0, [FOGATA], 1000, { needs: COLD });
+  assert.equal(classes['is-need'], true);
+  assert.equal(classes['is-route'], false);
+  map.update(HERE, 0, [FOGATA], 2000);
+  assert.equal(classes['is-need'], false);
+});
+
+test('el radar oculto no calcula la sugerencia', () => {
+  const map = new Minimap();
+  map.visible = false;
+  let read = false;
+  map.update(HERE, 0, [FOGATA], 1000, { needs: { get need() { read = true; return 'calor'; } } });
+  assert.equal(read, false);
+});

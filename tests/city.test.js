@@ -20,6 +20,7 @@ mock.module('../src/character/RealisticCharacter.js',{namedExports:{
   loadCatalog:async()=>({}),normalizeReal:(_,look)=>look,optionsFor:()=>[{id:'test'}]
 }});
 const { Bogota }=await import('../src/world/districts/Bogota.js');
+const { servicePlaces }=await import('../src/ui/mapServices.js');
 
 test('la ciudad añade el parque del lago a la ampliación de tres veces la superficie y conserva el interior original sin desplazarlo',()=>{
   const center=Array.from({length:ORIGINAL_CITY_HEIGHT},(_,z)=>Array.from({length:ORIGINAL_CITY_WIDTH},(_,x)=>
@@ -76,6 +77,14 @@ test('el distrito completo construye y actualiza barrios, vendedores, peatones y
     await Promise.all(city.npcs.map(npc=>npc.ready));
     assert.equal(city.npcs.length,72); // 66 peatones y 6 vendedores.
     assert.equal(city.vendors.length,6);
+    const places=servicePlaces(city),gps=city.createGpsNavigation();
+    assert.deepEqual(['chaza','fritanga','fogata'].map(kind=>places.filter(place=>place.service===kind).length),[4,2,4]);
+    for(const place of places) {
+      assert.ok(Number.isFinite(place.x)&&Number.isFinite(place.z),place.name);
+      assert.ok(place.icon&&place.color,place.name);
+      assert.ok(Object.keys(place.prices).length>0,place.name);
+      assert.ok(gps.findPath(city.reserved.spawn,place),`el GPS llega a ${place.name}`);
+    }
     assert.equal(city.pigeonFlocks.length, 3);
     for (const flock of city.pigeonFlocks) {
       assert.equal(flock.birds.length, 10);

@@ -50,11 +50,20 @@ export const PRUEBAS = [
   {
     id: 'personaje',
     nombre: 'Personaje y animaciones',
-    descripcion: 'Solo el jugador. Cambia de modelo y dispara acciones.',
+    descripcion: 'Compara las poses en el sitio. Movimiento libre permite caminar, saltar y golpear con los controles del juego.',
     montar(sala) {
       const p = sala.player;
       return {
-        acciones: ['pedir', 'saltar', 'dormir'].map((a) => ({ texto: a, hacer: () => p.playAction(a, a === 'dormir' ? 4 : 1.2) }))
+        acciones: [
+          ...['reposo', 'caminar', 'correr', 'buscar', 'pedir', 'comer', 'beber', 'saludo', 'cagar', 'lanzar', 'dormir', 'nadar', 'flotar'].map(name => ({
+            texto: name === 'cagar' ? 'Agacharse' : name[0].toUpperCase() + name.slice(1),
+            hacer: () => { sala.animationPreview.play(name); sala.cameraRig._snap = true; }
+          })),
+          { texto: 'Saltar', hacer: () => { sala.animationPreview.stop(); sala.input.pressedThisFrame.add('Space'); } },
+          { texto: 'Golpear', hacer: () => { sala.animationPreview.stop(); p.punch(); } },
+          { texto: 'Movimiento libre', hacer: () => sala.animationPreview.stop() }
+        ],
+        estado: () => sala.animationPreview.name ? `En el sitio · ${sala.animationPreview.name}` : 'Movimiento libre · WASD / Shift / Espacio / G'
       };
     }
   },

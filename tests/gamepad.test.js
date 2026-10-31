@@ -42,3 +42,18 @@ test('el stick izquierdo mueve al personaje salvo que el teclado ya lo esté mov
   input.locked = true;
   assert.deepEqual(input.axis, { x: 0, z: 0 });
 });
+
+test('hacer clic en la barra rápida no lanza un golpe; en el mundo sí', () => {
+  const listeners = {};
+  globalThis.window = { addEventListener: (type, listener) => { listeners[type] = listener; } };
+  try {
+    const input = new Input();
+    const click = (id) => listeners.mousedown({ button: 0, target: { closest: (selector) => (selector.split(', ').includes(id) ? {} : null) } });
+    click('#quickbar');
+    assert.equal(input.pressedThisFrame.has('Mouse0'), false);
+    click('#canvas');
+    assert.equal(input.pressedThisFrame.has('Mouse0'), true);
+  } finally {
+    delete globalThis.window;
+  }
+});

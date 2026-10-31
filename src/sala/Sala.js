@@ -12,6 +12,7 @@ import { normalizeLook } from '../character/look.js';
 import { SubstanceEffects } from '../systems/SubstanceEffects.js';
 import { PsychosisSystem } from '../systems/PsychosisSystem.js';
 import { SUBSTANCE_EFFECTS } from '../data/substanceEffects.js';
+import { AnimationPreview } from './AnimationPreview.js';
 
 // Necesidades llenas; el resto de sistemas que el jugador consulta no existen en la sala.
 export function createStats() {
@@ -25,8 +26,9 @@ export function createStats() {
 const silentAudio = new Proxy({}, { get: () => () => {} });
 
 export class Sala {
-  constructor(canvas) {
+  constructor(canvas, { animaciones = 'default', apariencia = 'default' } = {}) {
     this.canvas = canvas;
+    this.animationProfile = animaciones;
     this.renderer = new Renderer(canvas);
     this.sceneMgr = new SceneManager();
     this.scene = this.sceneMgr.scene;
@@ -55,10 +57,11 @@ export class Sala {
     grid.position.y = 0.002;
     this.scene.add(grid);
 
-    this.player = new Player(this.scene, this.input, this.stats, this.audio);
+    this.player = new Player(this.scene, this.input, this.stats, this.audio, { animaciones, apariencia });
     this.player.game = this;
     this.player.position.set(0, 0, 0);
     this.player.root.position.copy(this.player.position);
+    this.animationPreview = new AnimationPreview(this.player);
     this.setHour(this.hour);
 
     // Lo que se consume se ve igual que en el juego: efectos de sustancias y la paranoia del basuco
@@ -95,8 +98,31 @@ export class Sala {
     return this.player.setModel(kind);
   }
 
+  /** Encuadres de inspección; mantienen la apariencia y el estado de la acción. */
+  frameCharacter(detail = false) {
+    const camera = this.cameraRig;
+    camera.releaseControls();
+    camera.mode = 'third-person';
+    camera.yaw = this.player.root.rotation.y + .28;
+    camera.pitch = detail ? .06 : .12;
+    camera.distance = detail ? 2.5 : 3.2;
+    // En vertical conserva espacio horizontal para toda la cabeza.
+    camera.baseFov = detail ? THREE.MathUtils.radToDeg(2 * Math.atan(
+      Math.tan(THREE.MathUtils.degToRad(18) / 2) / Math.min(1, camera.camera.aspect)
+    )) : 45;
+    camera.lookOffset.set(0, detail ? 1.65 : .96, 0);
+    const head = detail && this.player.character.group.getObjectByName('mixamorigHead');
+    if (head) {
+      camera.lookOffset.copy(head.getWorldPosition(new THREE.Vector3())).sub(this.player.position);
+      camera.lookOffset.y += .09;
+    }
+    camera._snap = true;
+    camera.follow(this.player.position, 0);
+  }
+
   /** Vuelve al centro de la sala mirando a la cámara */
   resetPlayer() {
+    this.animationPreview.stop();
     this.player.position.set(0, 0, 0);
     this.player.root.position.copy(this.player.position);
     this.player.velocity?.set(0, 0, 0);
@@ -114,15 +140,18 @@ export class Sala {
     const now = performance.now();
     const real = Math.min((now - this._lastTime) / 1000, 0.1);
     this._lastTime = now;
-    const dt = real * this.timeScale;
+    const dt = this.paused ? (this.stepRequested ? 1 / 60 : 0) : real * this.timeScale;
+    this.stepRequested = false;
 
     this.cameraRig.updateControls(real, this.input);
     this.cameraRig.prepareMovement();
     // Las caladas, el combo y los efectos corren con `timeScale`; con x30 un cigarrillo dura 20 s.
-    this.player.update(dt, this.cameraRig.camera, null, () => 0, this.npcs);
-    if (!this.player.isStunned) { this.player.position.y = 0; this.player.root.position.y = 0; }
-    for (const npc of this.npcs) npc.update(dt, { player: this.player });
-    for (const update of this.updaters) update(dt);
+    if (dt > 0) {
+      if (this.animationPreview.name) this.animationPreview.update(dt);
+      else this.player.update(dt, this.cameraRig.camera, null, () => 0, this.npcs);
+      for (const npc of this.npcs) npc.update(dt, { player: this.player });
+      for (const update of this.updaters) update(dt);
+    }
     this.cameraRig.follow(this.player.position, real, null, this.player.speed, this.input.isRunning);
     this.psychosis.update(dt, this.cameraRig);
     this.effects.update(dt);

@@ -47,6 +47,21 @@ test('el bucle de movimiento conserva el salto y aterriza en la calle', () => {
   assert.equal(player.isGrounded, true);
 });
 
+test('la capa visual recibe la velocidad del giro real y vuelve a cero al detenerse', () => {
+  const ground = city.getGroundHeight(112.98, 97.84);
+  const { player, input, tick } = fixture(112.98, ground, 97.84);
+  let turnRate;
+  player.character.update = (_dt, { movement }) => { turnRate = movement.turnRate; };
+  input.axis.x = 1;
+  const previousYaw = player.root.rotation.y;
+  tick();
+  assert.ok(turnRate > 0);
+  assert.ok(Math.abs(turnRate - (player.root.rotation.y - previousYaw) * 60) < 1e-9);
+  input.axis.x = 0;
+  tick();
+  assert.equal(turnRate, 0);
+});
+
 for (const dt of [1 / 60, .1]) {
   test(`se sube y baja la rampa norte sin caer a la calle, dt=${dt}`, () => {
     const { player, input, tick } = fixture(75, .02, 14.5);

@@ -21,6 +21,10 @@ export class Menu {
     this.root.addEventListener('pointerdown', (e) => {
       if (e.target === this.root) this.dismiss();
     });
+    // Input cancela Espacio en `window` por el salto; sin esto, Espacio no pulsa los botones del menú.
+    this.root.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && e.target.closest?.('button')) e.stopPropagation();
+    });
     window.addEventListener('keydown', (e) => {
       if (this.isOpen && e.code === 'Escape') { e._panelHandled = true; this.dismiss(); }
     }, true);

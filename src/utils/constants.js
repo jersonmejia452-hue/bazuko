@@ -36,6 +36,7 @@ export const DISEASE_SORT_MULT = 1.8;      // +probabilidad al seleccionar (más
 export const DISEASE_HEALTH_DRAIN = 0.12;  // salud/seg: una enfermedad deja margen para tratarse
 export const DISEASE_MENTAL_DRAIN = 0.02;  // salud mental/seg por enfermedad
 export const DISEASE_DURATION = 45;        // segundos que dura una enfermedad
+export const DISEASE_DIRTY_SLEEP_CHANCE = 0.35; // dormir con higiene baja: probabilidad de sarna
 
 // === Salud mental ===
 export const MENTAL_DECAY_NIGHT = 100 / (6 * DAY_LENGTH_SECONDS);
@@ -66,8 +67,9 @@ export const POLICE_GIVE_UP_RANGE = 55;    // si te alejas tanto, vuelven a patr
 export const POLICE_CHASE_TIMEOUT = 40;    // segundos máximos de persecución
 
 // === Venta de sustancias ===
-export const SUBSTANCE_PRICE_MULT = 1.8;   // las sustancias se venden más caras de noche
-export const SUBSTANCE_RISK_CHANCE = 0.15; // probabilidad de problema con la ley
+export const SUBSTANCE_PRICE_MULT = 1.8;   // de noche, el dealer paga 1,8 veces el valor de lo que le traes
+export const DEALER_MARKUP = 2.5;          // y cobra 2,5 veces: más de lo que paga, aun con «Contactos» (+30 %)
+export const SUBSTANCE_RISK_CHANCE = 0.15; // requisa en cada venta: la policía se lleva lo que ibas a vender
 // Removed duplicate SORT_BASE_TIME declaration to fix redeclaration error
 // Colores del juego (estética Noir)
 export const COLORS = {

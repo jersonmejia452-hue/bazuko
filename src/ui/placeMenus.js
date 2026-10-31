@@ -1,7 +1,8 @@
 // src/ui/placeMenus.js
 // Menús de los lugares: Recicladora El Progreso, Tienda La Esquinita y el cambuche.
-import { ITEMS, SHOP_ITEMS, isRecyclable, itemIcon, itemRarityLabel } from '../data/items.js';
+import { ITEMS, SHOP_ITEMS, isForSale, itemIcon, itemRarityLabel } from '../data/items.js';
 import { CAMBUCHE } from '../data/cambuche.js';
+import { diseaseName } from '../data/diseases.js';
 import { originEffect } from '../data/origins.js';
 import { XP_SELL } from '../utils/constants.js';
 import { cop } from '../utils/money.js';
@@ -19,7 +20,7 @@ export function openRecycler(game) {
   const mult = (game.interaction.boostActive ? 1.2 : 1) * originEffect(game.look?.origen, 'sellMult');
 
   const render = () => {
-    const sellable = inventory.items.filter((i) => isRecyclable(ITEMS[i.id] ?? i));
+    const sellable = inventory.items.filter((i) => isForSale(ITEMS[i.id] ?? i, game.player?.equippedWeapon));
     const total = Math.round(sellable.reduce((a, i) => a + i.value * i.qty * mult, 0));
     const body = sellable.length
       ? el('ul', { class: 'rows' }, sellable.map((i) => rowEl({
@@ -48,7 +49,7 @@ export function openRecycler(game) {
     return { body, foot };
   };
 
-  game.menu.open({ title: 'Recicladora El Progreso', sub: 'Pagan de contado. Comida, remedios y sustancias no se reciben.', ic: 'recycle', render });
+  game.menu.open({ title: 'Recicladora El Progreso', sub: 'Pagan de contado. Comida, remedios y sustancias no se reciben; el arma que llevas en la mano no se vende.', ic: 'recycle', render });
 }
 
 /** Tienda La Esquinita, o un vendedor ambulante si `target` trae { title, items } */
@@ -98,7 +99,7 @@ function describe(it) {
     if (k !== it.consumable && it[k]) parts.push(`${it[k] > 0 ? '+' : ''}${it[k]} ${names[k]}`);
   }
   if (it.calor) parts.push(`+${Math.round(it.calor / 60)}m calor`);
-  if (it.cure) parts.push(`Cura: ${it.cure}`);
+  if (it.cure) parts.push(`Cura: ${diseaseName(it.cure)}`);
   return parts.join(' · ');
 }
 
