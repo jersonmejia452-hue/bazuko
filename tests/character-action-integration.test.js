@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { createRealisticCharacter } from '../src/character/RealisticCharacter.js';
 import { createCharacter } from '../src/character/character.js';
+import { Player } from '../src/entities/Player.js';
+import { StatsSystem } from '../src/systems/StatsSystem.js';
 import { CHARACTER_SCALE } from '../src/utils/constants.js';
 
 globalThis.ProgressEvent ??= class { constructor(type, values) { Object.assign(this, { type }, values); } };
@@ -57,6 +59,26 @@ function joint(root, name) {
   assert.ok(found, name);
   return found;
 }
+
+test('cambiar de modelo a mitad de levantarse no deja al realista a medio acostar cuando vuelve', async () => {
+  const input = { axis: { x: 0, z: 0 }, isRunning: false, consumePress: () => false, isDown: () => false };
+  const player = new Player(new THREE.Scene(), input, new StatsSystem(), null);
+  await player.setModel('realista');
+  const character = player.character;
+  const hips = joint(character.group, 'Hips');
+  character.update(.2, { speed: 0, movement: { grounded: true } });
+  const standing = hips.quaternion.clone();
+  for (let frame = 0; frame < 90; frame++) character.update(1 / 60, { action: 'dormir', movement: { grounded: true } });
+  character.update(1 / 60, { speed: 3, movement: { grounded: true } });
+  assert.ok(character.sleepWeight > .9 && character.sleepWeight < 1, `se está levantando: ${character.sleepWeight}`);
+  assert.ok(hips.quaternion.angleTo(standing) > .7, 'aún casi acostado');
+  await player.setModel('procedural');
+  await player.setModel('realista');
+  assert.equal(player.character, character);
+  assert.equal(character.sleepWeight, 0);
+  character.update(1 / 60, { speed: 0, movement: { grounded: true } });
+  assert.ok(hips.quaternion.angleTo(standing) < .2, 'de pie de una vez');
+});
 
 test('salto y puñetazo se componen sobre el cuerpo vestido también con velocidad horizontal', async () => {
   const character = await createRealisticCharacter();

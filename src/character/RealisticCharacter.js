@@ -466,6 +466,10 @@ export async function createRealisticCharacter(look = {}, { lod = false, animaci
     pipeBowl(target) { return inst?.basucoProps ? inst.basucoProps.pipe.top.getWorldPosition(target) : null; },
     /** Boca en el mundo, para el humo de la calada */
     mouth(target) { return inst?.actionPose.mouth(target) ?? null; },
+    /** Cuánto sigue acostado, de 0 (de pie) a 1 */
+    get sleepWeight() { return inst?.actionPose.sleep?.weight ?? 0; },
+    /** Olvida una pose de dormir que quedó a medias, para no retomarla al volver a este modelo */
+    clearSleepPose() { inst?.actionPose.sleep?.reset(); },
     dispose() {
       if (disposed) return;
       disposed = true; token++;

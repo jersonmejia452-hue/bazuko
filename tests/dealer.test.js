@@ -83,6 +83,90 @@ test('en una requisa la policía se lleva lo que ibas a vender y no te pagan', (
   assert.equal(inventory.count('pastilla'), 1);
 });
 
+// La tienda con lo justo para seguir el foco: reescribirla lo borra, como en el navegador, y un botón deshabilitado no lo recibe.
+function focusPanel() {
+  const seen = { focused: null };
+  const node = (props = {}) => ({
+    tabIndex: 0, listeners: [], ...props,
+    addEventListener(type, fn) { this.listeners.push([type, fn]); },
+    removeEventListener(type, fn) { this.listeners = this.listeners.filter(([name, listener]) => name !== type || listener !== fn); },
+    removeAttribute(name) { if (name === 'tabindex') this.tabIndex = null; },
+    focus() { if (!this.disabled) seen.focused = this; },
+    scrollIntoView() {},
+    fire(type, event = {}) { for (const [name, fn] of this.listeners) if (name === type) fn(event); },
+  });
+  const panel = {
+    buttons: [], notice: null,
+    set innerHTML(html) {
+      seen.focused = null;
+      this.notice = html.includes('class="dealer-empty"') ? node() : null;
+      this.buttons = [...html.matchAll(/<button class="(dealer-(?:buy|sell)-btn)" data-id="([^"]+)"([^>]*)>/g)].map(([, kind, id, attrs]) => {
+        const row = node();
+        return node({ kind, dataset: { id }, disabled: attrs.includes('disabled'), closest: (selector) => (selector === '.dealer-product' ? row : null) });
+      });
+    },
+    querySelectorAll(selector) { return this.buttons.filter(button => `.${button.kind}` === selector); },
+    querySelector(selector) { return selector === '.dealer-empty' ? this.notice : null; },
+  };
+  return { panel, seen };
+}
+
+function focusShop(t, night = true) {
+  const scene = dealerScene(t);
+  const { panel, seen } = focusPanel();
+  const hud = Object.assign(Object.create(HUD.prototype), { _htmlCache: new WeakMap(), dealerPanel: panel });
+  window.__game = { ...scene, clock: { isNight: night } };
+  t.mock.method(Math, 'random', () => .99); // sin requisa
+  const buyButton = (id) => panel.querySelectorAll('.dealer-buy-btn').find(button => button.dataset.id === id);
+  const sellButtons = () => panel.querySelectorAll('.dealer-sell-btn');
+  const press = (button, detail = 0) => button.fire('click', { detail, stopPropagation() {} });
+  return { ...scene, hud, panel, seen, buyButton, sellButtons, press };
+}
+
+test('con el mando, la compra que deshabilita su botón deja el foco en esa fila, hasta que la cruceta se va', (t) => {
+  const { stats, hud, seen, buyButton, press } = focusShop(t);
+  stats.dinero = dealerPrice(ITEMS.tintico) * 2;
+  hud.renderDealer();
+  press(buyButton('tintico'));
+  assert.equal(seen.focused, buyButton('tintico'), 'aún alcanza: sigue en su botón');
+  press(seen.focused);
+  assert.equal(stats.dinero, 0);
+  assert.equal(buyButton('tintico').disabled, true);
+  const row = buyButton('tintico').closest('.dealer-product');
+  assert.equal(seen.focused, row);
+  assert.equal(row.tabIndex, -1);
+  globalThis.document = { hasFocus: () => false };
+  t.after(() => { delete globalThis.document; });
+  row.fire('blur');
+  assert.equal(row.tabIndex, -1, 'cambiar de ventana no la saca: al volver el foco sigue ahí');
+  globalThis.document = { hasFocus: () => true };
+  row.fire('blur');
+  assert.equal(row.tabIndex, null, 'la fila solo se puede enfocar mientras espera');
+  assert.equal(row.listeners.length, 0);
+});
+
+test('con el mando, vender sigue en la última fila y, sin ventas, deja el foco en el aviso', (t) => {
+  const { hud, panel, seen, sellButtons, press } = focusShop(t);
+  hud.renderDealer();
+  press(sellButtons()[1]);
+  assert.deepEqual(sellButtons().map(button => button.dataset.id), ['basuco']);
+  assert.equal(seen.focused, sellButtons()[0], 'la última que queda');
+  press(seen.focused);
+  assert.equal(sellButtons().length, 0);
+  assert.equal(seen.focused, panel.notice);
+  assert.equal(panel.notice.tabIndex, -1);
+});
+
+test('con el ratón la tienda no se queda con el foco', (t) => {
+  const { stats, hud, seen, buyButton, sellButtons, press } = focusShop(t);
+  stats.dinero = dealerPrice(ITEMS.tintico);
+  hud.renderDealer();
+  press(buyButton('tintico'), 1);
+  assert.equal(seen.focused, null);
+  press(sellButtons()[0], 1);
+  assert.equal(seen.focused, null);
+});
+
 test('la tienda muestra lo que cobra y, de noche, una fila con lo que paga por cada sustancia', (t) => {
   const { stats, inventory, interaction, dealer } = dealerScene(t);
   const panel = { html: '', set innerHTML(value) { this.html = value; }, querySelectorAll: () => [] };

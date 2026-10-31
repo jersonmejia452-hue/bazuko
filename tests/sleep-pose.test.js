@@ -47,6 +47,32 @@ test('dormir apoya la geometría real, articula el cuerpo horizontal y conserva 
   }
 });
 
+test('al levantarse el apoyo se va con la pose: no empuja la cadera a cada paso y apenas cruza el piso', async () => {
+  const { scene, bones } = await bodyRig('hombre-adulto');
+  const hips = [...bones.values()].find(b => /hips$/i.test(b.name));
+  const height = () => { scene.updateMatrixWorld(true); return hips.getWorldPosition(new THREE.Vector3()).y; };
+  const pose = new SleepPose(bones, scene);
+  for (let i = 0; i < 120; i++) pose.apply(1 / 60, true);
+  // De pie, sin una animación encima.
+  let lowest = Infinity;
+  while (pose.weight > 0) { pose.apply(1 / 60, false); lowest = Math.min(lowest, bounds(scene).min.y); pose.restore(); }
+  assert.ok(lowest > -.05, `apenas cruza el piso: ${lowest}`);
+  // Andando, la punta del pie baja del piso en cada paso: aquí, todo el cuerpo.
+  for (let i = 0; i < 120; i++) pose.apply(1 / 60, true);
+  pose.restore();
+  const standing = hips.position.y;
+  hips.position.y = standing - .09;
+  const step = height();
+  let push = -Infinity;
+  while (pose.weight >= .02) {
+    pose.apply(1 / 60, false);
+    if (pose.weight < .05) push = Math.max(push, height() - step);
+    pose.restore();
+  }
+  hips.position.y = standing;
+  assert.ok(push < .02, `apenas empuja la cadera: ${push}`);
+});
+
 test('dormir no acumula offsets ni cambia otro cuerpo, tampoco al cancelar', async () => {
   const { scene, bones } = await bodyRig('hombre-adulto');
   const before = snapshot(bones), pose = new SleepPose(bones, scene);

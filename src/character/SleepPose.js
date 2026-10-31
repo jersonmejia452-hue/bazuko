@@ -150,6 +150,8 @@ export class SleepPose {
     }
     // During the transition the legs describe arcs. Lift just enough to prevent
     // the visible mesh crossing the ground; at rest the cached target is supported.
-    if (this.weight < .999) this._lift(Math.max(0, .006 - this._bottom()));
+    // The lift leaves with the pose: near the end the feet are the animation's, and a
+    // walking toe dips below the ground on every step, bobbing the hips with it.
+    if (this.weight < .999) this._lift(Math.min(1, 8 * this.weight) * Math.max(0, .006 - this._bottom()));
   }
 }

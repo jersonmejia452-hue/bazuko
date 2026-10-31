@@ -106,7 +106,8 @@ Los E2E `actions.spec.js` recorren caminar/correr, congelan un salto y un impact
 - Arma casera equipada desde el inventario: barrido, remate con más daño, esqueleto con matrices finitas y «Vender todo» sin tocar el arma de la mano.
 - La misma arma y dormir con el perfil `mixamo-game-preview`, que comparte esas poses con el banco Mixamo: acostado mientras duerme y sin arma visible, de pie al despertar.
 - Sin plata de noche: radar y mapa llevan al Dealer, `E` abre la tienda sin vender nada, solo se vende lo elegido, la fila de venta cabe a 375 y 1280 px, el aviso de requisa queda encima de la tienda, `Q` y `E` cierran sin reabrir y de día no compra.
-- Tienda con mando simulado: vender deja el foco en la fila que queda y sin ventas no se compra por inercia.
+- Tienda con mando simulado: vender deja el foco en la fila que queda; sin ventas, o al quedarse sin plata, el foco espera en el aviso o en la fila, A no compra ni vende otra cosa y la cruceta sigue desde ahí.
+- Dormir en plena carrera con el modelo realista: sin teclas no resbala al despertar y se levanta de a poco, también si ya va andando.
 - Dormir sucio en la pose nueva: se acuesta mientras duerme y se levanta al despertar, la sarna llega con su aviso y queda guardada; la pomada no se gasta sin la enfermedad, con el aviso encima del inventario, y después la cura.
 
 ## Materiales, barrios y sombras de contacto

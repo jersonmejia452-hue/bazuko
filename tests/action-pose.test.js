@@ -234,6 +234,17 @@ test('tobillos de salto y nado se restauran junto con la pose de cuerpo entero',
   pose.restore(); assert.deepEqual(snapshot(root), base);
 });
 
+test('despertar andando baja la pose de dormir de a poco, sin cortarla', () => {
+  const { bones, root } = bodyRig();
+  const pose = new ActionPose(bones, { frame: root });
+  for (let i = 0; i < 90; i++) { pose.restore(); pose.apply(1 / 60, { action: 'dormir', movement: { grounded: true } }); }
+  const walking = { speed: 3, movement: { grounded: true } };
+  pose.restore(); pose.apply(1 / 60, walking);
+  assert.ok(pose.sleep.weight > .9, `sigue acostado en el primer cuadro: ${pose.sleep.weight}`);
+  for (let i = 0; i < 120; i++) { pose.restore(); pose.apply(1 / 60, walking); }
+  assert.equal(pose.sleep.weight, 0);
+});
+
 test('dormir realista se restaura antes del mezclador y se cancela al saltar', () => {
   const a = bodyRig(), b = bodyRig();
   const pose = new ActionPose(a.bones, { frame: a.root }), clean = new ActionPose(b.bones, { frame: b.root });

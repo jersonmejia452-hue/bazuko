@@ -326,6 +326,23 @@ test('placeMeta dice qué ofrece cada lugar y desde qué precio', () => {
   assert.equal(placeMeta(chato), null);
 });
 
+test('con el Dealer como destino, radar y texto hablan de plata: él no compra material ni libera el costal', () => {
+  // Lo que alcanza no cabe y lo que cabe no alcanza: con lo del Dealer sí se puede comprar lo liviano.
+  const stall = { name: 'Fritanga', icon: '🥟', x: 6, z: 0, prices: { comida: 1000 }, offers: { comida: [{ price: 1000, weight: .25 }, { price: 1200, weight: .2 }] } };
+  const needs = { need: 'comida', money: 1000, kg: 19.79, maxKg: 20, carriesRecyclables: true, carriesSubstances: true, substanceValue: 5400, night: true };
+
+  const sell = suggestPlace([stall, dealer], HERE, needs);
+  assert.equal(sell.poi, dealer);
+  assert.equal(sell.full, false);
+  assert.equal(suggestionText(sell, '', '90m'), '💀 Dealer\nSin plata: vende ∙ 90m');
+
+  const rows = [{ poi: stall }];
+  assert.equal(noOptionText('comida', rows, needs, dealer), 'Lo que te alcanza no te cabe: vende sustancias o tira algo.');
+  assert.equal(noOptionText('comida', rows, { ...needs, carriesRecyclables: false }, dealer), 'Lo que te alcanza no te cabe: vende sustancias o tira algo.');
+  assert.equal(noOptionText('comida', rows, needs, recicladora), 'No te cabe en el costal: vende material o tira algo.');
+  assert.equal(noOptionText('comida', rows, needs), 'No te cabe en el costal: vende material o tira algo.', 'sin destino no cambia');
+});
+
 test('noOptionText explica por qué no hay botón', () => {
   const rows = [{ poi: dulces }, { poi: mona }];
   assert.equal(noOptionText('agua', rows, {}), 'No te alcanza: agua desde $ 1.200. Pide limosna (B).', 'sin nada que vender no lo aconseja');
@@ -360,6 +377,7 @@ test('ningún texto usa «·» y ninguna fila repite los nombres que buscan las 
     noOptionText('agua', [{ poi: dulces }], {}),
     noOptionText('agua', [{ poi: dulces }], { money: 5000 }),
     noOptionText('agua', [{ poi: dulces }], { money: 5000, carriesRecyclables: true }),
+    noOptionText('agua', [{ poi: dulces }], { money: 5000 }, dealer),
     noOptionText('agua', [{ poi: dulces }], { carriesSubstances: true, night: true }),
     noOptionText('vender', [{ poi: recicladora }], {}),
     noOptionText('vender', [{ poi: dealer }], { carriesSubstances: true }),

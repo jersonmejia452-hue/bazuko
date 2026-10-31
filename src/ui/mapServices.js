@@ -138,7 +138,8 @@ export function suggestPlace(pois, from, needs = {}) {
   if (best) return { tag: need, poi: best, price: bestPrice, dist: bestDist };
   if (cheapest === Infinity) return null;
   const buyer = sellFirstPlaces(pois, need, needs).sort((a, b) => distance(a) - distance(b))[0];
-  if (buyer) return { tag: need, poi: buyer, sellFirst: true, full, price: cheapest, dist: distance(buyer) };
+  // Venderle al Dealer da plata, no espacio: quien va allá va por lo que sí cabe y aún no alcanza.
+  if (buyer) return { tag: need, poi: buyer, sellFirst: true, full: full && !buyer.dealer, price: cheapest, dist: distance(buyer) };
   return { tag: need, [full ? 'full' : 'broke']: true, price: cheapest };
 }
 
@@ -208,7 +209,10 @@ export function noOptionText(tag, rows, { money = 0, carriesRecyclables = false,
   if (!rows.length) return null;
   if (tag === 'vender') return carriesSubstances && !night ? 'El dealer solo compra de noche ∙ desde las 20:00.' : 'No llevas nada que te compren.';
   const cheapest = Math.min(...rows.map(row => row.poi.prices[tag]));
-  if (cheapest <= money) return carriesRecyclables ? 'No te cabe en el costal: vende material o tira algo.' : 'No te cabe en el costal: tira algo.';
+  if (cheapest <= money) {
+    if (seller?.dealer) return 'Lo que te alcanza no te cabe: vende sustancias o tira algo.';
+    return carriesRecyclables ? 'No te cabe en el costal: vende material o tira algo.' : 'No te cabe en el costal: tira algo.';
+  }
   const sellsSubstances = seller ? seller.dealer : !carriesRecyclables && carriesSubstances && night;
   const beg = sellsSubstances ? 'Vende sustancias o pide' : seller || carriesRecyclables ? 'Vende material o pide' : 'Pide';
   return `No te alcanza: ${NEED_COPY[tag].label.toLowerCase()} desde ${cop(cheapest)}. ${beg} limosna (B).`;

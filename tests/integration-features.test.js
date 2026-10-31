@@ -214,6 +214,70 @@ test('dormir acuesta el cuerpo con la simulación quieta, le quita lo que tenía
   } finally { mock.timers.reset(); }
 });
 
+test('quien se acuesta corriendo se endereza y al despertar no resbala', () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const scene = new THREE.Scene();
+    const input = { axis: { x: 0, z: -1 }, isRunning: true, consumePress: () => false, isDown: () => false };
+    const stats = new StatsSystem();
+    const player = new Player(scene, input, stats, null);
+    const game = Object.assign(Object.create(Game.prototype), {
+      built: { base: true, paredes: true }, clock: { hour: 12, day: 1, isNight: false }, stats,
+      player, dog: null, _save() {}, inventory: new InventorySystem()
+    });
+    const tick = frames => { for (let i = 0; i < frames; i++) player.update(1 / 60, null, null, () => 0, []); };
+    tick(60);
+    assert.ok(player.velocity.length() > 5, `corría a ${player.velocity.length()} m/s`);
+    assert.ok(player.root.rotation.x > .05, 'corriendo se inclina');
+    player.landing = 1;
+    player.receiveHit(new THREE.Vector3(1, 0, 0), 2);
+
+    game.sleep();
+    Object.assign(input, { axis: { x: 0, z: 0 }, isRunning: false });
+    assert.equal(player.velocity.length(), 0);
+    assert.equal(player.landing, 0, 'no se despierta aterrizando');
+    assert.equal(player.isStunned, false, 'el golpe no sigue empujando al despertar');
+    for (let i = 0; i < 60; i++) player.updateSleepPose(1 / 60);
+    assert.ok(player.root.rotation.x < .001, `acostado derecho: ${player.root.rotation.x}`);
+    scene.updateMatrixWorld(true);
+    const visible = new THREE.Box3();
+    player.character.group.traverseVisible(node => { if (node.isMesh) visible.expandByObject(node, true); });
+    assert.ok(visible.min.y > -.02, `no cruza el piso: ${visible.min.y}`);
+
+    mock.timers.tick(1200);
+    const awake = player.position.clone();
+    tick(30);
+    assert.ok(player.position.equals(awake), 'sin teclas no se mueve');
+    assert.equal(player.speed, 0);
+  } finally { mock.timers.reset(); }
+});
+
+test('al levantarse voltea solo lo que ya se enderezó: acostado no barre el piso', () => {
+  const input = { axis: { x: 0, z: 0 }, isRunning: true, consumePress: () => false, isDown: () => false };
+  const player = new Player(new THREE.Scene(), input, new StatsSystem(), null);
+  const tick = frames => { for (let i = 0; i < frames; i++) player.update(1 / 60, null, null, () => 0, []); };
+  tick(10);
+  input.axis = { x: 1, z: 0 };
+  tick(1);
+  const standing = player.root.rotation.y;
+  assert.ok(standing > .3, `de pie voltea: ${standing}`);
+  assert.ok(player.root.rotation.z < -.02 && player.root.rotation.x > .01, 'y se inclina');
+
+  input.axis = { x: 0, z: 0 };
+  player.root.rotation.set(0, 0, 0);
+  player.playAction('dormir', 1.6);
+  for (let i = 0; i < 90; i++) player.updateSleepPose(1 / 60);
+  assert.ok(player.character.sleepWeight > .99, `acostado: ${player.character.sleepWeight}`);
+  player.action = null;
+  input.axis = { x: 1, z: 0 };
+  tick(1);
+  assert.ok(player.root.rotation.y < standing * .02, `acostado no voltea: ${player.root.rotation.y}`);
+  assert.ok(Math.abs(player.root.rotation.z) < .001 && Math.abs(player.root.rotation.x) < .001, 'ni se inclina');
+  tick(60);
+  assert.ok(player.character.sleepWeight < .001, `ya se levantó: ${player.character.sleepWeight}`);
+  assert.ok(Math.abs(player.root.rotation.y - Math.PI / 2) < .01, `y terminó de voltear: ${player.root.rotation.y}`);
+});
+
 test('el ladrón de la noche se lleva el material, no el arma que está en la mano', () => {
   mock.timers.enable({ apis: ['setTimeout'] });
   const random = mock.method(Math, 'random', () => 0);

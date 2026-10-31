@@ -636,6 +636,8 @@ export function createCharacter(initial = DEFAULT_LOOK) {
     group: root,
     ragdollRig,
     get look() { return look; },
+    /** Cuánto sigue acostado, de 0 (de pie) a 1 */
+    get sleepWeight() { return pose.lie; },
     setLook(l) {
       look = normalizeLook(l);
       build();

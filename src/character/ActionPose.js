@@ -146,7 +146,8 @@ export class ActionPose {
     if (speed >= .15) { basuco = null; this.pipe?.reset(); }
     const sleeping = action === 'dormir' && !airborne && !swim && !landing && speed < .15;
     if (this.sleep) {
-      if (!sleeping && (action || airborne || swim || landing || speed >= .15 || attack || smoke || basuco != null || point)) this.sleep.reset();
+      // Echar a andar no corta la pose: se levanta andando. Saltar, nadar, golpear o fumar sí necesitan el cuerpo de una vez.
+      if (!sleeping && (action || airborne || swim || landing || attack || smoke || basuco != null || point)) this.sleep.reset();
       if (sleeping || this.sleep.weight > 0) {
         this.sleep.apply(elapsed, sleeping);
         return;

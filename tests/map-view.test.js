@@ -181,6 +181,18 @@ test('con el costal lleno lo dice, y «Ir a vender» nunca lleva al Dealer', () 
   assert.equal(loaded.game.marked[0].name, 'Recicladora El Progreso', 'el Dealer queda más cerca, pero no compra reciclaje');
 });
 
+test('si «Ir a vender» lleva al Dealer, el texto no pide vender material', () => {
+  const dealer = { name: 'Dealer', icon: '💀', x: 3, z: 0, dealer: true };
+  const stall = { ...dulces, prices: { comida: 1000 }, offers: { comida: [{ price: 1000, weight: .25 }, { price: 1200, weight: .2 }] } };
+  const needs = { need: 'comida', money: 1000, kg: 19.79, maxKg: 20, carriesRecyclables: true, carriesSubstances: true, substanceValue: 5400, night: true };
+
+  const hungry = view({ pois: [stall, dealer], needs });
+  assert.equal(text(cta(hungry)), 'Ir a vender');
+  assert.equal(text(noOption(hungry)), 'Lo que te alcanza no te cabe: vende sustancias o tira algo.');
+  click(cta(hungry));
+  assert.equal(hungry.game.marked[0].name, 'Dealer');
+});
+
 test('«Vender» distingue entre no llevar nada y que el dealer solo compre de noche', () => {
   const dealer = { name: 'Dealer', icon: '💀', x: 30, z: 0, dealer: true };
   const pois = [...POIS, dealer];

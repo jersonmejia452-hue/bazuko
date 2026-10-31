@@ -879,14 +879,26 @@ else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] So
       </div>
     `)) return;
 
-    // El mando pulsa con click() (detail 0) y reescribir el panel le borra el foco: sigue en la misma fila o en la
-    // última de esa lista. Nunca salta de Vender a Comprar, y con el ratón no hay foco que Espacio pueda volver a pulsar.
+    // El mando pulsa con click() (detail 0) y reescribir el panel le borra el foco: sigue en la misma fila o en la última
+    // de esa lista. Si ahí no queda qué pulsar, espera en la fila o en el aviso, donde A no hace nada: insistir no compra
+    // ni vende otra cosa, y la cruceta sigue desde ahí. Con el ratón no hay foco que Espacio pueda volver a pulsar.
     const keepFocus = (selector, index, e) => {
       if (e.detail) return;
       const rows = this.dealerPanel.querySelectorAll(selector);
       const next = rows[Math.min(index, rows.length - 1)];
-      next?.focus({ preventScroll: true });
-      next?.scrollIntoView({ block: 'nearest' });
+      const target = !next ? this.dealerPanel.querySelector('.dealer-empty') : next.disabled ? next.closest('.dealer-product') : next;
+      if (target && target !== next) {
+        target.tabIndex = -1;
+        // Solo mientras espera. Cambiar de ventana también le quita el foco, pero al volver debe seguir ahí.
+        const leave = () => {
+          if (!document.hasFocus()) return;
+          target.removeAttribute('tabindex');
+          target.removeEventListener('blur', leave);
+        };
+        target.addEventListener('blur', leave);
+      }
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: 'nearest' });
     };
     this.dealerPanel.querySelectorAll('.dealer-buy-btn').forEach((btn, index) => {
       btn.addEventListener('click', (e) => {

@@ -645,11 +645,94 @@ test('con el mando, vender en la tienda no pierde la fila y nunca salta a compra
   await expect(sellers).toHaveCount(0);
   const sold = await page.evaluate(() => window.__game.stats.dinero);
   expect(sold).toBeGreaterThan(0);
-  await press(0); // Sin ventas, esta pulsación solo enfoca: comprar requiere otra.
+  await expect(panel.locator('.dealer-empty'), 'sin ventas espera en el aviso').toBeFocused();
+  await press(0);
+  await press(0);
   expect(await page.evaluate(() => window.__game.stats.dinero), 'A no compra por inercia').toBe(sold);
   await press(1); // B
   await expect(panel).not.toHaveClass(/open/);
   await page.evaluate(() => { Math.random = window.__realRandom; });
+  expect(errors).toEqual([]);
+});
+
+test('con el mando, quedarse sin plata en la tienda deja el foco en la fila y A no compra ni vende otra cosa', async ({ page }) => {
+  const errors = collectErrors(page);
+  const press = await simulatedPad(page);
+  await start(page);
+  await page.evaluate(async () => {
+    const game = window.__game, { ITEMS, dealerPrice } = await import('/src/data/items.js');
+    game.inventory.clear();
+    game.inventory.add(ITEMS.hierba, 1);
+    game.stats.dinero = dealerPrice(ITEMS.tintico);
+    game.clock.hour = 22;
+    game.hud.toggleDealerPanel();
+  });
+  const panel = page.locator('#dealer-panel'), buy = page.locator('.dealer-buy-btn[data-id="tintico"]');
+  await expect(panel).toHaveClass(/open/);
+  await frames(page, 3); // El mando ignora lo que ya venía pulsado al abrir: primero tiene que ver la tienda.
+  await buy.focus();
+  await press(0); // A: compra y se queda sin plata.
+  await expect(buy).toBeDisabled();
+  const row = panel.locator('.dealer-product', { has: buy });
+  await expect(row, 'espera en la fila que ya no se puede comprar').toBeFocused();
+  const bag = () => page.evaluate(() => [window.__game.stats.dinero, window.__game.inventory.items.map(({ id, qty }) => `${id}×${qty}`).join()]);
+  const bought = await bag();
+  expect(bought[0]).toBe(0);
+  await press(0);
+  await press(0);
+  expect(await bag(), 'insistir no compra ni vende otra cosa').toEqual(bought);
+  await press(13); // Abajo: la cruceta sigue desde la fila, y las demás de Comprar tampoco se pueden pulsar.
+  await expect(panel.locator('.dealer-sell-btn').first()).toBeFocused();
+  await expect(row, 'sin el foco deja de ser una parada').not.toHaveAttribute('tabindex');
+  await press(1); // B
+  await expect(panel).not.toHaveClass(/open/);
+  expect(errors).toEqual([]);
+});
+
+// Cuadro a cuadro desde que se acuesta hasta 40 después de despertar: el mayor salto de altura del cuerpo y lo que recorrió en el piso.
+const watchWake = page => page.evaluate(() => new Promise(resolve => {
+  const game = window.__game, player = game.player, from = player.position.clone();
+  let left = 40, previous = null, biggestStep = 0;
+  const sample = () => {
+    let top = -Infinity;
+    player.character.group.traverse(node => { top = Math.max(top, node.matrixWorld.elements[13]); });
+    const height = top - player.position.y;
+    if (previous !== null) biggestStep = Math.max(biggestStep, Math.abs(height - previous));
+    previous = height;
+    if (!game.isSleeping && --left <= 0) {
+      resolve({ biggestStep, moved: Math.hypot(player.position.x - from.x, player.position.z - from.z) });
+      return;
+    }
+    requestAnimationFrame(sample);
+  };
+  requestAnimationFrame(sample);
+}));
+
+test('quien se acuesta corriendo no resbala al despertar y se levanta de a poco, también si ya va andando', async ({ page }) => {
+  const errors = collectErrors(page);
+  await start(page);
+  await frames(page, 30);
+  const standing = await bodyHeight(page);
+  const sleepRunning = () => page.evaluate(() => {
+    const game = window.__game;
+    Object.assign(game.built, { base: true, paredes: true });
+    game.stats.higiene = 90;
+    game.player.velocity.set(0, 0, 6); // Llegó corriendo y pulsó E sin frenar.
+    game.sleep();
+  });
+
+  await sleepRunning();
+  const still = await watchWake(page);
+  expect(still.moved, 'sin teclas no resbala').toBeLessThan(.001);
+  // A 10 cuadros por segundo un cuadro cambia hasta la mitad del cuerpo; de pie de golpe serían casi tres cuartos.
+  expect(still.biggestStep, `de pie mide ${standing}`).toBeLessThan(standing * .65);
+
+  await sleepRunning();
+  await page.keyboard.down('w');
+  const walking = await watchWake(page);
+  await page.keyboard.up('w');
+  expect(walking.moved, 'con W sí camina').toBeGreaterThan(.3);
+  expect(walking.biggestStep, `de pie mide ${standing}`).toBeLessThan(standing * .65);
   expect(errors).toEqual([]);
 });
 

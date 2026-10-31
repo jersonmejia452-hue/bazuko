@@ -691,6 +691,7 @@ export class Game {
     this.dog?.restAt(this.player.position);
     this.player.stopSmoking?.();
     this.player.stopBasuco?.();
+    this.player.settleForSleep?.();
     this.player.playAction('dormir', 1.6);
 
     const night = this.clock.isNight;

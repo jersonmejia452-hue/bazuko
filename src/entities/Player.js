@@ -338,6 +338,7 @@ export class Player {
       this._realistic.setWeapon?.(this.equippedWeapon === DEFAULT_WEAPON ? null : this.equippedWeapon);
       this._realistic.setSmoking?.(this._holdingCigarette, this.smoking?.kind);
       this._realistic.setBasuco?.(!!this.basuco && !this.basuco.stowed);
+      this._realistic.clearSleepPose?.();
     } else {
       this.root.remove(this.character.group);
       this.character = this.procedural;
@@ -358,12 +359,23 @@ export class Player {
     this.actionProgress = 0;
   }
 
+  /** Dormir congela `update`: la inercia, el empujón de un golpe y el aterrizaje de ese instante volverían al despertar, resbalando y de pie de golpe. */
+  settleForSleep() {
+    this.velocity?.set(0, 0, 0);
+    this._impactVelocity.set(0, 0, 0);
+    this._impactTime = 0;
+    this.landing = 0;
+  }
+
   /** Dormir congela la simulación, no el cuerpo: se acuesta y sigue así hasta que Game lo despierta. */
   updateSleepPose(dt) {
     if (this.action !== 'dormir' || !(dt > 0)) return;
     this.time += dt;
     this.actionTimer = Math.max(0, this.actionTimer - dt);
     this.actionProgress = Math.min(1, 1 - this.actionTimer / (this.actionDuration || 1));
+    // Se endereza como al quedarse quieto: acostado con la inclinación de correr, el cuerpo liviano cruzaría el piso.
+    this.root.rotation.z = THREE.MathUtils.lerp(this.root.rotation.z, 0, 1 - Math.exp(-12 * dt));
+    this.root.rotation.x = THREE.MathUtils.lerp(this.root.rotation.x, 0, 1 - Math.exp(-10 * dt));
     Object.assign(this.movement, { landing: 0, turnRate: 0 });
     this.character.update(dt, {
       speed: 0,
@@ -601,13 +613,15 @@ export class Player {
       let diff = targetAngle - this.root.rotation.y;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
-      this.root.rotation.y += diff * Math.min(1, 14 * dt);
+      // Al levantarse voltea solo lo que ya se enderezó: acostado barrería el piso como una aspa.
+      const upright = 1 - (this.character.sleepWeight ?? 0);
+      this.root.rotation.y += diff * Math.min(1, 14 * dt) * upright;
 
       // Inclinación centrífuga (banking lateral en giros)
-      const targetBank = THREE.MathUtils.clamp(-diff * (this.isSwimming ? .08 : running ? 0.38 : 0.22), -0.22, 0.22);
+      const targetBank = THREE.MathUtils.clamp(-diff * (this.isSwimming ? .08 : running ? 0.38 : 0.22), -0.22, 0.22) * upright;
       this.root.rotation.z = THREE.MathUtils.lerp(this.root.rotation.z, targetBank, 1 - Math.exp(-14 * dt));
       // Inclinación hacia adelante con la aceleración
-      this.root.rotation.x = THREE.MathUtils.lerp(this.root.rotation.x, this.isSwimming ? 0 : running ? 0.08 : 0.02, 1 - Math.exp(-10 * dt));
+      this.root.rotation.x = THREE.MathUtils.lerp(this.root.rotation.x, (this.isSwimming ? 0 : running ? 0.08 : 0.02) * upright, 1 - Math.exp(-10 * dt));
     } else {
       this.root.rotation.z = THREE.MathUtils.lerp(this.root.rotation.z, 0, 1 - Math.exp(-12 * dt));
       this.root.rotation.x = THREE.MathUtils.lerp(this.root.rotation.x, 0, 1 - Math.exp(-10 * dt));
