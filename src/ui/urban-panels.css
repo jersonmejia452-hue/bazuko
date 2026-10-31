@@ -1,0 +1,551 @@
+/* BAZUKO — paneles del rebusque.
+   Una misma superficie oscura para costal, fabricación, pausa y comercio.
+   Este archivo se carga tras los estilos anteriores y no altera sus estados. */
+:root {
+  --urban-base: #101411;
+  --urban-panel: #191e1a;
+  --urban-raised: #252c26;
+  --urban-ink: #f1f0e7;
+  --urban-muted: #adb5ac;
+  --urban-accent: #efca52;
+  --urban-line: #414940;
+  --urban-good: #9cc9a0;
+  --urban-bad: #f19b8e;
+  --urban-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+}
+
+:is(#menu, #inv-overlay, #craft-panel, #talent-panel, #dealer-panel) {
+  --item-panel: var(--urban-panel);
+  --item-well: var(--urban-base);
+  --item-deep: #0c100d;
+  --item-row: #202720;
+  --item-line: var(--urban-line);
+  --item-ink: var(--urban-ink);
+  --item-text: #d1d6cc;
+  --item-dim: var(--urban-muted);
+  --item-gold: var(--urban-accent);
+  --item-qty: var(--urban-ink);
+  --item-green: var(--urban-good);
+  --item-bad-text: var(--urban-bad);
+  --amarillo: var(--urban-accent);
+  --azul-texto: var(--urban-muted);
+  --hud-ink: var(--urban-ink);
+  --hud-muted: var(--urban-muted);
+  --hud-route: var(--urban-accent);
+  color: var(--urban-ink);
+  font-family: 'Overpass', system-ui, sans-serif;
+  font-size: 14px;
+}
+
+/* The game remains visible around the panels; surfaces themselves stay opaque. */
+#menu, #inv-overlay { background: rgb(6 9 7 / 78%); }
+#menu { padding: 24px; animation: none; }
+#menu .sign--menu,
+#inv-overlay .inv-window,
+#craft-panel, #talent-panel, #dealer-panel {
+  background: var(--urban-panel);
+  border: 1px solid var(--urban-line);
+  border-top: 4px solid var(--urban-accent);
+  border-radius: 2px;
+  box-shadow: 0 24px 80px #0009;
+  padding: 24px 28px;
+  color: var(--urban-ink);
+  animation: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--urban-line) var(--urban-base);
+}
+#menu .sign--menu {
+  width: min(680px, 100%);
+  max-height: calc(100dvh - 48px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+#menu .sign--wide {
+  width: min(1160px, 100%);
+  height: min(850px, calc(100dvh - 48px));
+}
+#menu .menu__head {
+  padding: 0 0 20px;
+  border-bottom: 1px solid var(--urban-line);
+  gap: 16px;
+}
+#menu .menu__head > div { min-width: 0; }
+#menu .menu__title,
+#inv-overlay .inv-head h2,
+#craft-panel .craft-header h2,
+#talent-panel .talent-header h2,
+#dealer-panel .dealer-header h2 {
+  margin: 0;
+  font: 800 clamp(32px, 4vw, 48px)/.98 var(--urban-display);
+  letter-spacing: -.02em;
+  text-transform: uppercase;
+  color: var(--urban-ink);
+}
+#menu .menu__sub { margin-top: 8px; color: var(--urban-muted); font-size: 13px; }
+#menu .menu__icon { color: var(--urban-accent); }
+#menu .menu__body { min-height: 0; padding: 18px 2px; overscroll-behavior: contain; }
+#menu .menu__foot { border-top: 1px solid var(--urban-line); padding-top: 16px; gap: 12px; }
+#menu .menu__money { font-size: 13px; color: var(--urban-muted); }
+#menu .menu__money span { color: var(--urban-accent); }
+
+/* A solid yellow action and a clearly bounded secondary action. */
+#menu .btn, #menu .map-view__tool,
+#inv-overlay .inv-ghost, #inv-overlay .inv-hot-key,
+#inv-overlay .inv-close, #craft-panel .craft-close,
+#dealer-panel .dealer-buy-btn, #dealer-panel .dealer-sell-btn {
+  min-height: 44px;
+  border: 1px solid var(--urban-line);
+  border-radius: 2px;
+  background: var(--urban-raised);
+  box-shadow: none;
+  color: var(--urban-ink);
+  font: 800 13px/1.3 'Overpass', system-ui, sans-serif;
+  text-transform: none;
+  letter-spacing: 0;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+#menu .btn { padding: 10px 18px 8px; }
+#menu .btn--primary,
+#inv-overlay .item-primary,
+#craft-panel .item-primary,
+#dealer-panel .dealer-buy-btn:not(:disabled), #dealer-panel .dealer-sell-btn:not(:disabled) {
+  min-height: 46px;
+  padding: 11px 18px 9px;
+  background: var(--urban-accent);
+  color: var(--urban-base);
+  border: 1px solid var(--urban-accent);
+  border-radius: 2px;
+  box-shadow: none;
+  font: 800 14px/1.3 'Overpass', system-ui, sans-serif;
+  text-transform: none;
+  letter-spacing: 0;
+}
+#menu .btn:disabled,
+#inv-overlay button:disabled,
+#craft-panel button:disabled,
+#dealer-panel button:disabled {
+  color: #a4aaa1;
+  background: #252b25;
+  border-color: #353c34;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: .7;
+  transform: none;
+}
+#menu .menu__close, #inv-overlay .inv-close, #craft-panel .craft-close {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--urban-line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--urban-ink);
+}
+:is(#menu, #inv-overlay, #craft-panel, #talent-panel, #dealer-panel) :is(button, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--urban-accent);
+  outline-offset: 3px;
+}
+
+/* PAUSE — one horizontal navigation rail, large readable sections. */
+#menu .pause-menu-body { gap: 22px; }
+#menu .pause-tabs {
+  top: -18px;
+  min-width: 0;
+  background: var(--urban-base);
+  border: 1px solid var(--urban-line);
+  border-radius: 2px;
+  gap: 0;
+  padding: 0;
+}
+#menu .pause-tab {
+  min-width: 0;
+  min-height: 54px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 0;
+  color: var(--urban-muted);
+  font: 700 23px/1 var(--urban-display);
+  letter-spacing: .025em;
+  text-transform: uppercase;
+}
+#menu .pause-tab.is-active, #menu .pause-tab[aria-selected='true'] {
+  background: var(--urban-accent);
+  color: var(--urban-base);
+  box-shadow: none;
+}
+#menu .pause-tabs__key {
+  margin: 0 12px;
+  min-width: 24px;
+  height: 24px;
+  padding: 2px 4px 0;
+  background: none;
+  color: var(--urban-muted);
+  border: 1px solid var(--urban-line);
+  border-radius: 2px;
+}
+#menu .pause-panel { min-width: 0; }
+#menu :is(.pause-state, .pause-settings) { gap: 18px; }
+#menu .pause-cards { gap: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#menu .pause-card {
+  padding: 14px 18px;
+  min-width: 0;
+  background: var(--urban-base);
+  border: 0;
+  border-bottom: 1px solid var(--urban-line);
+  border-radius: 0;
+  box-shadow: none;
+  gap: 5px;
+}
+#menu .pause-card__label { font-size: 12px; color: var(--urban-muted); }
+#menu .pause-card__value { font: 700 25px/1.15 var(--urban-display); overflow-wrap: anywhere; }
+#menu .pause-card__value svg { color: var(--urban-accent); }
+#menu .pause-section-title { font: 700 23px/1.1 var(--urban-display); color: var(--urban-ink); letter-spacing: .01em; }
+#menu :is(.pause-section, .pause-needs, .pause-level, .pause-row--split) {
+  background: var(--urban-base);
+  border: 1px solid #2b342c;
+  border-radius: 2px;
+  padding: 16px 18px;
+}
+#menu .pause-row { gap: 12px; min-height: 44px; }
+#menu :is(.pause-row__label, .pause-hint, .pause-level__xp, .pause-gps-summary) { color: var(--urban-muted); }
+#menu .pause-hint { opacity: 1; line-height: 1.5; }
+#menu .pause-row__label { font-size: 13px; }
+#menu .pause-slider { min-height: 30px; accent-color: var(--urban-accent); }
+#menu .pause-segmented { gap: 6px; }
+#menu .pause-segmented .btn { min-width: 0; min-height: 44px; padding: 8px; }
+#menu .pause-level__badge { border-radius: 2px; background: var(--urban-accent); color: var(--urban-base); }
+#menu .pause-value { color: var(--urban-accent); }
+#menu .pause-meter { border: 0; border-radius: 0; height: 6px; background: #333b33; }
+#menu .pause-meter__fill { border-radius: 0; }
+#menu .pause-needs { gap: 14px 28px; }
+#menu .pause-need { min-height: 32px; }
+#menu .pause-need.is-critical .pause-need__value { color: var(--urban-bad); }
+#menu .pause-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; columns: auto; }
+#menu .pause-controls .pause-section { margin: 0; align-content: start; }
+#menu .pause-controls-list { gap: 12px 16px; font-size: 13px; line-height: 1.5; }
+#menu :is(.pause-controls-list, .map-view__hint) kbd {
+  padding: 4px 8px 2px;
+  border: 1px solid var(--urban-line);
+  border-bottom: 2px solid #6d776a;
+  border-radius: 2px;
+  background: var(--urban-raised);
+  color: var(--urban-ink);
+}
+
+/* MAP — preserve the existing route canvas, filters and accessible controls. */
+#menu .map-view { gap: 20px; grid-template-columns: minmax(0, 1fr) 284px; }
+#menu .map-view__canvas {
+  border: 1px solid var(--urban-line);
+  border-radius: 2px;
+  background: var(--urban-base);
+  height: clamp(280px, calc(100dvh - 320px), 520px);
+}
+#menu .map-view__side {
+  gap: 12px;
+  max-height: clamp(280px, calc(100dvh - 320px), 520px);
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--urban-line) var(--urban-base);
+}
+#menu .map-view__side > :not(.map-view__list) { flex-shrink: 0; }
+#menu .map-view__tools { gap: 8px; }
+#menu .map-view__tool { width: 44px; height: 44px; background: #101411ed; }
+#menu .map-view__legend { border: 1px solid var(--urban-line); border-radius: 2px; background: #101411ed; font-size: 12px; }
+#menu .map-view__dest { border: 0; border-left: 3px solid var(--urban-accent); border-radius: 0; background: var(--urban-base); padding: 12px 14px; }
+#menu .map-view__dest strong { font: 700 25px/1.1 var(--urban-display); color: var(--urban-ink); }
+#menu .map-view__dest-label { color: var(--urban-accent); font-size: 12px; letter-spacing: 0; text-transform: none; }
+#menu .map-view__dest-meta { color: var(--urban-muted); line-height: 1.5; }
+#menu .map-view__filters { gap: 5px; }
+#menu .map-view__filter {
+  border: 1px solid var(--urban-line);
+  border-radius: 2px;
+  padding: 8px 10px 6px;
+  min-height: 36px;
+  background: var(--urban-base);
+  color: var(--urban-muted);
+  font: 700 12px/1.2 'Overpass', sans-serif;
+}
+#menu .map-view__filter.is-active { background: var(--urban-accent); color: var(--urban-base); border-color: var(--urban-accent); }
+#menu .map-view__filter.is-need:not(.is-active) { border-color: var(--urban-accent); color: var(--urban-ink); }
+#menu .map-view__list-title { font-size: 12px; color: var(--urban-muted); letter-spacing: 0; text-transform: none; }
+#menu .map-view__list { flex: 1 0 130px; min-height: 130px; gap: 4px; overflow: visible; }
+#menu .map-view__place { min-height: 56px; border: 1px solid transparent; border-radius: 2px; background: var(--urban-base); padding: 10px; }
+#menu .map-view__place.is-active { border-color: var(--urban-accent); background: #efca5212; }
+#menu .map-view__place-name { color: var(--urban-ink); font-size: 13px; }
+#menu :is(.map-view__place-dist, .map-view__place-meta, .map-view__no-option) { color: var(--urban-muted); font-size: 12px; }
+#menu .map-view__place.is-broke .map-view__place-meta { color: var(--urban-bad); }
+
+/* INVENTORY / WORKBENCH — a broad grid and a quiet, readable object detail. */
+#inv-overlay { padding: 24px; }
+#inv-overlay .inv-window {
+  width: 1000px;
+  max-width: 100%;
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+#craft-panel { width: 1000px; max-width: calc(100vw - 48px); max-height: calc(100dvh - 48px); }
+#inv-overlay .inv-head, #craft-panel .craft-header {
+  gap: 16px;
+  border-bottom: 1px solid var(--urban-line);
+  padding-bottom: 20px;
+  margin-bottom: 22px;
+}
+#inv-overlay .inv-head-art, #craft-panel .craft-header-art { width: 32px; height: 32px; color: var(--urban-accent); }
+#inv-overlay .inv-load { font-size: 13px; gap: 8px; }
+#inv-overlay .inv-load-bar { width: 90px; height: 5px; border: 0; background: var(--urban-line); }
+#inv-overlay .inv-load-bar i { background: var(--urban-accent); }
+#inv-overlay .inv-load-flag { font-size: 12px; }
+#inv-overlay .inv-load.near .inv-load-text { color: var(--urban-accent); }
+#inv-overlay .inv-body, #craft-panel .craft-body { gap: 26px; }
+#inv-overlay .inv-side { gap: 14px; }
+#inv-overlay .inv-grid { gap: 8px; }
+#inv-overlay .inv-slot, #craft-panel .craft-recipe {
+  min-height: 64px;
+  background: var(--urban-base);
+  border: 1px solid var(--urban-line);
+  border-bottom: 3px solid color-mix(in srgb, var(--cat) 60%, var(--urban-base));
+  border-radius: 2px;
+  box-shadow: none;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+#inv-overlay .inv-slot.is-empty { background: #151a16; border-color: #30382f; border-bottom-width: 1px; }
+#inv-overlay .inv-slot.selected, #craft-panel .craft-recipe.selected {
+  border: 2px solid var(--urban-accent);
+  background: #efca5210;
+  box-shadow: none;
+}
+#inv-overlay .inv-slot-art { width: clamp(30px, 4vw, 46px); height: clamp(30px, 4vw, 46px); }
+#inv-overlay .inv-slot-qty, #craft-panel .craft-slot-qty { top: 6px; right: 7px; font-size: 12px; color: var(--urban-ink); text-shadow: none; }
+#inv-overlay .inv-slot-key { top: 6px; left: 6px; font-size: 11px; line-height: 17px; min-width: 18px; border-color: var(--urban-line); }
+#inv-overlay .inv-slot-rare { bottom: 5px; left: 7px; }
+#inv-overlay .inv-grid-foot { font-size: 12px; color: var(--urban-muted); }
+#inv-overlay .inv-bench, #craft-panel .craft-bench {
+  flex: 0 0 310px;
+  background: var(--urban-base);
+  border: 1px solid #30382f;
+  border-radius: 2px;
+  box-shadow: none;
+  padding: 22px;
+  gap: 10px;
+}
+#inv-overlay .inv-pedestal, #craft-panel .craft-pedestal {
+  width: 140px;
+  height: 140px;
+  margin: 0 0 8px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--urban-line);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--urban-ink);
+}
+#inv-overlay .inv-pedestal .item-art, #craft-panel .craft-pedestal .item-art { width: 94px; height: 94px; }
+#inv-overlay .inv-name, #craft-panel .craft-result-name {
+  color: var(--urban-ink);
+  font: 700 30px/1.05 var(--urban-display);
+  text-align: center;
+}
+#inv-overlay :is(.inv-note, .inv-effect, .inv-meta, .inv-reason),
+#craft-panel :is(.craft-effect, .craft-reason) { font-size: 13px; line-height: 1.5; }
+#inv-overlay .inv-note, #inv-overlay .inv-meta, #craft-panel .craft-effect { color: var(--urban-muted); }
+#inv-overlay .inv-rarity { font-size: 12px; letter-spacing: .03em; }
+#inv-overlay .inv-secondary { gap: 8px; }
+#inv-overlay .inv-ghost { padding: 9px 10px 7px; }
+#inv-overlay .inv-hot { gap: 12px; margin-top: 8px; padding-top: 16px; flex-wrap: wrap; }
+#inv-overlay .inv-hot-label { color: var(--urban-muted); text-transform: none; letter-spacing: 0; font-size: 12px; }
+#inv-overlay .inv-hot-keys { width: 100%; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+#inv-overlay .inv-hot-key { width: 100%; height: 44px; }
+#inv-overlay .inv-hot-key[aria-pressed='true'] { border-color: var(--urban-accent); color: var(--urban-accent); box-shadow: inset 0 -2px 0 var(--urban-accent); }
+#inv-overlay .inv-hint, #craft-panel .craft-hint { margin-top: 20px; border-top: 1px solid var(--urban-line); padding-top: 14px; font-size: 12px; color: var(--urban-muted); text-align: left; line-height: 1.5; }
+#inv-overlay .inv-tip { border-radius: 2px; padding: 10px 14px; font-size: 12px; box-shadow: 0 10px 30px #0007; }
+#craft-panel .craft-recipes { gap: 8px; }
+#craft-panel .craft-recipe { padding: 10px; min-height: 108px; }
+#craft-panel .craft-slot-name { font-size: 13px; line-height: 1.3; }
+#craft-panel .craft-load { font-size: 13px; color: var(--urban-muted); }
+#craft-panel .craft-mats-title { margin-top: 12px; padding-top: 16px; text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--urban-muted); }
+#craft-panel .craft-mats { gap: 6px; }
+#craft-panel .craft-mat { min-height: 40px; padding: 6px; border-radius: 2px; border: 0; border-bottom: 1px solid var(--urban-line); background: #ffffff04; }
+#craft-panel .craft-mat-name { white-space: normal; font-size: 12px; }
+#craft-panel .craft-reason { color: var(--urban-bad); }
+#craft-panel .craft-bench.ready .craft-reason { color: var(--urban-good); }
+
+/* TALENTS / DEALER / PLACES — aligned with the same panel family. */
+#talent-panel { transform: translate(-50%, -50%); width: 1060px; max-width: calc(100vw - 48px); max-height: calc(100dvh - 48px); }
+#dealer-panel { width: 700px; max-width: calc(100vw - 48px); max-height: calc(100dvh - 48px); }
+:is(#talent-panel, #dealer-panel) :is(.talent-header, .dealer-header) { gap: 18px; padding-bottom: 20px; margin-bottom: 22px; border-bottom: 1px solid var(--urban-line); }
+#talent-panel .talent-branches { gap: 22px; }
+#talent-panel .talent-branch h3 { color: var(--urban-accent); font: 700 24px/1.1 var(--urban-display); margin-bottom: 14px; }
+#talent-panel .talent-points-display, #dealer-panel .dealer-money { color: var(--urban-accent); font-size: 14px; }
+#talent-panel .talent-node { border: 1px solid var(--urban-line); border-radius: 2px; padding: 16px; background: var(--urban-base); margin-bottom: 10px; }
+#talent-panel .talent-node.available { border-left: 3px solid var(--urban-accent); }
+#talent-panel .talent-node.unlocked { background: #9cc9a00c; border-color: #607f61; }
+#talent-panel .talent-name { font: 700 21px/1.1 var(--urban-display); color: var(--urban-ink); }
+#talent-panel .talent-node .talent-desc { margin: 9px 0; font-size: 13px; line-height: 1.5; color: #d1d6cc; }
+#talent-panel .talent-node .reqs { font-size: 12px; line-height: 1.5; color: var(--urban-muted); }
+#talent-panel .talent-node .talent-cost { margin-top: 10px; font-size: 12px; color: var(--urban-accent); }
+#talent-panel .talent-hint, #dealer-panel .dealer-hint { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--urban-line); color: var(--urban-muted); font-size: 12px; line-height: 1.5; text-align: left; }
+#dealer-panel .dealer-product { gap: 20px; background: var(--urban-base); border: 1px solid var(--urban-line); border-radius: 2px; padding: 18px; }
+#dealer-panel .dealer-prod-info { min-width: 0; }
+#dealer-panel .dealer-prod-name { font: 700 25px/1.15 var(--urban-display); color: var(--urban-ink); }
+#dealer-panel .dealer-prod-desc { margin-top: 6px; font-size: 13px; line-height: 1.5; color: var(--urban-muted); }
+#dealer-panel .dealer-prod-price { font-size: 15px; color: var(--urban-accent); white-space: nowrap; }
+#dealer-panel .dealer-prod-action { gap: 14px; }
+#dealer-panel .dealer-section { margin: 0 0 10px; color: var(--urban-accent); font: 700 22px/1.1 var(--urban-display); letter-spacing: 0; text-transform: none; }
+#dealer-panel .dealer-section + .dealer-products + .dealer-section { margin-top: 22px; }
+#dealer-panel .dealer-empty { border: 1px dashed var(--urban-line); border-radius: 2px; padding: 14px 18px; color: var(--urban-muted); font-size: 13px; line-height: 1.5; text-align: left; }
+#menu .row { border-radius: 0; border-bottom: 1px solid #30382f; padding: 14px 10px; gap: 12px; }
+#menu .row:nth-child(odd) { background: var(--urban-base); }
+#menu .row__name { font-size: 15px; }
+#menu .row__desc { font-size: 13px; line-height: 1.5; color: var(--urban-muted); }
+#menu .row__price { color: var(--urban-accent); }
+#menu .req { line-height: 1.5; }
+#menu .req__ok { color: var(--urban-good); }
+#menu .req__no { color: var(--urban-bad); }
+#menu .empty { color: var(--urban-muted); line-height: 1.6; }
+#menu :is(.radio-info-box, .radio-perks-box) { background: var(--urban-base); border: 1px solid var(--urban-line); border-radius: 2px; }
+#menu .radio-freq-display { font: 700 27px/1 var(--urban-display); color: var(--urban-accent); border-radius: 2px; border-color: var(--urban-line); padding: 7px 10px; }
+#menu .radio-dial-scale { border: 1px solid var(--urban-line); border-radius: 2px; background: #0c100d; box-shadow: none; padding: 14px 12px 18px; }
+#menu .radio-dial-ticks { color: var(--urban-muted); border-color: var(--urban-line); }
+#menu .radio-dial-needle { background: var(--urban-accent); box-shadow: none; }
+#menu .radio-battery-bar { height: 6px; border: 0; border-radius: 0; background: var(--urban-line); }
+#menu .radio-battery-label { color: var(--urban-muted); font-size: 12px; }
+#menu .radio-indicator-led { color: var(--urban-muted); font-size: 12px; }
+#menu .radio-indicator-led.is-on { color: var(--urban-good); text-shadow: none; }
+#menu .radio-info-header { gap: 10px; flex-wrap: wrap; }
+#menu :is(.radio-power-col, .radio-battery-col) { min-width: 0; flex-wrap: wrap; }
+#menu .radio-signal-badge { border-radius: 2px; color: var(--urban-base); font-size: 12px; padding: 4px 8px; }
+#menu .radio-signal-badge.signal-full { background: var(--urban-good); }
+#menu .radio-signal-badge.signal-medium { background: var(--urban-accent); }
+#menu .radio-signal-badge.signal-low { background: var(--urban-bad); }
+#menu .radio-signal-badge.signal-none { background: var(--urban-muted); }
+#menu .radio-info-program { color: var(--urban-accent); font-size: 13px; line-height: 1.5; }
+#menu .radio-info-genre { color: var(--urban-muted); font-size: 13px; line-height: 1.5; }
+#menu .radio-perk-text strong { color: var(--urban-good); }
+#menu .shelter-preview { border-radius: 2px; border-color: var(--urban-line); background: var(--urban-base); }
+#menu .shelter-preview figcaption { background: var(--urban-base); color: var(--urban-muted); }
+#menu .developer-note { color: var(--urban-ink); font-size: 14px; line-height: 1.65; }
+#menu .developer-note__credits li { border-radius: 2px; background: var(--urban-base); }
+#menu .developer-note__credits span { color: var(--urban-muted); }
+#menu .developer-note__request { border-radius: 0; border-color: var(--urban-accent); background: var(--urban-base); padding: 16px; }
+#menu .developer-note__request h3, #menu .developer-note a { color: var(--urban-accent); }
+
+@media (hover: hover) {
+  #menu .btn--primary:not(:disabled):hover, #inv-overlay .item-primary:not(:disabled):hover, #craft-panel .item-primary:not(:disabled):hover,
+  #dealer-panel .dealer-buy-btn:not(:disabled):hover, #dealer-panel .dealer-sell-btn:not(:disabled):hover { background: #f8dc7c; border-color: #f8dc7c; color: var(--urban-base); }
+  #menu .btn--ghost:not(:disabled):hover, #menu .menu__close:hover,
+  #inv-overlay .inv-ghost:not(:disabled):hover, #inv-overlay .inv-close:hover, #craft-panel .craft-close:hover {
+    background: #333c32; border-color: #7c8978; color: var(--urban-ink);
+  }
+  #menu .pause-tab:not(.is-active):hover { background: #30392e; color: var(--urban-ink); }
+  #menu .map-view__place:not(.is-active):hover, #menu .map-view__filter:not(.is-active):hover { border-color: #7c8978; background: #2a3329; }
+  #inv-overlay .inv-slot:not(.selected):hover, #craft-panel .craft-recipe:not(.selected):hover { border-color: #7c8978; background: #2a3329; }
+  #talent-panel .talent-node.available:hover { background: #efca5212; border-color: var(--urban-accent); }
+}
+
+@media (max-width: 900px) {
+  #inv-overlay .inv-bench, #craft-panel .craft-bench { flex-basis: 270px; padding: 18px; }
+  #inv-overlay .inv-body, #craft-panel .craft-body { gap: 18px; }
+  #menu .pause-settings { grid-template-columns: 1fr; }
+  #menu .map-view { grid-template-columns: minmax(0, 1fr) 240px; gap: 14px; }
+}
+@media (max-width: 760px) {
+  #menu, #inv-overlay { padding: 12px; }
+  #menu .sign--menu, #inv-overlay .inv-window, #craft-panel, #talent-panel, #dealer-panel { padding: 20px; max-height: calc(100dvh - 24px); }
+  #craft-panel, #talent-panel, #dealer-panel { max-width: calc(100vw - 24px); }
+  #menu .sign--wide { height: calc(100dvh - 24px); }
+  #menu .pause-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #menu .pause-controls { grid-template-columns: 1fr; }
+  #menu .map-view { grid-template-columns: 1fr; }
+  #menu .map-view__canvas { height: clamp(240px, 42dvh, 400px); }
+  #menu .map-view__side { max-height: none; overflow: visible; padding-right: 0; }
+  #menu .map-view__list { min-height: 0; flex-basis: auto; }
+  #menu .map-view__filter { min-height: 44px; }
+  #menu .pause-needs { grid-template-columns: minmax(0, 1fr); }
+  #menu .pause-tabs__key { display: none; }
+  #menu .pause-tab { flex: 1 1 0; font-size: 18px; min-height: 50px; padding: 10px 4px; }
+  #talent-panel .talent-branches { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  #inv-overlay .inv-window, #craft-panel { padding: 18px; }
+  #inv-overlay .inv-head, #craft-panel .craft-header { display: grid; grid-template-columns: 28px minmax(0, 1fr) 44px; gap: 10px; margin-bottom: 18px; padding-bottom: 16px; }
+  #inv-overlay .inv-head-art, #craft-panel .craft-header-art { width: 26px; height: 26px; }
+  #inv-overlay .inv-head h2, #craft-panel .craft-header h2 { font-size: 34px; }
+  #inv-overlay .inv-close, #craft-panel .craft-close { grid-column: 3; grid-row: 1; }
+  #inv-overlay .inv-load, #craft-panel .craft-load { grid-row: 2; grid-column: 1 / -1; min-width: 0; }
+  #inv-overlay .inv-load-bar { flex: 1; }
+  #inv-overlay .inv-body, #craft-panel .craft-body { flex-direction: column; gap: 18px; }
+  #inv-overlay .inv-bench {
+    flex: none; order: -1;
+    display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 6px 14px; padding: 16px;
+  }
+  #inv-overlay .inv-bench > * { grid-column: 2; }
+  #inv-overlay .inv-bench .inv-pedestal { grid-column: 1; grid-row: 1 / span 5; width: 76px; height: 88px; margin: 0; }
+  #inv-overlay .inv-pedestal .item-art { width: 58px; height: 58px; }
+  #inv-overlay :is(.inv-name, .inv-effect, .inv-meta, .inv-note, .inv-reason) { text-align: left; }
+  #inv-overlay .inv-name { font-size: 28px; }
+  #inv-overlay .inv-note:not(:empty) { display: block; }
+  #inv-overlay .inv-reason { margin: 0; padding: 0; }
+  #inv-overlay .inv-bench > :is(.item-primary, .inv-secondary, .inv-hot) { grid-column: 1 / -1; }
+  #inv-overlay .inv-bench.is-empty { grid-template-columns: minmax(0, 1fr); }
+  #inv-overlay .inv-bench.is-empty > * { grid-column: 1; }
+  #inv-overlay .inv-bench.is-empty .inv-pedestal { display: none; }
+  #inv-overlay .inv-slot { min-height: 48px; }
+  #inv-overlay .inv-slot-art { width: 28px; height: 28px; }
+  #inv-overlay .inv-slot-qty { top: 2px; right: 3px; font-size: 11px; }
+  #inv-overlay .inv-slot-key { top: 2px; left: 2px; font-size: 10px; line-height: 13px; min-width: 14px; }
+  #inv-overlay .inv-hint, #craft-panel .craft-hint { display: block; font-size: 12px; }
+  #craft-panel .craft-bench { flex: none; order: -1; }
+  #craft-panel .craft-pedestal { width: 110px; height: 110px; }
+  #craft-panel .craft-pedestal .item-art { width: 76px; height: 76px; }
+  #craft-panel .craft-recipe { min-height: 96px; padding: 10px 5px 5px; }
+  #dealer-panel .dealer-header, #talent-panel .talent-header { flex-wrap: wrap; gap: 12px; }
+  #dealer-panel .dealer-product { display: grid; grid-template-columns: 1fr; gap: 14px; padding: 16px; }
+  #dealer-panel .dealer-prod-action { justify-content: space-between; }
+  #dealer-panel .dealer-header h2, #talent-panel .talent-header h2 { font-size: 36px; }
+}
+@media (max-width: 460px) {
+  #menu .sign--menu { padding: 16px; }
+  #menu .menu__head { gap: 10px; padding-bottom: 16px; }
+  #menu .menu__title { font-size: 34px; }
+  #menu .menu__sub { font-size: 12px; line-height: 1.4; }
+  #menu .pause-card { padding: 12px; }
+  #menu .pause-tab { font-size: 16px; padding-inline: 2px; letter-spacing: 0; }
+  #menu .pause-card__value { font-size: 23px; }
+  #menu .pause-needs, #menu .pause-section { padding: 14px 12px; }
+  #menu .pause-row { grid-template-columns: 88px minmax(0, 1fr) auto; gap: 8px; }
+  #menu .pause-row > .pause-segmented { grid-column: 1 / -1; }
+  #menu .pause-segmented .btn { font-size: 12px; }
+  #menu .pause-need { grid-template-columns: 90px minmax(0, 1fr) 32px; gap: 8px; font-size: 12px; }
+  #menu .pause-level { gap: 8px; padding: 12px; }
+  #menu .pause-level__xp { font-size: 12px; }
+  #menu .menu__foot > .btn { width: 100%; }
+  #menu .row { grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; }
+  #menu .row > .btn { grid-column: 2 / -1; width: 100%; }
+  #menu .row__price { font-size: 13px; }
+  #menu .row__name { font-size: 14px; }
+  #menu .row__desc { font-size: 12px; }
+  #menu .radio-battery-col { width: 100%; }
+  #menu .radio-battery-col .btn { width: 100%; }
+  #menu .radio-battery-bar { flex: 1; }
+}
+@media (max-height: 540px) and (min-width: 761px) {
+  #menu, #inv-overlay { padding: 12px; }
+  #menu .sign--menu, #inv-overlay .inv-window, #craft-panel, #talent-panel, #dealer-panel { max-height: calc(100dvh - 24px); padding: 16px 22px; }
+  #menu .sign--wide { height: calc(100dvh - 24px); }
+  #menu .menu__head { padding-bottom: 12px; }
+  #menu .menu__title { font-size: 34px; }
+  #menu .menu__body { padding-top: 12px; padding-bottom: 12px; }
+  #menu .pause-tabs { top: -12px; }
+  #menu .pause-tab { min-height: 44px; }
+  #menu .menu__foot { padding-top: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(#menu, #inv-overlay, #craft-panel, #talent-panel, #dealer-panel) *,
+  :is(#menu, #inv-overlay, #craft-panel, #talent-panel, #dealer-panel) *::before,
+  :is(#menu, #inv-overlay, #craft-panel, #talent-panel, #dealer-panel) *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -34,7 +34,8 @@ test('HUD a 375 px conserva radar, controles táctiles y necesidades accesibles 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await startNewGame(page);
 
-  await expect(page.locator('#clock')).toHaveText(/Día 1 — \d{2}:\d{2}/);
+  await expect(page.locator('#clock')).toHaveText(/^\d{2}:\d{2}$/);
+  await expect(page.locator('#day-display')).toHaveText('Día 1');
   await expect(page.locator('#money')).not.toBeEmpty();
   await expect(page.locator('#hud-vitals [data-stat="salud"]')).toBeVisible();
   await expect(page.locator('#hud-vitals [data-stat="energia"]')).toBeVisible();
@@ -94,7 +95,7 @@ test('HUD a 375 px conserva radar, controles táctiles y necesidades accesibles 
 
   // En móvil los controles están visibles sin hover. Comprobar también que
   // reciben el clic: un botón puede tener 44 px y seguir tapado por el canvas.
-  const buttons = page.locator('#game-settings button, #needs-toggle, #camera-toggle, #inventory-open, #controls-help-toggle, .radar__tools button');
+  const buttons = page.locator('#game-settings button, #needs-toggle, #camera-toggle, #panel-dock .dock-btn, #controls-help-toggle, .radar__tools button');
   for (const button of await buttons.all()) {
     await expect(button).toBeVisible();
     const rect = await button.boundingBox();

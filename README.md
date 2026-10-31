@@ -8,6 +8,8 @@ Este proyecto es un fork de [juanagogo/bazuko](https://github.com/juanagogo/bazu
 
 ## Características
 
+- Identidad urbana BAZUKO: HUD por zonas, menús de asfalto y amarillo taxi, tipografía condensada, inventario y fabricación coherentes, carga ilustrada y creador adaptable. [Sistema visual](docs/identidad-visual.md).
+
 - Carrocerías diferenciadas de carros y taxis bogotanos, ruedas con dirección, stops y direccionales, limpiaparabrisas con lluvia. [Vehículos y comprobación](docs/vehiculos-bogota.md).
 
 - Edificios con marcos, rejas y azoteas; arbolado de tres siluetas con ramas y hojas al viento, pastos y jardines agrupados en los parques de Bogotá.

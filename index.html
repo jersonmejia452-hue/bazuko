@@ -11,6 +11,9 @@
   <link rel="stylesheet" href="/src/ui/menus.css" />
   <link rel="stylesheet" href="/src/ui/visual-identity.css" />
   <link rel="stylesheet" href="/src/ui/photo-mode.css" />
+  <link rel="stylesheet" href="/src/ui/urban-hud.css" />
+  <link rel="stylesheet" href="/src/ui/urban-panels.css" />
+  <link rel="stylesheet" href="/src/ui/urban-entry.css" />
 </head>
 <body class="is-loading">
 <section id="loading-screen" aria-label="Carga del juego">
@@ -34,6 +37,7 @@
 </section>
 <div id="app">
   <canvas id="game-canvas"></canvas>
+  <div class="street-brand" aria-hidden="true"><strong>BAZUKO</strong><span>Bogotá<br>D. C.</span></div>
 
   <!-- Radar, signos vitales y estado comparten una columna de ancho ajustable. -->
   <div id="hud-dock" data-radar-size="m">

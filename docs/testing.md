@@ -111,3 +111,7 @@ node node_modules/@playwright/test/cli.js test --list
 ```
 
 La ejecución con renderizado por software sirve para verificar flujos; sus FPS no representan el rendimiento de una GPU real.
+
+## Identidad de la interfaz
+
+`PLAYWRIGHT_GPU=1 npm run test:e2e:headed -- tests/e2e/identity.spec.js tests/e2e/game.spec.js tests/e2e/upgrade.spec.js` verifica la interfaz BAZUKO con la GPU local: distribución de controles y dinero, inventario con objetos, accesos rápidos, creador, pestañas, mapa/GPS y modo foto. La prueba de identidad incluye escritorio, móvil estrecho y orientación horizontal; los controles deben caber y poder pulsarse sin solaparse. Ver `docs/identidad-visual.md` para paleta y responsabilidades de cada hoja de estilos.

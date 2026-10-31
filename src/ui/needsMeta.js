@@ -2,13 +2,13 @@
 // Nombre, icono (lucide, ver icons.js) y color de cada necesidad; el HUD y la pestaña Estado usan los mismos.
 
 export const NEED_META = [
-  { id: 'hambre', glyph: 'food', label: 'Hambre', color: '#e9a83b' },
-  { id: 'sed', glyph: 'droplet', label: 'Sed', color: '#3d8ef0' },
-  { id: 'energia', glyph: 'zap', label: 'Energía', color: '#a678ff' },
-  { id: 'salud', glyph: 'heart', label: 'Salud', color: '#ec4b4f' },
-  { id: 'higiene', glyph: 'bath', label: 'Higiene', color: '#2fc3ad' },
-  { id: 'animo', glyph: 'smile', label: 'Ánimo', color: '#ef77b6' },
-  { id: 'vicio', glyph: 'cigarette', label: 'Vicio', color: '#b8977a' },
+  { id: 'hambre', glyph: 'food', label: 'Hambre', color: '#efca52' },
+  { id: 'sed', glyph: 'droplet', label: 'Sed', color: '#82b8dc' },
+  { id: 'energia', glyph: 'zap', label: 'Energía', color: '#8fc3cf' },
+  { id: 'salud', glyph: 'heart', label: 'Salud', color: '#97c887' },
+  { id: 'higiene', glyph: 'bath', label: 'Higiene', color: '#75bfa8' },
+  { id: 'animo', glyph: 'smile', label: 'Ánimo', color: '#cc9cae' },
+  { id: 'vicio', glyph: 'cigarette', label: 'Vicio', color: '#c5ad8b' },
 ];
 
 /** Bajo este valor la necesidad se resalta; bajo el crítico, parpadea. */

@@ -1,4 +1,7 @@
 import '@fontsource/overpass/600.css';
+import '@fontsource/overpass/400.css';
+import '@fontsource/barlow-condensed/700.css';
+import '@fontsource/barlow-condensed/800.css';
 import '@fontsource/overpass/800.css';
 import '@fontsource/overpass/900.css';
 import { LoadingScreen } from './ui/LoadingScreen.js';
