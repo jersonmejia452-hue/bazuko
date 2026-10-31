@@ -137,6 +137,17 @@ test('el personaje procedural recibe salto y nado con el mismo contrato de movim
   assert.deepEqual(character.group.position.toArray(), [0, 0, 0]);
 });
 
+test('en el modelo liviano calentarse sube las manos y echar a andar las baja', () => {
+  const character = createCharacter();
+  const arm = () => character.ragdollRig.rightArm.rotation.x;
+  for (let frame = 0; frame < 30; frame++) character.update(1 / 60, { speed: 0, action: 'calentarse', actionProgress: .5 });
+  const warming = arm();
+  assert.ok(warming < -1, 'las manos van al frente');
+  for (let frame = 0; frame < 30; frame++) character.update(1 / 60, { speed: 2, action: 'calentarse', actionProgress: .5 });
+  assert.ok(Math.abs(arm()) < .7, 'andando los brazos vuelven a su balanceo');
+  character.dispose();
+});
+
 test('la estatura corta personalizada mantiene cabeza fuera del agua sin elevar la raíz física', () => {
   const character = createCharacter({ estatura: .92 });
   for (let frame = 0; frame < 30; frame++) character.update(1 / 60, { speed: 2.6, movement: { swimming: true, surfaceY: 1.05 } });

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { preparePlayback, blendAnimationWeights, transitionRate } from '../src/character/AnimationPlayback.js';
+import { preparePlayback, blendAnimationWeights, transitionRate, HipBlend } from '../src/character/AnimationPlayback.js';
 
 function fixture() {
   const root = new THREE.Object3D();
@@ -74,4 +74,28 @@ test('interrumpir, retomar y liberar el reloj dirigido no deja acciones pausadas
   assert.equal(actions.pedir.loop, THREE.LoopRepeat);
   assert.equal(actions.pedir.paused, false);
   assert.equal(actions.pedir.time, 1, 'el clip compartido vuelve a su ciclo natural');
+});
+
+test('la cadera no baja de más a media mezcla y el mezclador recibe su base intacta', () => {
+  const hips = new THREE.Bone();
+  hips.name = 'mixamorigHips';
+  hips.position.y = 1;
+  const clip = (name, y) => new THREE.AnimationClip(name, 1, [new THREE.VectorKeyframeTrack(`${hips.name}.position`, [0, 1], [0, y, 0, 0, y, 0])]);
+  const action = c => ({ getClip: () => c, time: .5 });
+  const blend = new HipBlend({ idle: action(clip('idle', 1)), walk: action(clip('walk', .2)), buscar: action(clip('buscar', .4)), sinCadera: action(new THREE.AnimationClip('sinCadera', 1, [])) }, hips);
+  assert.deepEqual(blend.gestures.map(gesture => gesture.name), ['buscar'], 'la locomoción no se toca');
+
+  hips.position.y = .7; // lo que deja el mezclador con la mitad del peso
+  blend.apply({ idle: .5, buscar: .5 });
+  assert.ok(Math.abs(hips.position.y - .85) < 1e-6, 'a media mezcla baja un cuarto del gesto, no la mitad');
+  blend.restore();
+  assert.ok(Math.abs(hips.position.y - .7) < 1e-6);
+  blend.restore();
+  assert.ok(Math.abs(hips.position.y - .7) < 1e-6, 'restaurar dos veces no pisa al mezclador');
+
+  // Quieto en el gesto o de pie, la pose del clip manda.
+  for (const weights of [{ idle: 1, buscar: 0 }, { idle: 0, buscar: 1 }]) {
+    blend.apply(weights);
+    assert.equal(blend.active, false);
+  }
 });

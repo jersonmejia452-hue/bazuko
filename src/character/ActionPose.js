@@ -59,6 +59,8 @@ export class ActionPose {
     this.glance = 0;
     this.greetWeight = 0;
     this.greetTime = 0;
+    this.warmWeight = 0;
+    this.warmTime = 0;
     this._frameQ = new Quaternion();
     this._worldQ = new Quaternion();
     this._parentQ = new Quaternion();
@@ -124,6 +126,12 @@ export class ActionPose {
     if (airborne || swim || landing || (action && action !== 'saludo') || attack || smoke || basuco != null || point || speed >= .15) this.greetWeight = 0;
     if (!greet && this.greetWeight < .001) this.greetWeight = this.greetTime = 0;
     if (this.greetWeight) this.greetTime += elapsed;
+    const warm = !this.procedural && action === 'calentarse' && !airborne && !swim && !landing && speed < .15;
+    this.warmWeight += ((warm ? 1 : 0) - this.warmWeight) * -Math.expm1(-(warm ? 7 : 6) * elapsed);
+    // Andar baja las manos de a poco; otro dueño de las manos las necesita de una vez.
+    if (airborne || swim || landing || (action && action !== 'calentarse') || (!warm && (attack || smoke || basuco != null || point))) this.warmWeight = 0;
+    if (!warm && this.warmWeight < .001) this.warmWeight = this.warmTime = 0;
+    if (this.warmWeight) this.warmTime += elapsed;
     const handsBlocked = swim || airborne || landing > 0 || hit || (action && !['golpear', 'basuco'].includes(action));
     // Un dueño de manos por vez. El agua, el vuelo y los impactos cancelan incluso
     // los restos de una transición; no se suman un puñetazo y una calada al mismo brazo.
@@ -157,7 +165,7 @@ export class ActionPose {
     if (handsBlocked) this.glance = 0;
     const gestures = attack || smoke || basuco != null || point > 0 || this.melee?.active || this.smoke?.active || this.pipe?.active || this.point?.active || Math.abs(this.glance) > .002;
     // El LOD mantiene animación barata salvo una reacción de combate visible.
-    if (this.lod && !punch && !hit && !gestures && !this.greetWeight) return;
+    if (this.lod && !punch && !hit && !gestures && !this.greetWeight && !this.warmWeight) return;
     const swimTarget = swim ? Math.min(3, Math.max(0, finite(speed))) : 0;
     const speedBlend = -Math.expm1(-12 * elapsed);
     // Integrar la velocidad suavizada analíticamente conserva la fase a distintos FPS.
@@ -165,8 +173,8 @@ export class ActionPose {
     this.swimSpeed += (swimTarget - this.swimSpeed) * speedBlend;
     this.swimWeight += ((swim ? 1 : 0) - this.swimWeight) * -Math.expm1(-14 * elapsed);
     if (!swim && this.swimWeight < .001) this.swimWeight = this.swimLift = 0;
-    if (!swim && !this.swimWeight && !airborne && !landing && !punch && !hit && !gestures && !this.greetWeight) return;
-    if (action && !punch && !hit && !swim && !gestures && action !== 'saltar' && action !== 'aterrizar' && !this.greetWeight) return;
+    if (!swim && !this.swimWeight && !airborne && !landing && !punch && !hit && !gestures && !this.greetWeight && !this.warmWeight) return;
+    if (action && !punch && !hit && !swim && !gestures && action !== 'saltar' && action !== 'aterrizar' && !this.greetWeight && !this.warmWeight) return;
     this.time += swim || this.swimWeight ? .8 * elapsed + .25 * speedIntegral : elapsed;
     this.frame?.getWorldQuaternion(this._frameQ) ?? this._frameQ.identity();
     for (const slot of this.slots.values()) {
@@ -193,6 +201,7 @@ export class ActionPose {
     }
     if (hit) this._hit(clamp(finite(actionProgress)));
     if (this.greetWeight) this._greet(this.greetWeight);
+    if (this.warmWeight) this._warm(this.warmWeight);
   }
 
   _jump(movement, airborne, landing, speed = 0) {
@@ -269,6 +278,19 @@ export class ActionPose {
     this._aim('rightArm', -.65, .50, .12, weight);
     this._aim('rightForeArm', -.08 + wave * .18, .96, .12, weight);
     this._rotate('rightHand', 0, .08, wave * .20, weight);
+  }
+
+  _warm(weight) {
+    // Las dos manos hacia el calor y los hombros sueltos; el vaivén lento no se confunde con temblar.
+    const drift = Math.sin(this.warmTime * 1.7) * .03;
+    this._rotate('spine', .07, 0, 0, weight);
+    this._rotate('head', .05, 0, 0, weight);
+    for (const [side, name] of [[1, 'left'], [-1, 'right']]) {
+      // Codos bajos y antebrazos casi planos: con el brazo recto y a la altura del hombro parece guardia de boxeo.
+      this._aim(`${name}Arm`, side * .2, -.72, .66, weight);
+      this._aim(`${name}ForeArm`, -side * .24, .03 + side * drift, .97, weight);
+      this._rotate(`${name}Hand`, -.35, 0, 0, weight);
+    }
   }
 
   _hit(progress) {

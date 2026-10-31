@@ -325,10 +325,10 @@ test('radar y mapa señalan lo que necesitas: M + Enter traza la ruta a la fogat
   await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Slash', key: '-' })));
   expect(await radarBase()).not.toBe(baseBefore);
 
-  // La fogata del callejón comparte punto con la mesa de crafteo, y E debe seguir calentando ahí.
+  // E calienta junto a la fogata del callejón, entre ella y la mesa de crafteo, que se abre con C.
   await page.evaluate(() => {
     const { player, world, stats } = window.__game;
-    const { x, z } = world.active.reserved.craft;
+    const { x, z } = world.active.fireBarrels[1].position;
     player.position.set(x + 1, player.position.y, z);
     stats.calor = 0;
   });

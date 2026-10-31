@@ -714,6 +714,9 @@ body.is-loading #panel-dock { visibility: hidden; }
   overflow: hidden;
 }
 
+/* Estas capas van sobre la ciudad, no sobre el HUD: sin esto el frío vela la hora y la plata. */
+#app #topbar, #app #camera-controls, #app #poop-hud-ammo { z-index: 12; }
+
 .rain-lens {
   position: absolute;
   inset: 0;
@@ -740,13 +743,18 @@ body.is-loading #panel-dock { visibility: hidden; }
   100% { transform: translateY(-4px); }
 }
 
+/* La opacidad la lleva CinematicOverlays. Sin mezcla: sobre la noche oscura «overlay» casi no se ve. */
 .cold-lens {
   position: absolute;
   inset: 0;
+  display: none;
   opacity: 0;
-  transition: opacity 2s ease;
-  background: radial-gradient(circle at center, transparent 65%, rgba(140, 180, 220, 0.22) 85%, rgba(180, 220, 255, 0.45) 100%);
-  mix-blend-mode: overlay;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(150, 190, 225, 0.16) 80%, rgba(195, 225, 250, 0.42) 100%);
+}
+
+/* Con display, no visibility: un «visible» aquí le ganaría a la capa oculta del modo foto. */
+.cold-lens.active {
+  display: block;
 }
 
 /* Aberración cromática óptica en psicosis */

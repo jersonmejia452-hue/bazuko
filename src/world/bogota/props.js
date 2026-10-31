@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { signTexture } from '../../utils/signs.js';
 import { trashBag, cardboard, radialSprite } from './textures.js';
+import { createFlame, stepFlames } from './flame.js';
 import { createUrbanTree } from './UrbanTrees.js';
 export { foliageWind } from './UrbanTrees.js';
 
@@ -12,7 +13,7 @@ const std = (color, opts = {}) => {
   const parameters = { color, roughness: 0.85, ...opts };
   const material = new THREE.MeshStandardMaterial(parameters);
   // Solo estos materiales inmutables pueden compartir lote entre objetos.
-  // Las llamas y las partes que cambian de opacidad mantienen sus materiales propios.
+  // Las partes que cambian de opacidad mantienen sus materiales propios.
   material.userData.staticMergeKey = `prop:${JSON.stringify(Object.keys(parameters).sort().map(key => [key, parameters[key]?.uuid ?? parameters[key]]))}`;
   return material;
 };
@@ -29,20 +30,18 @@ export function fireBarrel() {
   const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.3, 0.9, 12, 1, true), std('#4a3a2c', { metalness: 0.6, side: THREE.DoubleSide }));
   drum.position.y = 0.45;
   g.add(drum);
-  const flames = [];
-  for (let i = 0; i < 3; i++) {
-    const f = new THREE.Mesh(new THREE.ConeGeometry(0.16 - i * 0.03, 0.5, 7),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(['#ff7a1a', '#ffb347', '#ffd27a'][i]).multiplyScalar(2.5), transparent: true, opacity: 0.85 }));
-    f.position.set(rand(-0.08, 0.08), 1.0, rand(-0.08, 0.08));
-    g.add(f);
-    flames.push(f);
-  }
+  const flame = createFlame(0.82, 1.18);
+  flame.position.y = 0.7;
+  g.add(flame);
   const light = new THREE.PointLight(0xff8a2a, 6, 9, 1.6);
   light.position.y = 1.4;
   g.add(light);
+  const phase = rand(0, Math.PI * 2);
   g.userData.update = (dt, t) => {
-    flames.forEach((f, i) => { const k = 0.8 + Math.sin(t * (13 + i * 5)) * 0.15 + Math.sin(t * (29 + i)) * 0.1; f.scale.set(1, k, 1); });
-    light.intensity = 5 + Math.sin(t * 17) * 1.2 + Math.sin(t * 31) * 0.8;
+    stepFlames(t);
+    // La forma se mece y la luz respira despacio: un parpadeo rápido molesta en toda la calle.
+    flame.scale.y = 1.18 * (1 + Math.sin(t * 1.9 + phase) * 0.05);
+    light.intensity = 5 + Math.sin(t * 2.4 + phase) * 0.35;
   };
   return shadow(g);
 }

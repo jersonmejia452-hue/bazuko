@@ -958,7 +958,7 @@ export class Bogota {
     // canecas con fuego en la olla y el callejón
     // Las fogatas también sirven para calentarse en las noches frías.
     this.fireBarrels = [];
-    for (const [x, z] of [[13, 19], [16.5, 24.5], [10, 21.5], [19.5, 22]]) {
+    for (const [x, z] of [[13, 19], [14.75, 24.5], [10, 21.5], [19.5, 22]]) {
       this._add(P.fireBarrel(), cx(x), cz(z));
       this.fireBarrels.push({ kind: 'fireBarrel', position: new THREE.Vector3(cx(x), 0, cz(z)), title: 'Fogata de caneca' });
     }

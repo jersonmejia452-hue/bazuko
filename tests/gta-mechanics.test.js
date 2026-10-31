@@ -184,3 +184,25 @@ test('Gráficos: SceneManager con seguimiento solar y niebla según lluvia', () 
   const rainFar = mgr.scene.fog.far;
   assert.ok(rainFar < clearFar, 'La bruma de lluvia reduce la distancia de niebla para ambiente de páramo');
 });
+
+test('Voltea en el sitio por el camino corto hacia un punto y andar le devuelve el control', () => {
+  const scene = new THREE.Scene();
+  const input = { axis: { x: 0, z: 0 }, isRunning: false, consumePress() { return false; }, isDown() { return false; } };
+  const player = new Player(scene, input);
+  player.position.set(10, 0, 10);
+  const turned = () => Math.atan2(Math.sin(player.root.rotation.y), Math.cos(player.root.rotation.y));
+  player.root.rotation.y = 3;
+  player.faceTowards(new THREE.Vector3(9, 0, 9.5));
+  const want = Math.atan2(-1, -.5);
+  const first = player.root.rotation.y;
+  player.update(1 / 60, null, null);
+  assert.ok(player.root.rotation.y > first, 'de 3 a -2 rad el camino corto pasa por π');
+  for (let i = 0; i < 90; i++) player.update(1 / 60, null, null);
+  assert.ok(Math.abs(turned() - want) < .02, 'termina mirando el punto');
+  assert.deepEqual([player.position.x, player.position.z], [10, 10], 'no se desplaza al voltear');
+
+  player.faceTowards(new THREE.Vector3(5, 0, 0));
+  input.axis = { x: 0, z: 1 };
+  player.update(1 / 60, null, null);
+  assert.equal(player._faceYaw, null, 'echar a andar cancela el giro pendiente');
+});

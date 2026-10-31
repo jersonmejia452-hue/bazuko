@@ -85,6 +85,9 @@ test('el distrito completo construye y actualiza barrios, vendedores, peatones y
       assert.ok(Object.keys(place.prices).length>0,place.name);
       assert.ok(gps.findPath(city.reserved.spawn,place),`el GPS llega a ${place.name}`);
     }
+    for(const fire of city.fireBarrels) for(const [name,place] of Object.entries(city.reserved)) {
+      assert.ok(Math.hypot(fire.position.x-place.x,fire.position.z-place.z)>=3,`ninguna fogata arde encima de ${name}`);
+    }
     assert.equal(city.pigeonFlocks.length, 3);
     for (const flock of city.pigeonFlocks) {
       assert.equal(flock.birds.length, 10);

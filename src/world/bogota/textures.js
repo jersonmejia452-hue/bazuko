@@ -585,6 +585,50 @@ export function neon({ text, color = '#ff3b6b', w = 512, h = 160, font = 900 }) 
   return t;
 }
 
+/** Atlas de llama: cada cuadro es la misma llama un poco más arriba, así el bucle no salta. */
+export function flameAtlas(columns, rows, cellW = 128, cellH = 256) {
+  const [c, x] = canvas(columns * cellW, rows * cellH);
+  const noise = (i, k) => { const s = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return s - Math.floor(s); };
+  const mix = (a, b, t) => a.map((value, i) => Math.round(value + (b[i] - value) * t));
+  const hot = [255, 218, 128], warm = [255, 138, 40], cool = [206, 58, 18];
+  x.globalCompositeOperation = 'lighter';
+  for (let frame = 0; frame < columns * rows; frame++) {
+    const left = (frame % columns) * cellW, top = Math.floor(frame / columns) * cellH;
+    const phase = frame / (columns * rows);
+    const blob = (px, py, radius, [r, g, b], alpha) => {
+      const cx = left + cellW / 2 + px * cellW, cy = top + cellH - py * cellH, size = radius * cellW;
+      const gradient = x.createRadialGradient(cx, cy, 0, cx, cy, size);
+      gradient.addColorStop(0, `rgba(${r},${g},${b},${alpha})`);
+      gradient.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      x.fillStyle = gradient;
+      // Recortar a la celda evita que un cuadro manche al vecino.
+      const x0 = Math.max(left, cx - size), y0 = Math.max(top, cy - size);
+      x.fillRect(x0, y0, Math.min(left + cellW, cx + size) - x0, Math.min(top + cellH, cy + size) - y0);
+    };
+    blob(0, .16, .36, warm, .8);
+    for (let i = 0; i < 24; i++) {
+      // Multiplicar la fase por un entero conserva el bucle y evita que todas suban igual.
+      const life = (i / 24 + phase * (1 + i % 2)) % 1;
+      const wander = Math.sin((life * 1.5 + noise(i, 2)) * Math.PI * 2) * .07 * life;
+      const px = (noise(i, 1) - .5) * .5 * (1 - life * .8) + wander;
+      const py = .08 + life * (.64 + noise(i, 3) * .18);
+      const color = life < .35 ? mix(hot, warm, life / .35) : mix(warm, cool, (life - .35) / .65);
+      blob(px, py, (.27 * (1 - life) ** .8 + .05) * (.8 + noise(i, 4) * .4), color, Math.min(1, life * 8) * (1 - life) ** 1.1);
+    }
+    for (let i = 0; i < 3; i++) {
+      const life = (noise(i, 5) + phase) % 1;
+      blob(Math.sin((life + noise(i, 6)) * Math.PI * 2) * .16, .48 + life * .46, .02, warm, 1 - life);
+    }
+  }
+  const t = toTexture(c);
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  t.anisotropy = 1;
+  t.generateMipmaps = false;
+  t.minFilter = THREE.LinearFilter;
+  t.repeat.set(1 / columns, 1 / rows);
+  return t;
+}
+
 /** Degradado radial suave (charcos de luz de faros, halos). */
 export function radialSprite(size = 128, inner = 'rgba(255,255,255,1)', outer = 'rgba(255,255,255,0)') {
   const [c, x] = canvas(size, size);

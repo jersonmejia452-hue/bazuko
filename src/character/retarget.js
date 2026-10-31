@@ -51,7 +51,7 @@ function matchRestPose(src, tgtRoot, C) {
 /**
  * Prepara el retarget de srcRoot (esqueleto de las animaciones) a tgtRoot (personaje).
  * Deja el destino en la pose de reposo del origen. Devuelve retarget(clip) → clip horneado
- * solo con rotaciones (animación en el sitio):
+ * con rotaciones y, si se pide, la altura de la cadera (animación en el sitio):
  *   mundoDestino(t) = C · mundoOrigen(t) · reposoOrigen⁻¹ · C⁻¹ · reposoDestino
  *   localDestino(t) = mundoPadreDestino(t)⁻¹ · mundoDestino(t)
  */
@@ -69,9 +69,8 @@ export function createRetargeter(srcRoot, tgtRoot, { preserveHipHeight = false, 
   const restSrc = new Map([...src].map(([n, b]) => [n, b.getWorldQuaternion(new THREE.Quaternion())]));
   const restTgt = new Map([...tgt].map(([n, b]) => [n, b.getWorldQuaternion(new THREE.Quaternion())]));
   const restLocal = new Map([...tgt].map(([n, b]) => [n, b.quaternion.clone()]));
-  const hipName = [...src.keys()].find(n => (hipSpace === 'world'
-    ? n.replace(/[^a-z0-9]/gi, '').replace(/^mixamorig/i, '').toLowerCase() === 'hips'
-    : /(^|:)Hips$/.test(n)) && tgt.has(n));
+  // El cargador de glTF quita los «:» del nombre: mixamorig:Hips llega como mixamorigHips.
+  const hipName = [...src.keys()].find(n => n.replace(/[^a-z0-9]/gi, '').replace(/^mixamorig/i, '').toLowerCase() === 'hips' && tgt.has(n));
   const sourceHip = hipName && src.get(hipName);
   const targetHip = hipName && tgt.get(hipName);
   const sourceHipRest = sourceHip?.position.clone();

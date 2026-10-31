@@ -6,6 +6,7 @@ import { ITEMS, SHOP_ITEMS } from '../src/data/items.js';
 import { StatsSystem } from '../src/systems/StatsSystem.js';
 import { InteractionSystem } from '../src/systems/InteractionSystem.js';
 import { Bogota } from '../src/world/districts/Bogota.js';
+import * as P from '../src/world/bogota/props.js';
 
 beforeEach(() => {
   globalThis.window = new EventTarget();
@@ -110,6 +111,42 @@ test('Calentarse en la fogata restablece ánimo, otorga calor y respeta cooldown
   });
   interaction._warmAtFire(fakeFire);
   assert.equal(warned, true, 'Debe advertir que el calor aún perdura y respetar cooldown');
+});
+
+test('Calentarse voltea hacia la fogata y usa su propio gesto, no el saludo', () => {
+  const calls = [];
+  const interaction = new InteractionSystem(
+    { faceTowards: point => calls.push(['voltea', point]), playAction: (...args) => calls.push(args) },
+    {},
+    { calor: 0, energia: 50, animo: 50 },
+    { play: () => {} },
+    null,
+    null,
+    null
+  );
+  const fire = { kind: 'fireBarrel', position: new THREE.Vector3(3, 0, 4) };
+  interaction._warmAtFire(fire);
+  assert.deepEqual(calls, [['voltea', fire.position], ['calentarse', 2.8]]);
+});
+
+test('La caneca arde con una llama compartida y su luz no parpadea', () => {
+  const a = P.fireBarrel(), b = P.fireBarrel();
+  const flame = g => g.children.find(child => child.isSprite);
+  assert.equal(flame(a).material, flame(b).material, 'todas las fogatas comparten material');
+  assert.equal(a.children.filter(child => child.isMesh && child.geometry.type === 'ConeGeometry').length, 0);
+  const light = a.children.find(child => child.isLight);
+  let peaks = 0, previous = null, rising = false;
+  const seconds = 20;
+  for (let frame = 0; frame < seconds * 60; frame++) {
+    a.userData.update(1 / 60, frame / 60);
+    const value = light.intensity;
+    if (previous !== null) {
+      if (rising && value < previous) peaks++;
+      rising = value > previous;
+    }
+    previous = value;
+  }
+  assert.ok(peaks / seconds <= .5, `la luz oscila a ${(peaks / seconds).toFixed(2)} Hz`);
 });
 
 test('El Frío de La Nevera (noche lluviosa) penaliza al jugador si no tiene calor', () => {

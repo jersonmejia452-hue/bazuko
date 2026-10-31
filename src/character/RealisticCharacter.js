@@ -7,7 +7,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { ACTIONFORGE_CLIPS, buildCharacterClips } from './actionforge.js';
 import { buildMixamoPreviewClips, buildMixamoGameComplements, isMixamoProfile, resolveAnimationProfile } from './animationProfiles.js';
-import { groundMixamoClips, MixamoGroundContact } from './mixamoGrounding.js';
+import { groundLocomotion, groundMixamoClips, MixamoGroundContact } from './mixamoGrounding.js';
 import { locomotionBlend, locomotionRate, measureLocomotion } from './locomotion.js';
 import { DEFAULT_LOOK, PALETTES } from './look.js';
 import { addGrime, addHairTone } from './weathering.js';
@@ -18,7 +18,7 @@ import { attachBasucoProps } from './pipe.js';
 import { addHatClip, hatEdgeProfile } from './hatFit.js';
 import { animationDamping, SecondaryMotion } from './SecondaryMotion.js';
 import { ActionPose } from './ActionPose.js';
-import { preparePlayback, blendAnimationWeights } from './AnimationPlayback.js';
+import { preparePlayback, blendAnimationWeights, HipBlend } from './AnimationPlayback.js';
 
 const MODEL_BASE = `${import.meta.env?.BASE_URL ?? '/'}models/`;
 const BASE = `${MODEL_BASE}personaje/`;
@@ -146,7 +146,7 @@ async function clipsForBody(bodyId, bodyGltf, profile) { // bodyId incluye el ni
       // El banco anterior (2 MB con mallas y texturas) solo se descarga si falta locomoción.
       const complete = actionforge && ['idle', 'walk', 'run']
         .every(key => actionforge.animations.some(clip => clip.name === ACTIONFORGE_CLIPS[key]));
-      const clips = buildCharacterClips(bodyGltf, complete ? null : await loadAnimations(), actionforge);
+      const clips = groundLocomotion(bodyGltf.scene, buildCharacterClips(bodyGltf, complete ? null : await loadAnimations(), actionforge));
       if (clips.walk) clips.walk.userData.locomotion = measureLocomotion(bodyGltf.scene, clips.walk, clips.run);
       return clips;
     })().catch(error => {
@@ -349,7 +349,9 @@ async function buildInstance(catalog, look, lod = false, profile = resolveAnimat
   const secondaryMotion = lod ? null : new SecondaryMotion(bones, seed);
   const actionPose = new ActionPose(bones, { lod, frame: root });
   const groundContact = isMixamoProfile(profile.id) ? new MixamoGroundContact(root) : null;
-  return { root, bones, mixer, actions, real, appearanceProfile: appearance, accessories, secondaryMotion, actionPose, groundContact, playback: {}, phase: 0, runShare: 0, ownedGeometries: bodyMesh ? [bodyMesh.geometry] : [] };
+  const hipBone = [...bones.values()].find(bone => /hips$/i.test(bone.name));
+  const hipBlend = groundContact || !hipBone ? null : new HipBlend(actions, hipBone);
+  return { root, bones, mixer, actions, real, appearanceProfile: appearance, accessories, secondaryMotion, actionPose, groundContact, hipBlend, playback: {}, phase: 0, runShare: 0, ownedGeometries: bodyMesh ? [bodyMesh.geometry] : [] };
 }
 
 /** Solo recursos de instancia; los modelos y texturas del banco siguen compartidos. */
@@ -359,6 +361,7 @@ export function disposeRealisticInstance(instance) {
   instance.groundContact?.restore();
   instance.actionPose?.restore();
   instance.secondaryMotion?.restore();
+  instance.hipBlend?.restore();
   instance.weapon?.dispose();
   instance.cigarette?.dispose();
   instance.basucoProps?.dispose();
@@ -537,7 +540,9 @@ export async function createRealisticCharacter(look = {}, { lod = false, animaci
       inst.groundContact?.restore();
       inst.actionPose.restore();
       inst.secondaryMotion?.restore();
+      inst.hipBlend?.restore();
       inst.mixer.update(dt);
+      inst.hipBlend?.apply(weights);
       inst.secondaryMotion?.apply(dt, {
         speed: gaitSpeed, load, phase: inst.phase, turnRate: movement.turnRate,
         action: handsBlocked || attack || smoke || pipeAllowed || point ? 'gesture' : action

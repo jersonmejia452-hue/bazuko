@@ -564,7 +564,7 @@ export class Game {
     this.interaction.register(this.dealer);
 
     // ===== Mesa de crafteo =====
-    // No es objetivo de E: se abre con C, y ganaría el empate con la fogata que comparte su punto.
+    // No es objetivo de E: se abre con C.
     this.craftingStation = new CraftingStation(
       this.sceneMgr.scene,
       new THREE.Vector3(
@@ -1125,7 +1125,7 @@ export class Game {
     const travelled = this.player.isGrounded === false || this.player.inWater ? 0 : Math.hypot(this.player.position.x - previousX, this.player.position.z - previousZ);
     this.audio.updateSteps(moving, this.input.isRunning, groundType, isRaining, travelled, dt);
     this.audio.updateBoost(this.interaction.boostActive);
-    this.overlays?.update?.(dt, this.weather, this.clock, this.psychosis);
+    this.overlays?.update?.(dt, this.weather, this.stats, this.psychosis);
     this.profiler?.mark?.('entidadesClimaAudio');
 
     // 12. Render
@@ -1203,7 +1203,7 @@ export class Game {
     if (!this._poiCache || now - this._poiCacheTime >= 350 || this._poiDogFriend !== friend) {
       const district = this.world?.active;
       const reserved = district?.reserved ?? {};
-      // Puestos y fogatas van primero para que los lugares fijos queden encima (la fogata del callejón comparte punto con el Crafteo).
+      // Puestos y fogatas van primero para que los lugares fijos queden encima.
       const services = district?.vendors ? (this._services ??= servicePlaces(district)) : [];
       this._poiCache = [...services, ...[[this.cambuche, reserved.bed, 'Cambuche', '⛺', '#ffd166'],
         [this.sellPoint, reserved.sell, 'Recicladora El Progreso', '♻️', '#2ab7ca', { prices: { vender: 0 } }],

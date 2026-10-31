@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { CHARACTER_SCALE } from '../utils/constants.js';
 import { createImportedModel, disposeImportedInstance } from '../utils/ImportedModels.js';
+import { createFlame, stepFlames } from '../world/bogota/flame.js';
 
 export class Cambuche {
   constructor(scene, position) {
@@ -103,9 +104,8 @@ export class Cambuche {
       c.position.set(Math.cos(a) * 0.18, 0.06, Math.sin(a) * 0.18);
       fogon.add(c);
     }
-    const fireMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff7a1a').multiplyScalar(4), transparent: true, opacity: 0.9 });
-    this.fire = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.32, 8), fireMat);
-    this.fire.position.y = 0.2;
+    this.fire = createFlame(0.46, 0.66);
+    this.fire.position.y = 0.04;
     fogon.add(this.fire);
     this.fireLight = new THREE.PointLight(0xff8a2a, 2.5, 5);
     this.fireLight.position.y = 0.4;
@@ -174,9 +174,9 @@ export class Cambuche {
   update(dt) {
     this.t += dt;
     const t = this.t;
-    const f = 0.85 + Math.sin(t * 17) * 0.08 + Math.sin(t * 29) * 0.07;
-    this.fire.scale.set(1, f * 1.1, 1);
-    this.fireLight.intensity = 2 + f;
+    stepFlames(t);
+    this.fire.scale.y = 0.66 * (1 + Math.sin(t * 1.9) * 0.05);
+    this.fireLight.intensity = 2.85 + Math.sin(t * 2.4) * 0.2;
     this.flame.scale.setScalar(0.9 + Math.sin(t * 11) * 0.1);
     this.marker.material.opacity = 0.35 + Math.sin(t * 2) * 0.15;
   }

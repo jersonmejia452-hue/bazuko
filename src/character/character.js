@@ -560,6 +560,16 @@ export function createCharacter(initial = DEFAULT_LOOK) {
         target.elbR = -.65; target.headY = -.06; target.headX = -.03;
         break;
       }
+      case 'calentarse': {
+        const p = progress(2.8);
+        // Echar a andar baja las manos, igual que en el modelo realista.
+        gestureWeight = gaitSpeed < .15 ? ease(0, .2, p) * (1 - ease(.86, 1, p)) : 0;
+        target.armLx = target.armRx = -1.25;
+        target.armLz = -.16; target.armRz = .16;
+        target.elbL = target.elbR = -.42;
+        target.lean = .07; target.headX = .09;
+        break;
+      }
       case 'dormir':
         target.lie = 1;
         target.lean = target.twist = target.sway = 0;

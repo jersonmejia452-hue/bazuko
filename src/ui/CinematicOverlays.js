@@ -12,20 +12,22 @@ export class CinematicOverlays {
 
     this.rainIntensity = 0;
     this.coldIntensity = 0;
+    this._coldOpacity = '0.000';
 
     this._initElements();
   }
 
   _initElements() {
     if (typeof document === 'undefined') return;
+    // Las gotas siguen sin conectar en index.html: seis puntos fijos parecen polvo en la pantalla.
     this.rainEl = document.getElementById('cinematic-rain');
     this.coldEl = document.getElementById('cinematic-cold');
     this.psychosisOverlayEl = document.getElementById('psychosis-overlay');
   }
 
-  update(dt, weather, clock, psychosis) {
+  update(dt, weather, stats, psychosis) {
     if (typeof document === 'undefined') return;
-    if (!this.rainEl || !this.coldEl) this._initElements();
+    if (!this.coldEl) this._initElements();
 
     // 1. Gotas de lluvia en lente: más densas con aguacero y tormenta
     const isRaining = weather?.isRaining ?? false;
@@ -39,16 +41,17 @@ export class CinematicOverlays {
       }
     }
 
-    // 2. Frío bogotano: madrugadas y noches, heladas de temporada seca, lluvia y viento
-    const h = clock?.hour ?? 12;
-    const isColdHour = h < 6.5 || h > 21.0;
-    const chill = (isRaining ? 0.15 * (weather.rainIntensity ?? 1) : 0) + 0.1 * Math.max(0, (weather?.windStrength ?? 0) - 0.5);
-    const targetCold = Math.min(0.85, (isColdHour ? 0.65 + (weather?.season?.cold ?? 0) * 0.6 : 0) + chill);
-    this.coldIntensity += (targetCold - this.coldIntensity) * Math.min(1, dt * 0.8);
-    if (this.coldEl) {
-      this.coldEl.style.opacity = this.coldIntensity.toFixed(3);
+    // 2. Frío: el mismo que debilita al jugador. Se mete de a poco y la fogata lo quita rápido.
+    const targetCold = stats?.isFreezing ? 0.7 + 0.3 * Math.min(1, weather?.rainIntensity ?? 0) : 0;
+    const coldRate = targetCold > this.coldIntensity ? 0.12 : 1.6;
+    this.coldIntensity += (targetCold - this.coldIntensity) * Math.min(1, dt * coldRate);
+    if (this.coldIntensity < 0.002 && !targetCold) this.coldIntensity = 0;
+    const coldOpacity = this.coldIntensity.toFixed(3);
+    if (this.coldEl && coldOpacity !== this._coldOpacity) {
+      this._coldOpacity = coldOpacity;
+      this.coldEl.style.opacity = coldOpacity;
       if (typeof this.coldEl.classList?.toggle === 'function') {
-        this.coldEl.classList.toggle('active', this.coldIntensity > 0.05);
+        this.coldEl.classList.toggle('active', this.coldIntensity > 0);
       }
     }
 

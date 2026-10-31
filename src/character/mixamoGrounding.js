@@ -85,8 +85,44 @@ export class MixamoGroundContact {
   }
 }
 
+/**
+ * Con la cadera animada, la pisada de correr clava el pie en el suelo. Caminar y correr
+ * no bajan de donde apoya el cuerpo de pie, medido con el mismo cuerpo que los usa.
+ */
+export function groundLocomotion(visibleRoot, clips) {
+  const root = clone(visibleRoot), support = createSkinSupport(root);
+  if (!clips.idle || !clips.walk || !support.vertexCount) return clips;
+  const mixer = new AnimationMixer(root);
+  mixer.clipAction(clips.idle).play();
+  mixer.setTime(0);
+  // Aquí no hay zapatos, que se ponen por instancia: al rodar el pie, la suela baja unos 2 cm más que la piel.
+  const clearance = support.minimumY() + .02;
+  mixer.stopAllAction(); mixer.uncacheRoot(root);
+  const { walk, run } = clips;
+  // El banco salta hasta 50° por cuadro: sin suavizar, la cadera temblaría al compensar cada pisada.
+  return { ...clips, ...groundMixamoClips(visibleRoot, run ? { walk, run } : { walk }, { clearance, smooth: .05 }) };
+}
+
+/** Cubre cada subida con un máximo y la redondea con una media, en ciclo: nunca queda por debajo del original. */
+function smoothLifts(lifts, radius) {
+  const count = lifts.length - 1;
+  const around = (source, i, read) => {
+    for (let d = -radius; d <= radius; d++) read(source[(i + d + count) % count]);
+  };
+  const covered = lifts.map((_, i) => {
+    let top = 0;
+    around(lifts, i, sample => { top = Math.max(top, sample); });
+    return top;
+  });
+  return covered.map((_, i) => {
+    let sum = 0;
+    around(covered, i, sample => { sum += sample; });
+    return sum / (radius * 2 + 1);
+  });
+}
+
 /** Hornea solo altura de pelvis; conserva duración, rotaciones y fases de vuelo. */
-export function groundMixamoClips(visibleRoot, clips, { fps = 60, clearance = .004 } = {}) {
+export function groundMixamoClips(visibleRoot, clips, { fps = 60, clearance = .004, smooth = 0 } = {}) {
   const root = clone(visibleRoot);
   let hips;
   root.traverse(node => { if (node.isBone && /(?:mixamorig|:)Hips$|^Hips$/.test(node.name)) hips = node; });
@@ -100,14 +136,20 @@ export function groundMixamoClips(visibleRoot, clips, { fps = 60, clearance = .0
     action.reset().play();
     const frames = Math.max(2, Math.ceil(source.duration * fps) + 1);
     const times = new Float32Array(frames), positions = new Float32Array(frames * 3);
-    let maxLift = 0;
+    let lifts = new Float32Array(frames);
     for (let i = 0; i < frames; i++) {
       const time = Math.min(source.duration, i / fps);
       times[i] = time;
       mixer.setTime(time);
-      const low = support.minimumY();
-      const lift = Math.max(0, clearance - low);
-      maxLift = Math.max(maxLift, lift);
+      lifts[i] = Math.max(0, clearance - support.minimumY());
+    }
+    const maxLift = lifts.reduce((a, b) => Math.max(a, b), 0);
+    if (smooth) lifts = smoothLifts(lifts, Math.round(smooth * fps));
+    action.reset().play(); // al llegar al final quedó en pausa
+    for (let i = 0; i < frames; i++) {
+      mixer.setTime(times[i]);
+      root.updateMatrixWorld(true);
+      const lift = lifts[i];
       hips.getWorldPosition(point);
       // La instancia aún no está unida al mundo. Resolver el desplazamiento en
       // espacio de raíz también mantiene correcto cualquier padre del esqueleto.

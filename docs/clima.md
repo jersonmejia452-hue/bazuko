@@ -38,7 +38,7 @@ El shader de la cúpula (`src/core/Scene.js`) dibuja degradado, disco solar, lun
 - Las ondas en el piso aumentan con la intensidad (hasta 36 instancias).
 - En tormenta y, a veces, en aguacero, los relámpagos iluminan nubes, cielo y escena con un doble destello. El evento `weather-lightning` dispara un trueno sintetizado con el retraso del sonido según la distancia; pasa por `_fx()` y el volumen maestro.
 - El bucle de lluvia ajusta su volumen según la intensidad.
-- Las gotas en la lente y el frío en pantalla dependen de la intensidad, el viento y la temporada.
+- Los bordes de la pantalla se enfrían mientras el jugador se está congelando: el frío entra de a poco, pesa más con lluvia y se va en un par de segundos junto al fuego.
 
 ## Interfaz
 

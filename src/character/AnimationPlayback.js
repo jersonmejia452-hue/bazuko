@@ -53,3 +53,41 @@ export function blendAnimationWeights(weights, target, dt, rate = 10) {
   // Evita introducir la pose de enlace al retirar los restos de otro clip.
   if (total > 0) for (const key of Object.keys(weights)) weights[key] /= total;
 }
+
+/**
+ * La cadera se mezcla en línea recta, pero doblar las rodillas apenas la baja al principio:
+ * a media mezcla ya bajó de más y los pies atraviesan el suelo. Lo que baja de verdad sigue
+ * más o menos al cuadrado del peso, así que se devuelve w·(1−w) de la bajada de cada gesto.
+ */
+export class HipBlend {
+  constructor(actions, hips) {
+    this.hips = hips;
+    this.saved = 0;
+    this.active = false;
+    const heightOf = action => action?.getClip().tracks.find(track => track.name === `${hips.name}.position`);
+    this.standing = heightOf(actions.idle)?.values[1] ?? hips.position.y;
+    this.gestures = Object.entries(actions)
+      .filter(([name]) => !['idle', 'walk', 'run'].includes(name))
+      .map(([name, action]) => ({ name, action, track: heightOf(action), height: null }))
+      .filter(gesture => gesture.track);
+  }
+
+  restore() {
+    if (this.active) this.hips.position.y = this.saved;
+    this.active = false;
+  }
+
+  apply(weights) {
+    let lift = 0;
+    for (const gesture of this.gestures) {
+      const weight = weights[gesture.name] ?? 0;
+      if (weight <= 0 || weight >= 1) continue;
+      gesture.height ??= gesture.track.createInterpolant();
+      lift += weight * (1 - weight) * Math.max(0, this.standing - gesture.height.evaluate(gesture.action.time)[1]);
+    }
+    if (lift <= 0) return;
+    this.saved = this.hips.position.y;
+    this.hips.position.y += lift;
+    this.active = true;
+  }
+}

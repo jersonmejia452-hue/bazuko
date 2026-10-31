@@ -16,6 +16,7 @@ import { WEAPONS, DEFAULT_WEAPON } from '../data/weapons.js';
 import { SMOKE_DURATION, PUFF_INTERVAL, FIRST_PUFF, PUFF, PUFF_LENGTH, isExhaling, smokable, SmokePuffs } from '../character/smoking.js';
 import { BASUCO, BASUCO_LENGTH, BASUCO_TOTAL, isBasucoExhaling } from '../character/pipe.js';
 
+const shortestTurn = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
 const emit = (type, detail) => {
   if (typeof window !== 'undefined' && window.dispatchEvent) window.dispatchEvent(new CustomEvent(type, { detail }));
 };
@@ -75,7 +76,7 @@ export class Player {
     this.speed = 0;
     this.state = 'idle';
     this.load = 0;            // 0..1: llenado del costal (tamaño del saco)
-    this.action = null;       // 'pedir' | 'buscar' | 'comer' | 'dormir' | 'saludo'
+    this.action = null;       // 'pedir' | 'buscar' | 'comer' | 'dormir' | 'saludo' | 'calentarse'
     this.actionTimer = 0;
     this.actionDuration = 0;
     this.actionProgress = 0;
@@ -350,6 +351,11 @@ export class Player {
     this.root.add(this.character.group);
   }
 
+  /** Voltea en el sitio hacia un punto; echar a andar le devuelve el control. */
+  faceTowards(point) {
+    this._faceYaw = Math.atan2(point.x - this.position.x, point.z - this.position.z);
+  }
+
   /** Anima una acción breve (segundos) */
   playAction(action, duration = 1) {
     if (action !== 'golpear') this.melee?.cancel();
@@ -609,10 +615,8 @@ export class Player {
     const previousYaw = this.root.rotation.y;
     // Rotación suave
     if (moving) {
-      const targetAngle = Math.atan2(dir.x, dir.z);
-      let diff = targetAngle - this.root.rotation.y;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
+      this._faceYaw = null;
+      const diff = shortestTurn(Math.atan2(dir.x, dir.z) - this.root.rotation.y);
       // Al levantarse voltea solo lo que ya se enderezó: acostado barrería el piso como una aspa.
       const upright = 1 - (this.character.sleepWeight ?? 0);
       this.root.rotation.y += diff * Math.min(1, 14 * dt) * upright;
@@ -625,6 +629,11 @@ export class Player {
     } else {
       this.root.rotation.z = THREE.MathUtils.lerp(this.root.rotation.z, 0, 1 - Math.exp(-12 * dt));
       this.root.rotation.x = THREE.MathUtils.lerp(this.root.rotation.x, 0, 1 - Math.exp(-10 * dt));
+      if (this._faceYaw != null) {
+        const diff = shortestTurn(this._faceYaw - this.root.rotation.y);
+        this.root.rotation.y += diff * Math.min(1, 9 * dt);
+        if (Math.abs(diff) < .01) this._faceYaw = null;
+      }
     }
 
     // Resolver primero agua, apoyo y orientación evita contactos desde la posición anterior.

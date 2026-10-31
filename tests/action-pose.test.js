@@ -209,6 +209,34 @@ test('saludar articula mano y antebrazo y vuelve al clip sin arrastrar los pies'
   assert.deepEqual(snapshot(root), base);
 });
 
+test('calentarse lleva las dos manos al frente, no mueve los pies y andar las baja de a poco', () => {
+  const { root, bones } = bodyRig(), pose = new ActionPose(bones, { frame: root });
+  const base = snapshot(root), support = lowest(pose);
+  for (let i = 0; i < 60; i++) pose.apply(1 / 60, { action: 'calentarse' });
+  for (const name of ['left', 'right']) {
+    const forearm = direction(pose, `${name}ForeArm`);
+    assert.ok(forearm.z > .85, `${name}: antebrazo hacia la fogata`);
+    assert.ok(Math.abs(forearm.y) < .3, `${name}: a la altura del pecho, no sobre la cabeza`);
+  }
+  assert.equal(lowest(pose), support);
+  const step = pose.warmWeight;
+  pose.apply(1 / 60, { action: 'calentarse', speed: 2 });
+  assert.ok(pose.warmWeight > step * .8 && pose.warmWeight < step, 'echar a andar no corta el gesto de un golpe');
+  for (let i = 0; i < 120; i++) pose.apply(1 / 60, { speed: 2 });
+  assert.equal(pose.warmWeight, 0);
+  pose.restore();
+  assert.deepEqual(snapshot(root), base);
+});
+
+test('calentarse se ve aunque esté fumando y le cede las manos a un golpe', () => {
+  const { bones } = bodyRig(), pose = new ActionPose(bones);
+  for (let i = 0; i < 40; i++) pose.apply(1 / 60, { action: 'calentarse', smoke: { puff: 1.2 } });
+  assert.ok(pose.warmWeight > .9, 'las manos van al fuego con el cigarrillo encima');
+  pose.apply(1 / 60, { action: 'golpear', actionProgress: .1 });
+  assert.equal(pose.warmWeight, 0);
+  pose.restore();
+});
+
 test('un golpe nuevo cancela el saludo anterior y la reacción absorbe sin perder suelo', () => {
   const a = bodyRig(), b = bodyRig();
   const pose = new ActionPose(a.bones), clean = new ActionPose(b.bones);

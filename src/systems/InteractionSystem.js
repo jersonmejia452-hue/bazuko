@@ -229,7 +229,8 @@ export class InteractionSystem {
       return;
     }
     this._lastWarmTime = now;
-    this.player?.playAction?.('saludo', 2.0);
+    this.player?.faceTowards?.(target.position);
+    this.player?.playAction?.('calentarse', 2.8);
     this.stats.calor = Math.min(300, (this.stats.calor || 0) + 180);
     this.stats.energia = Math.min(100, (this.stats.energia || 0) + 8);
     this.stats.animo = Math.min(100, (this.stats.animo || 0) + 12);
