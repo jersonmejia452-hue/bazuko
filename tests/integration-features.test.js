@@ -24,16 +24,18 @@ beforeEach(() => {
 
 test('los perfiles respetan su límite de resolución incluso después de la adaptación automática', () => {
   const renderer = Object.assign(Object.create(Renderer.prototype), {
-    resolution: new AdaptiveResolution(2),
-    instance: { shadowMap: {}, setPixelRatio(value) { this.ratio = value; }, getPixelRatio() { return this.ratio; } }
+    resolution: new AdaptiveResolution(2), culling: { apply() {}, restore() {} }, silhouette: { render() {} },
+    instance: { shadowMap: {}, info: { reset() {} }, render() {}, setPixelRatio(value) { this.ratio = value; } }
   });
+  // El lienzo solo cambia de resolución al dibujar el cuadro siguiente.
+  const drawnRatio = () => { renderer.render(new THREE.Scene(), new THREE.PerspectiveCamera()); return renderer.instance.ratio; };
   for (const [quality, cap] of [['baja', 1], ['media', 1.25], ['alta', 1.5]]) {
     renderer.setQuality(quality);
-    assert.equal(renderer.instance.ratio, cap);
+    assert.equal(drawnRatio(), cap);
     for (let i = 0; i < 300; i++) renderer.adaptResolution(40);
-    assert.ok(renderer.instance.ratio < cap);
+    assert.ok(drawnRatio() < cap);
     for (let i = 0; i < 4000; i++) renderer.adaptResolution(10);
-    assert.ok(renderer.instance.ratio <= cap);
+    assert.ok(drawnRatio() <= cap);
     assert.equal(renderer.instance.shadowMap.enabled, quality !== 'baja');
     assert.equal(localStorage.getItem('bazuko.graphics_quality'), quality);
   }

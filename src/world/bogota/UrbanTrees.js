@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { chainSunField } from './SunFieldShader.js';
 
 /** Tiempo común: el distrito lo avanza una vez, incluso después de fusionar las copas. */
 export const foliageWind = { value: 0 };
@@ -99,14 +100,17 @@ function withWind(material, key) {
   return material;
 }
 
+// Más que el radio de una copa común: las hojas del lado del sol no se tapan con las de al lado.
+const CANOPY_REACH = 5;
+
 let shared;
 function materials() {
   if (shared) return shared;
   const atlas = leafAtlas();
-  const leaves = withWind(new THREE.MeshStandardMaterial({
+  const leaves = chainSunField(withWind(new THREE.MeshStandardMaterial({
     map: atlas, vertexColors: true, roughness: .96, metalness: 0, side: THREE.DoubleSide,
     alphaTest: .38, transparent: false
-  }), 'urban-tree-foliage-v1');
+  }), 'urban-tree-foliage-v1'), CANOPY_REACH);
   leaves.name = 'Hojas urbanas'; leaves.userData.staticMergeKey = 'urban-tree:foliage-v1|wind';
   const depth = withWind(new THREE.MeshDepthMaterial({
     map: atlas, alphaTest: .38, side: THREE.DoubleSide, depthPacking: THREE.RGBADepthPacking

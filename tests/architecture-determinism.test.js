@@ -6,6 +6,7 @@ import { Bogota } from '../src/world/districts/Bogota.js';
 import { rng } from '../src/world/bogota/textures.js';
 import { CollisionSystem } from '../src/systems/CollisionSystem.js';
 import { TILE_SIZE } from '../src/utils/constants.js';
+import { EAST_SEAM } from '../src/world/bogota/EastZones.js';
 
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
@@ -63,13 +64,19 @@ function architecture(seed, churn) {
         for (let x = Math.floor(min.x / TILE_SIZE) + 1; x < Math.ceil(max.x / TILE_SIZE); x++) occupancy[z][x]++;
       }
     }
-    for (let z = 0; z < city.map.length; z++) for (let x = 0; x < city.map[z].length; x++) {
+    // Los lotes del oriente se comprueban en east-zones.test.js: allí hay patios sin casa.
+    for (let z = 0; z < city.map.length; z++) for (let x = 0; x < EAST_SEAM; x++) {
       assert.equal(occupancy[z][x], ['building', 'ruin'].includes(city.map[z][x]) ? 1 : 0, `solar ${x},${z}`);
     }
     const collisions = new CollisionSystem();
     city._buildCollisions(city.map, collisions);
+    // Lo que había antes de ampliar al oriente: la misma columna X 119 era el muro.
+    const oldMap = city.map.map(row => [...row.slice(0, EAST_SEAM), 'wall']);
+    const oldCollisions = new CollisionSystem();
+    city._buildCollisions(oldMap, oldCollisions);
     return {
-      map: before, geometry: geometry.digest('hex'), labels: digest(labels), occupancy: digest(occupancy),
+      map: before, oldMap: digest(oldMap), oldColliders: digest(oldCollisions.colliders.map(({ box }) => [box.min.toArray(), box.max.toArray()])),
+      geometry: geometry.digest('hex'), labels: digest(labels), occupancy: digest(occupancy),
       bounds: digest(city.buildingVisibility.buildings.map(building => [building.bounds.min.toArray(), building.bounds.max.toArray()])),
       colliders: digest(collisions.colliders.map(({ box }) => [box.min.toArray(), box.max.toArray()]))
     };
@@ -84,8 +91,9 @@ test('la arquitectura no cambia con el azar global ni con más creaciones de tex
   const first = architecture(89123, false);
   assert.deepEqual(architecture(17, true), first);
   // Capturados antes de separar el azar arquitectónico: el mapa y sus sólidos siguen exactos.
-  assert.equal(first.map, 'ad927fbac5cbcbb2fae2f8b8b0ae0f64a4beda7492b1c482c317d04b35ec8f9c');
-  assert.equal(first.colliders, '6b8d21ce0063a9a7ef0f4f4bfb43608e02335553ab98206151f237594ef3dd0d');
+  // El oriente se añadió sin mover nada: recortado a la ciudad anterior, da los mismos valores.
+  assert.equal(first.oldMap, 'ad927fbac5cbcbb2fae2f8b8b0ae0f64a4beda7492b1c482c317d04b35ec8f9c');
+  assert.equal(first.oldColliders, '6b8d21ce0063a9a7ef0f4f4bfb43608e02335553ab98206151f237594ef3dd0d');
 });
 
 test('cerrar la ciudad libera una vez todos los mapas del suelo y el detalle propio de la ribera', () => {

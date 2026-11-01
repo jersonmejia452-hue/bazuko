@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { LAKE_PARK, lakeRadius, lakeWaterInfo, onLakeBridge } from './LakePark.js';
+import { chainSunField } from './SunFieldShader.js';
 
 // El cambuche conserva su reserva incluso si el caller no proporciona isReserved.
 // No importar Bogota aquí: el distrito construye este módulo.
@@ -158,7 +159,7 @@ function createMaterial(windTime) {
       `);
   };
   material.customProgramCacheKey = () => 'park-vegetation-v1';
-  return material;
+  return chainSunField(material);
 }
 
 // Geometría directa por sector: no se crean cientos de Mesh ni texturas alpha.

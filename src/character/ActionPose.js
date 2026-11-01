@@ -114,7 +114,7 @@ export class ActionPose {
     return this.smoke.mouth(target);
   }
 
-  apply(dt, { speed = 0, action = null, actionProgress = 0, movement = {}, attack = null, smoke = null, basuco = null, point = 0, look = 0 } = {}) {
+  apply(dt, { speed = 0, action = null, actionProgress = 0, movement = {}, attack = null, smoke = null, basuco = null, point = 0, look = 0, hipLow = 0 } = {}) {
     this.restore();
     const elapsed = Math.max(0, finite(dt));
     const swim = movement.swimming === true;
@@ -199,7 +199,7 @@ export class ActionPose {
         if (this.joints.head) rotateInFrame(this.frame, this.joints.head, 0, this.glance * (this.joints.neck ? .6 : 1), 0);
       }
     }
-    if (hit) this._hit(clamp(finite(actionProgress)));
+    if (hit) this._hit(clamp(finite(actionProgress)), clamp(finite(hipLow)));
     if (this.greetWeight) this._greet(this.greetWeight);
     if (this.warmWeight) this._warm(this.warmWeight);
   }
@@ -293,8 +293,10 @@ export class ActionPose {
     }
   }
 
-  _hit(progress) {
+  _hit(progress, hipLow = 0) {
     const recoil = smooth(0, .10, progress) * (1 - smooth(.22, 1, progress));
+    // Con la cadera todavía abajo no hay rodillas que absorban nada: estirarlas subiría el cuerpo de un salto.
+    const legs = recoil * .4 * Math.max(0, 1 - hipLow * 4);
     const headLag = smooth(.03, .20, progress) * (1 - smooth(.3, 1, progress));
     const footY = this._lowestFoot();
     // El impacto se reparte entre pelvis, columna y cabeza; las rodillas absorben
@@ -304,13 +306,13 @@ export class ActionPose {
     this._rotate('spine', -.21, -.08, .05, recoil);
     this._rotate('head', .13, .10, -.08, headLag);
     for (const [side, name] of [[1, 'left'], [-1, 'right']]) {
-      this._aim(`${name}UpLeg`, side * .10, -.92, .23, recoil * .4);
-      this._aim(`${name}Leg`, 0, -.96, -.22, recoil * .4);
+      this._aim(`${name}UpLeg`, side * .10, -.92, .23, legs);
+      this._aim(`${name}Leg`, 0, -.96, -.22, legs);
       this._aim(`${name}Arm`, side * .42, -.28, .42, recoil);
       this._aim(`${name}ForeArm`, -side * .07, .75, .58, recoil);
     }
     const after = this._lowestFoot();
-    if (footY !== null && after !== null) this._raiseHips(footY - after);
+    if (legs > 0 && footY !== null && after !== null) this._raiseHips(footY - after);
   }
 
   _swim(speed, weight, movement, dt) {

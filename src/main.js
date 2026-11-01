@@ -14,8 +14,9 @@ try {
   const { Game } = await import('./core/game.js');
   const animaciones = new URLSearchParams(location.search).get('animaciones') === 'mixamo-preview'
     ? 'mixamo-game-preview' : 'default';
-  const apariencia = new URLSearchParams(location.search).get('aspecto') === 'realista' ? 'street-preview' : 'default';
-  const game = new Game(document.getElementById('game-canvas'), { animaciones, apariencia });
+  // Los materiales de calle ya son los de todos: ?aspecto=realista queda para no caer en el modelo liviano guardado.
+  const modeloRealista = new URLSearchParams(location.search).get('aspecto') === 'realista';
+  const game = new Game(document.getElementById('game-canvas'), { animaciones, modeloRealista });
   await game.start(loading);
   startControlsHelp();
   openDeveloperNote(game);

@@ -1,6 +1,7 @@
 /* La fotografía usa solo el canvas; estos controles nunca entran en el PNG. */
 .is-photo-mode #app > :not(#game-canvas),
 .is-photo-mode #inventory-open,
+.is-photo-mode #craft-open,
 .is-photo-mode #quickbar,
 .is-photo-mode #controls-help,
 .is-photo-mode #controls-help *,

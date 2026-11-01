@@ -91,7 +91,10 @@ export class InteractionSystem {
     let nearestDist = INTERACT_RANGE;
 
     for (const t of this.targets) {
-      const d = t.position.distanceTo(this.player.position);
+      // Un carro sin nada que robar no da aviso ni le quita el turno a lo que tenga al lado.
+      if (t.stealable === false) continue;
+      // Un carro se alcanza también desde sus espejos; lo demás, desde su centro.
+      const d = t.interactDistance?.(this.player.position) ?? t.position.distanceTo(this.player.position);
       if (d < nearestDist) {
         nearestDist = d;
         nearest = t;
@@ -108,6 +111,8 @@ export class InteractionSystem {
         else if (t instanceof Object && typeof t.sell === 'function') nearestType = 'sell';
       }
     }
+    // Con una persona más cerca que el carro, el aviso y la E son del cosquilleo. Basura, tiendas y demás conservan su turno.
+    if ((nearestType === 'car' || nearestType === 'dog') && this.personCloserThan?.(nearestDist)) nearest = nearestType = null;
     this.currentTarget = nearest;
     this.currentTargetType = nearestType;
 
@@ -144,7 +149,8 @@ export class InteractionSystem {
     }
 
     // === Interacción principal (E) ===
-    if (input.consumePress('KeyE') && nearest) {
+    // Sin objetivo la tecla sigue libre: el cosquilleo la lee después, en `StealSystem`.
+    if (nearest && input.consumePress('KeyE')) {
       switch (nearestType) {
         case 'pickup':
           this._harvestTrash(nearest, false);

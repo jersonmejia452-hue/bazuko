@@ -1,34 +1,27 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { busGeometry, busTextures, busWipers, WINDSHIELD_GLSL } from './BusBody.js';
+import { chainSunField } from './SunFieldShader.js';
 
 /**
- * Bus articulado por piezas (carpeta public/models/bus-articulado): dos secciones, un fuelle con tres huesos y seis ruedas.
- * Cada seccion sigue el eje del carril por separado, asi que en las curvas y rampas del viaducto el bus se dobla en la articulacion;
- * el fuelle se deforma entre ambas y las ruedas ruedan (las del primer eje, ademas, viran). Las piezas usan el frente +Z del modelo;
- * el grupo del bus tiene su frente en -Z, de ahi el giro de 180 grados.
+ * Bus articulado: dos secciones, un fuelle con tres huesos y seis ruedas, armados por código sobre las medidas de
+ * public/models/bus-articulado/bus.json (pivotes, ruedas y fuelle). Cada seccion sigue el eje del carril por separado, asi
+ * que en las curvas y rampas del viaducto el bus se dobla en la articulacion; el fuelle se deforma entre ambas y las ruedas
+ * ruedan (las del primer eje, ademas, viran). Las piezas usan el frente +Z del modelo; el grupo del bus tiene su frente
+ * en -Z, de ahi el giro de 180 grados.
  */
-const Y = new THREE.Vector3(0, 1, 0);
 const MAX_STEER = 0.5;
+const SIGN_PAGE_SECONDS = 5;
 
 const baseUrl = () => `${import.meta.env?.BASE_URL ?? '/'}models/bus-articulado/`;
 let assets = null;
 
-/** Descarga (una sola vez) la ficha y los GLB de las piezas. */
-export function loadArticulatedBusAssets({ base = baseUrl(), fetchJson = url => fetch(url).then(r => r.json()), loadGlb = url => new GLTFLoader().loadAsync(url), loadTexture = url => new THREE.TextureLoader().loadAsync(url) } = {}) {
-  assets ??= (async () => {
-    const spec = await fetchJson(`${base}bus.json`);
-    const glb = async file => (await loadGlb(`${base}${file}`)).scene;
-    const sections = await Promise.all(spec.sections.map(s => glb(s.file)));
-    const bellows = await Promise.all((spec.accordions ?? []).map(a => glb(a.file)));
-    const wheels = await Promise.all(spec.wheels.map(w => glb(w.file)));
-    const signTexture = spec.sign ? await loadTexture(`${base}${spec.sign.file}`) : null;
-    return { spec, sections, bellows, wheels, signTexture };
-  })();
+/** Descarga (una sola vez) la ficha con las medidas; la carrocería se arma al crear cada bus. */
+export function loadArticulatedBusAssets({ base = baseUrl(), fetchJson = url => fetch(url).then(r => r.json()) } = {}) {
+  assets ??= (async () => ({ spec: await fetchJson(`${base}bus.json`) }))();
   return assets;
 }
 
-/** Solo pruebas: sustituye las piezas descargadas por otras ya construidas. */
+/** Solo pruebas: sustituye la ficha descargada por otra ya construida. */
 export function setArticulatedBusAssets(value) { assets = value ? Promise.resolve(value) : null; }
 
 /** Crea una instancia con materiales propios (el bus se desvanece en los extremos del recorrido). */
@@ -38,14 +31,69 @@ export async function createArticulatedBus(options) {
 
 const placement = new THREE.Matrix4();
 const inverse = new THREE.Matrix4();
+const WIPER_CYCLES_PER_SECOND = .7, WIPER_SWEEP = 1.2;
+
+/** Inyecta en el material el corrimiento de las hojas de puerta y, en el vidrio, un reflejo más fuerte que el de un dieléctrico. */
+function patchMaterial(material, { door = null, reflectance = null, alpha = null, lampNight = null, coat = 0, wiper = null }) {
+  material.onBeforeCompile = shader => {
+    if (wiper) {
+      // Solo las piezas del limpiabrisas tienen UV: giran sobre su pivote y se pegan a la curva del vidrio.
+      shader.uniforms.busWiper = wiper;
+      shader.vertexShader = `uniform float busWiper;\n${WINDSHIELD_GLSL}\n${shader.vertexShader}`
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+  if (uv.y > .5 && busWiper > 0.) {
+    float wipe = uv.x > 0. ? -busWiper : busWiper;
+    vec2 arm = transformed.xy - uv;
+    vec2 swept = uv + vec2(arm.x * cos(wipe) - arm.y * sin(wipe), arm.x * sin(wipe) + arm.y * cos(wipe));
+    transformed.z += windshieldZ(swept) - windshieldZ(transformed.xy);
+    transformed.xy = swept;
+  }`);
+    }
+    if (coat) {
+      // Laca de bus: refleja el doble que una pintura común, y sin aclarar el rojo con un material metálico.
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>\n  material.specularColorBlended = vec3(${coat.toFixed(3)});`);
+    }
+    if (lampNight) {
+      // Cada lámpara guarda en la UV su brillo de día y de noche: faros, cornisas y stops comparten malla y material.
+      shader.uniforms.lampNight = lampNight;
+      shader.vertexShader = `uniform float lampNight;\nvarying float vLampGlow;\n${shader.vertexShader}`
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vLampGlow = mix(uv.x, uv.y, lampNight);');
+      shader.fragmentShader = `varying float vLampGlow;\n${shader.fragmentShader}`
+        .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= vLampGlow;');
+    }
+    if (door) {
+      shader.uniforms.busDoor = door;
+      shader.vertexShader = `attribute float aSlide;\nuniform float busDoor;\n${shader.vertexShader}`
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n  transformed.z += aSlide * busDoor;');
+    }
+    if (reflectance) {
+      // El vidrio entintado refleja como una película: sin esto el 4 % de un vidrio común no se nota de día.
+      shader.uniforms.glassReflectance = reflectance;
+      shader.uniforms.glassAlpha = alpha;
+      shader.fragmentShader = `uniform float glassReflectance;\nuniform float glassAlpha;\n${shader.fragmentShader}`
+        .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.a *= glassAlpha;')
+        .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n  material.specularColorBlended = vec3(glassReflectance);');
+    }
+  };
+  material.customProgramCacheKey = () => `bus:${door ? 'puerta' : ''}:${reflectance ? 'vidrio' : ''}:${lampNight ? 'lampara' : ''}:${coat}:${wiper ? 'plumilla' : ''}`;
+  return chainSunField(material);
+}
 
 export class ArticulatedBusRig {
-  constructor({ spec, sections, bellows, wheels, signTexture }) {
+  constructor({ spec }) {
     this.spec = spec;
     this.root = new THREE.Group();
     this.root.name = 'Bus articulado';
     this.owned = [];
     this.time = Math.random() * 100;
+    this.doorUniform = { value: 0 };
+    this.reflectanceUniform = { value: .2 };
+    this.glassAlphaUniform = { value: 1 };
+    this.lampNightUniform = { value: 0 };
+    this.wiperUniform = { value: 0 };
+    this.wiperPhase = 0;
+    this.night = false;
     const count = spec.sections.length;
     const ends = [Math.max(spec.sections[0].max[2], spec.sections[0].min[2]), ...spec.pivots.map(p => p[2]),
       Math.min(spec.sections[count - 1].min[2], spec.sections[count - 1].max[2])];
@@ -54,15 +102,31 @@ export class ArticulatedBusRig {
     this.centerZ = (ends[0] + ends[count]) / 2;
     this.halfLength = Array.from({ length: count }, (_, i) => Math.abs(ends[i] - ends[i + 1]) / 2);
 
+    const geometry = busGeometry(spec);
+    const materials = this._createMaterials();
+
     // Cada seccion: un nodo que se coloca sobre el eje del carril y, dentro, la pieza girada 180 grados y anclada en su punto de referencia.
     this.sectionRoots = [];
     this.flips = [];
+    this.stopMeshes = [];
+    this.flareMeshes = [];
     spec.sections.forEach((_, i) => {
       const section = new THREE.Object3D();
       const flip = new THREE.Object3D();
       flip.rotation.y = Math.PI;
       flip.position.z = this.reference[i];
-      flip.add(this._own(sections[i]));
+      // El vidrio va de último: transparente, se dibuja encima de todo lo que deja ver.
+      for (const name of ['paint', 'matte', 'interior', 'lamps', 'decals', 'sign', 'stops', 'flares', 'glass']) {
+        const part = geometry.sections[i][name];
+        if (!part) continue;
+        const mesh = new THREE.Mesh(part, materials[name]);
+        mesh.name = `${name} ${i}`;
+        mesh.castShadow = name === 'paint' || name === 'matte';
+        mesh.receiveShadow = name === 'paint';
+        flip.add(mesh);
+        if (name === 'stops') { mesh.visible = false; this.stopMeshes.push(mesh); }
+        if (name === 'flares') { mesh.visible = false; mesh.renderOrder = 2; this.flareMeshes.push(mesh); }
+      }
       section.add(flip);
       this.root.add(section);
       this.sectionRoots.push(section);
@@ -70,32 +134,28 @@ export class ArticulatedBusRig {
     });
     this.wheels = [];
     this.wheelSpecs = [];
-    spec.wheels.forEach((wheel, index) => {
+    spec.wheels.forEach(wheel => {
       const sectionIndex = wheel.section >= 0 ? wheel.section : (wheel.axle <= 1 ? 0 : 1);
       const pivot = new THREE.Object3D();
       pivot.rotation.order = 'YXZ';
       pivot.position.set(...wheel.center);
-      const model = this._own(wheels[index]);
-      model.position.set(-wheel.center[0], -wheel.center[1], -wheel.center[2]);
+      const model = new THREE.Mesh(geometry.wheel, materials.wheel);
+      model.castShadow = true;
+      // La rueda se modela con la tapa hacia +X; las del otro costado se giran, no se reflejan.
+      if (wheel.center[0] < 0) model.rotation.y = Math.PI;
       pivot.add(model);
       this.flips[sectionIndex].add(pivot);
       this.wheels.push(pivot);
       this.wheelSpecs.push({ radius: wheel.radius, front: !!wheel.front });
     });
-    this.sign = spec.sign && signTexture ? this._buildSign(spec.sign, signTexture) : null;
 
     // Fuelle: su armadura queda en el marco del bus; los huesos delantero, central y trasero se mueven con las secciones.
     this.bellowsRoot = new THREE.Group();
     this.bellowsRoot.rotation.y = Math.PI;
     this.bellowsRoot.position.z = this.centerZ;
     this.bellows = [];
-    bellows.forEach(source => {
-      const model = this._own(source);
-      this.bellowsRoot.add(model);
-      let skinned = null;
-      model.traverse(o => { if (o.isSkinnedMesh) skinned = o; });
-      if (skinned) { skinned.frustumCulled = false; this.bellows.push(skinned); }
-    });
+    const arm = this._buildBellows(geometry.bellows, materials.bellows);
+    this.bellowsRoot.add(arm);
     this.root.add(this.bellowsRoot);
     this.root.updateMatrixWorld(true);
     this._bones = this.bellows.map(mesh => {
@@ -107,58 +167,85 @@ export class ArticulatedBusRig {
       info.bones.forEach(b => { b.matrixAutoUpdate = false; });
       return info;
     }).filter(info => info.bones.length === 3);
+    this.setDestination(-1);
+    this.setNight(false);
   }
 
-  /** Clona con materiales propios: el desvanecido no debe afectar a otro bus. */
-  _own(source) {
-    const model = cloneSkinned(source);
-    const materials = new Map();
-    const copy = material => {
-      if (!materials.has(material)) {
-        const own = material.clone();
-        // la escena no tiene mapa de entorno: un metal pleno se ve negro; se limita al brillo que si se aprecia
-        if (own.name?.startsWith('metal')) own.metalness = Math.min(own.metalness ?? 0, 0.3);
-        materials.set(material, own);
-        this.owned.push(own);
-      }
-      return materials.get(material);
+  /** Materiales propios de este bus: el desvanecido de uno no debe afectar al otro. La geometría y las texturas sí se comparten. */
+  _createMaterials() {
+    const shared = busTextures();
+    const own = material => { this.owned.push(material); return material; };
+    const door = this.doorUniform;
+    this.interiorMaterial = own(new THREE.MeshBasicMaterial({ name: 'interior', vertexColors: true }));
+    this.lampMaterial = own(patchMaterial(new THREE.MeshBasicMaterial({ name: 'lamparas', vertexColors: true, toneMapped: false }), { lampNight: this.lampNightUniform }));
+    this.glassMaterial = own(patchMaterial(new THREE.MeshStandardMaterial({
+      name: 'vidrio', vertexColors: true, transparent: true, depthWrite: false, roughness: .06, metalness: 0,
+      side: THREE.DoubleSide, forceSinglePass: true
+    }), { door, reflectance: this.reflectanceUniform, alpha: this.glassAlphaUniform }));
+    this.signMaterial = own(new THREE.MeshBasicMaterial({ name: 'letrero', toneMapped: false }));
+    return {
+      paint: own(patchMaterial(new THREE.MeshStandardMaterial({ name: 'pintura', vertexColors: true, map: shared.grime, roughness: .24, metalness: .04 }), { coat: .09 })),
+      matte: own(patchMaterial(new THREE.MeshStandardMaterial({ name: 'caucho', vertexColors: true, roughness: .62, metalness: 0 }), { door, wiper: this.wiperUniform })),
+      interior: this.interiorMaterial,
+      lamps: this.lampMaterial,
+      decals: own(new THREE.MeshStandardMaterial({ name: 'calcomanias', map: shared.decals, alphaTest: .5, roughness: .42, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })),
+      sign: this.signMaterial,
+      stops: own(new THREE.MeshBasicMaterial({ name: 'stop', vertexColors: true, toneMapped: false })),
+      flares: own(new THREE.MeshBasicMaterial({ name: 'destello', map: shared.flare, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false })),
+      glass: this.glassMaterial,
+      wheel: own(new THREE.MeshStandardMaterial({ name: 'rueda', vertexColors: true, roughness: .62, metalness: .12 })),
+      bellows: own(new THREE.MeshStandardMaterial({ name: 'fuelle', vertexColors: true, roughness: .78, metalness: 0 }))
     };
-    model.traverse(object => {
-      if (!object.isMesh) return;
-      object.material = Array.isArray(object.material) ? object.material.map(copy) : copy(object.material);
-      object.castShadow = true;
-    });
-    return model;
   }
 
-  /** Letrero LED del frente: tira curva con la textura de puntos; el texto corre desplazando la textura. */
-  _buildSign(sign, texture) {
-    const points = sign.points;
-    const positions = [], uvs = [], index = [];
-    const visible = sign.window / sign.columns;
-    points.forEach((p, i) => {
-      positions.push(p[0], p[1], p[2], p[3], p[4], p[5]);
-      const u = i / (points.length - 1);
-      uvs.push(u, 0, u, 1);
-      if (i > 0) { const a = (i - 1) * 2; index.push(a, a + 2, a + 3, a, a + 3, a + 1); }
+  _buildBellows(data, material) {
+    const arm = new THREE.Group();
+    const bones = [['F', data.zFront], ['M', data.midZ], ['R', data.zRear]].map(([name, z]) => {
+      const bone = new THREE.Bone();
+      bone.name = name;
+      bone.position.set(0, 1.92, z);
+      arm.add(bone);
+      return bone;
     });
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    geometry.setIndex(index);
-    const map = texture.clone();
-    map.wrapS = THREE.RepeatWrapping;
-    map.repeat.set(visible, 1);
+    const mesh = new THREE.SkinnedMesh(data.geometry, material);
+    mesh.name = 'Fuelle';
+    mesh.castShadow = true;
+    mesh.frustumCulled = false;
+    arm.add(mesh);
+    arm.updateMatrixWorld(true);
+    mesh.bind(new THREE.Skeleton(bones), mesh.matrixWorld);
+    this.bellows.push(mesh);
+    return arm;
+  }
+
+  /** El letrero depende del sentido: hacia el norte el Portal, hacia el sur el Parque del Lago. */
+  setDestination(direction) {
+    const shared = busTextures();
+    this.signMap?.dispose();
+    const map = (direction < 0 ? shared.ledNorth : shared.ledSouth).clone();
     map.colorSpace = THREE.SRGBColorSpace;
     map.needsUpdate = true;
-    const material = new THREE.MeshBasicMaterial({ map, side: THREE.DoubleSide, toneMapped: false });
-    this.owned.push(material);
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.frustumCulled = false;
-    this.flips[0].add(mesh);
     this.signMap = map;
-    this.signColumns = sign.columns;
-    return mesh;
+    this.signMaterial.map = map;
+    this.signMaterial.needsUpdate = true;
+  }
+
+  /** Las luces interiores y de posición son emisivas: nada de luces reales por bus. */
+  setNight(isNight) {
+    this.night = isNight;
+    // De día el interior se ve apagado detrás del tinte; de noche manda la luz de adentro y el vidrio casi no refleja.
+    this.interiorMaterial.color.setRGB(...(isNight ? [1.45, 1.28, 1.02] : [.72, .72, .72]));
+    this.lampNightUniform.value = isNight ? 1 : 0;
+    this.reflectanceUniform.value = isNight ? .05 : .2;
+    this.glassAlphaUniform.value = isNight ? .62 : 1;
+    for (const mesh of this.flareMeshes) mesh.visible = isNight;
+  }
+
+  /** `amount` de 0 a 1: las hojas de vidrio corren dentro de la carrocería. */
+  setDoors(amount) { this.doorUniform.value = amount; }
+
+  setBraking(braking) {
+    for (const mesh of this.stopMeshes) mesh.visible = braking;
   }
 
   /**
@@ -225,10 +312,20 @@ export class ArticulatedBusRig {
     const steer = THREE.MathUtils.clamp(diff * 2, -MAX_STEER, MAX_STEER);
     this.wheels.forEach((wheel, i) => { wheel.rotation.y = this.wheelSpecs[i].front ? steer : 0; });
     this._deformBellows();
-    if (this.signMap && dt > 0) {
+    if (dt > 0) {
       this.time += dt;
-      this.signMap.offset.x = (this.time * 14 / this.signColumns) % 1;   // 14 columnas por segundo, como en el port
+      // Alterna entre dos páginas despacio y de un golpe: sin parpadeo ni brillo que oscile.
+      this.signMap.offset.y = Math.floor(this.time / SIGN_PAGE_SECONDS) % 2 ? -.5 : 0;
+      this._wipe(dt);
     }
+  }
+
+  /** Va y vuelve mientras llueve; si escampa a mitad de barrido termina el viaje y queda parqueado. */
+  _wipe(dt) {
+    if (!busWipers.running && this.wiperPhase === 0) return;
+    this.wiperPhase += dt * WIPER_CYCLES_PER_SECOND;
+    if (this.wiperPhase >= 1) this.wiperPhase = busWipers.running ? this.wiperPhase % 1 : 0;
+    this.wiperUniform.value = WIPER_SWEEP * (.5 - .5 * Math.cos(this.wiperPhase * Math.PI * 2));
   }
 
   _deformBellows() {
@@ -265,6 +362,7 @@ export class ArticulatedBusRig {
     for (const material of this.owned) material.dispose();
     this.owned.length = 0;
     this.signMap?.dispose();
+    for (const mesh of this.bellows) mesh.skeleton.dispose();
     this.root.removeFromParent();
   }
 }

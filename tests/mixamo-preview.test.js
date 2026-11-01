@@ -88,7 +88,13 @@ const models = fileURLToPath(new URL('../public/models/', import.meta.url));
 const originalFetch = globalThis.fetch;
 const loads = [];
 let failPreview = true;
+const skinDetail = new THREE.Texture();
+const detailLoads = [];
 test.before(() => {
+  mock.method(THREE.TextureLoader.prototype, 'loadAsync', async url => {
+    detailLoads.push(url);
+    return skinDetail;
+  });
   mock.method(globalThis, 'fetch', (url, ...rest) => url === '/models/personaje/catalogo.json'
     ? Promise.resolve(new Response(readFileSync(path.join(models, 'personaje/catalogo.json'))))
     : originalFetch(url, ...rest));
@@ -123,51 +129,34 @@ test.before(() => {
 });
 test.after(() => mock.restoreAll());
 
-test('la apariencia cambia en vivo sin tocar look, banco de animaciones ni texturas compartidas', async t => {
-  let detailLoads = 0;
-  const detail = new THREE.Texture();
-  t.mock.method(THREE.TextureLoader.prototype, 'loadAsync', async url => {
-    assert.equal(url, '/models/preview/skin/skin-micro-normal.png');
-    detailLoads++;
-    return detail;
-  });
+test('el material de calle es el de todos: poros compartidos, ojos con brillo y pestañas suaves', async () => {
   const look = { piel: 2, peloColor: 4, desgaste: 2 };
   const character = await createRealisticCharacter(look);
-  assert.equal(character.appearanceProfile, 'default');
-  const initialAnimations = character.animationStatus;
-  const materialOf = expression => {
+  const other = await createRealisticCharacter({ piel: 4 });
+  assert.equal(character.look, look);
+  const materialOf = (expression, owner = character) => {
     let material;
-    character.group.traverse(node => { if (node.isSkinnedMesh && expression.test(node.name)) material = node.material; });
+    owner.group.traverse(node => { if (node.isSkinnedMesh && expression.test(node.name)) material = node.material; });
     return material;
   };
-  const originalBody = materialOf(/body/), originalMap = originalBody.map;
-  await character.setAppearance('street-preview');
-  assert.equal(character.appearanceProfile, 'street-preview');
-  assert.equal(character.look, look);
-  assert.deepEqual(character.animationStatus, initialAnimations);
-  assert.equal(materialOf(/body/).map, originalMap);
-  assert.equal(materialOf(/body/).normalMap, detail);
+  assert.ok(materialOf(/body/).map, 'la textura del cuerpo sigue ahí');
+  assert.equal(materialOf(/body/).normalMap, skinDetail);
+  assert.equal(materialOf(/body/, other).normalMap, skinDetail);
   assert.equal(materialOf(/body/).userData.streetSurface, 'skin');
   assert.equal(materialOf(/low-poly/).roughness, .22);
   assert.equal(materialOf(/eyelashes/).transparent, true);
   assert.equal(materialOf(/eyelashes/).depthWrite, false);
-  assert.equal(detail.flipY, false);
-  assert.deepEqual(detail.repeat.toArray(), [18, 18]);
-  assert.equal(detail.colorSpace, THREE.NoColorSpace);
-  await character.setAppearance('default');
-  assert.equal(materialOf(/body/).normalMap, originalBody.normalMap);
-  assert.equal(materialOf(/body/).map, originalMap);
-  assert.equal(materialOf(/body/).userData.streetSurface, undefined);
-  await character.setAppearance('street-preview');
-  assert.equal(detailLoads, 1);
-  await assert.rejects(character.setAppearance('../otro'), /Perfil de apariencia desconocido/);
-  assert.equal(character.appearanceProfile, 'street-preview');
+  assert.equal(skinDetail.flipY, false);
+  assert.deepEqual(skinDetail.repeat.toArray(), [18, 18]);
+  assert.equal(skinDetail.colorSpace, THREE.NoColorSpace);
+  assert.deepEqual(detailLoads, ['/models/preview/skin/skin-micro-normal.png'], 'una sola descarga, de los recursos locales');
   character.dispose();
+  other.dispose();
 });
 
-test('street usa el desgaste inicial del personaje y respeta limpio y cabello negro explícitos', async () => {
+test('el material usa el desgaste inicial del personaje y respeta limpio y cabello negro explícitos', async () => {
   const look = {};
-  const character = await createRealisticCharacter(look, { apariencia: 'street-preview' });
+  const character = await createRealisticCharacter(look);
   const materialOf = expression => {
     let material;
     character.group.traverse(node => { if (node.isSkinnedMesh && expression.test(node.name)) material = node.material; });
@@ -185,8 +174,6 @@ test('street usa el desgaste inicial del personaje y respeta limpio y cabello ne
   const blackHair = materialOf(/hair_02/);
   assert.ok(blackHair, 'pelo desordenado real del catálogo');
   assert.ok(Math.max(blackHair.color.r, blackHair.color.g, blackHair.color.b) < .06, 'negro mantiene luminancia baja');
-  await character.setAppearance('default');
-  assert.ok(materialOf(/hair_02/).color.r > .15, 'el tratamiento anterior queda intacto');
   character.dispose();
 });
 

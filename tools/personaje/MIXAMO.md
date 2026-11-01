@@ -8,7 +8,25 @@ http://127.0.0.1:5188/sala.html?prueba=personaje&animaciones=mixamo-preview
 
 El perfil explícito `mixamo-preview` carga `public/models/preview/animaciones-mixamo.glb`. La sala muestra los clips cargados y distingue un clip Mixamo de una pose procedural. Un error de carga del banco se presenta como error.
 
-Para probarlo en la ciudad se abre `http://127.0.0.1:5188/?animaciones=mixamo-preview`. Esa entrada selecciona el perfil `mixamo-game-preview`, activa el personaje realista para esa carga y complementa comer/agacharse con los clips actuales de ActionForge. La preferencia de modelo guardada se conserva. La URL habitual del juego continúa usando el banco predeterminado; los NPC también lo conservan. Las velocidades, colisiones y tiempos de acciones del juego siguen controlando la simulación.
+Para probarlo en la ciudad se abre `http://127.0.0.1:5188/?animaciones=mixamo-preview`. Esa entrada selecciona el perfil `mixamo-game-preview`, activa el personaje realista para esa carga y complementa comer/agacharse con los clips actuales de ActionForge. La preferencia de modelo guardada se conserva. La URL habitual del juego no carga este banco: la gente y el jugador andan con las familias de `docs/animaciones-actionforge.md`. Las velocidades, colisiones y tiempos de acciones del juego siguen controlando la simulación.
+
+## Dónde se usa Mixamo en el juego
+
+Adobe permite usar Mixamo dentro de un juego, pero no redistribuir los archivos sueltos. Por eso conviene saber dónde están:
+
+- `public/models/preview/animaciones-mixamo.glb`: el banco de nueve clips de este documento, solo con el perfil `mixamo-preview` o `mixamo-game-preview`.
+- `public/models/andar-cansado.glb`: tres de esos clips (`walk`, `run`, `pedir`), recortados sin mallas ni texturas. Es parte del juego normal: su `walk`, mezclado con el de `andar-erguido.glb`, da las familias de andar, y de él salen el correr y la pose de la que parte el reposo de todas las personas. Ver `docs/animaciones-actionforge.md`.
+- `public/models/andar-erguido.glb`: un clip (`walk`), recortado sin mallas ni texturas del `Walk` de `public/models/animaciones-prueba.glb`. También es parte del juego normal. **Su origen no se conoce con certeza**: los huesos llevan el prefijo `mixamorig:`, el del esqueleto de Mixamo, pero el archivo de partida no dice de dónde salió, trae otro personaje (`vanguard_Mesh`, `vanguard_visor`) y su `Walk` no es el de la tabla de abajo. Mientras no se aclare, conviene tratarlo como si fuera de Mixamo y saber que cualquier duda sobre su licencia también toca al juego normal.
+- `public/models/animaciones-prueba.glb`: el archivo de partida, con sus mallas y sus imágenes. Sigue en el paquete, pero el juego normal solo lo descarga si falta el banco de ActionForge.
+
+El juego normal no carga el banco de revisión. Para rehacer los recortes:
+
+```sh
+node tools/personaje/recortar_banco.mjs public/models/preview/animaciones-mixamo.glb public/models/andar-cansado.glb walk run pedir
+node tools/personaje/recortar_banco.mjs public/models/animaciones-prueba.glb public/models/andar-erguido.glb Walk:walk
+```
+
+`recortar_banco.mjs` deja solo el esqueleto y los clips pedidos, con las rotaciones de todos los huesos y la traslación de la cadera.
 
 ## Selección e identidad
 

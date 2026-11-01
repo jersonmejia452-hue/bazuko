@@ -9,6 +9,7 @@ import { LAKE_PARK } from './LakePark.js';
 import { GAS_STATION } from './GasStation.js';
 import { D69_STORE } from './D69Store.js';
 import { COLPATRIA } from './Colpatria.js';
+import { EAST_LABELLED_CARRERAS, EAST_LABELLED_CALLES, PLAZA, TEUSAQUILLO_PARK, TOWERS_LOT, MARKET } from './EastZones.js';
 
 export const MAP_COLORS = Object.freeze({
   road: '#24272d', busway: '#5b2c31', sidewalk: '#6b6e72', floor: '#585c61', plaza: '#77736a',
@@ -86,6 +87,9 @@ export function streetLabels(tileSize = 2) {
     ...CITY_CARRERAS.map(band => ({ name: band[2], x: mid(band), vertical: true })),
     { name: 'Av. Caracas', x: mid([CARACAS.lanes[0][0], CARACAS.lanes[1][1]]), vertical: true },
     ...CITY_CALLES.map(band => ({ name: band[2], z: mid(band), vertical: false })),
+    // Calles propias del oriente: solo existen allí, así que su nombre no se pinta en el centro.
+    ...EAST_LABELLED_CARRERAS.map(band => ({ name: band[2], x: mid(band), vertical: true })),
+    ...EAST_LABELLED_CALLES.map(band => ({ name: band[2], z: mid(band), vertical: false, minX: mid(CITY_CARRERAS.at(-1)) })),
   ];
 }
 
@@ -100,5 +104,7 @@ export function cityLandmarks(tileSize = 2) {
     { name: 'Supermercado D69', icon: '🏬', color: '#3cc47c', decor: true, ...center(D69_STORE) },
     ...EXTENSION_PARKS.map(p => ({ name: p.name, icon: '🌳', color: '#6fcf6a',
       x: (p.x0 + p.x1) / 2 * tileSize, z: (p.z0 + p.z1) / 2 * tileSize })),
+    ...[[PLAZA, '⛲', '#d9c49a'], [TEUSAQUILLO_PARK, '🌳', '#6fcf6a'], [TOWERS_LOT, '🏢', '#c46a4c'], [MARKET, '🧺', '#e8a33d']].map(([zone, icon, color]) =>
+      ({ name: zone.name, icon, color, x: (zone.x0 + zone.x1) / 2 * tileSize, z: (zone.z0 + zone.z1) / 2 * tileSize })),
   ];
 }

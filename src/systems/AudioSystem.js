@@ -10,7 +10,7 @@ const STEP_SPRITES = { step1: [215, 300], step2: [605, 300], step3: [995, 300], 
   step5: [1785, 300], step6: [2185, 300], step7: [2575, 280] };
 const STEP_NAMES = Object.keys(STEP_SPRITES);
 // Metros entre pisadas: con la animación escalada por velocidad mantiene el ritmo de los pies.
-const STRIDE_WALK = 1.15, STRIDE_RUN = 1.9;
+const STRIDE_WALK = 1.25, STRIDE_RUN = 1.45;
 const STEP_SURFACES = {
   grass: { volume: .3, rate: .88 }, dirt: { volume: .34, rate: .9 },
   road: { volume: .46, rate: 1 }, busway: { volume: .46, rate: 1 },

@@ -285,16 +285,18 @@ test('el jugador no puede golpear a un peatón noqueado', () => {
 test('la pose de KO se conserva al cambiar el detalle del modelo', () => {
   const { npc } = arena();
   const n = npc(10, 11);
-  const lod = { group: new THREE.Group(), update() {} };
-  const full = { group: new THREE.Group(), update() {} };
+  const seen = (model) => { model.ko = []; model.update = (_dt, params) => model.ko.push(params.ko); return model; };
+  const lod = seen({ group: new THREE.Group() });
+  const full = seen({ group: new THREE.Group() });
   const far = { player: { x: 1e4, z: 1e4 } };
   n._show(lod);
   n.takeHit({ damage: 1000, dir: { x: 0, z: 1 } });
   for (let i = 0; i < 20; i++) n.update(0.05, far);
-  assert.ok(lod.group.rotation.x < -1.4, 'tendido');
+  assert.equal(lod.ko.at(-1), 1, 'tendido');
+  assert.equal(lod.group.rotation.x, 0, 'el cuerpo lo acuesta la cadera, no el grupo');
   n._show(full);
-  assert.ok(full.group.rotation.x < -1.4, 'el otro modelo también queda tendido');
-  assert.equal(lod.group.rotation.x, 0, 'el que sale se limpia');
+  n.update(0.05, far);
+  assert.equal(full.ko.at(-1), 1, 'el otro modelo también queda tendido');
 });
 
 // ---------- animación procedural sobre el esqueleto ----------

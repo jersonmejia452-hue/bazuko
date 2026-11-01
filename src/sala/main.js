@@ -2,12 +2,13 @@
 // Arranque de sala.html: monta la prueba de ?prueba=<id> y el panel de botones.
 import { Sala } from './Sala.js';
 import { PRUEBAS } from './pruebas.js';
+import { streetWetness } from '../character/streetMaterials.js';
 
 const $ = (id) => document.getElementById(id);
 const setText = (id, value) => { if ($(id).textContent !== value) $(id).textContent = value; };
 
 function showError(error) {
-  $('sala-error').textContent = `${error.message ?? error} Puedes elegir «Actual» para comparar o recargar para reintentar.`;
+  $('sala-error').textContent = `${error.message ?? error} Puedes recargar para reintentar.`;
   $('sala-error').hidden = false;
 }
 
@@ -52,7 +53,7 @@ function showToasts() {
 const params = new URLSearchParams(location.search);
 const prueba = PRUEBAS.find((p) => p.id === params.get('prueba')) ?? PRUEBAS[0];
 const animaciones = params.get('animaciones') === 'mixamo-preview' ? 'mixamo-preview' : 'default';
-const apariencia = params.get('aspecto') === 'realista' ? 'street-preview' : 'default';
+const modeloRealista = params.get('aspecto') === 'realista';
 function navigateParam(name, value) {
   const url = new URL(location.href);
   if (value === 'default') url.searchParams.delete(name);
@@ -68,7 +69,7 @@ $('sala-banco').addEventListener('change', () => navigateParam('animaciones', $(
 $('sala-descripcion').textContent = prueba.descripcion;
 showToasts();
 
-const sala = new Sala($('sala-canvas'), { animaciones, apariencia });
+const sala = new Sala($('sala-canvas'), { animaciones });
 sala.steal = { buscado: 0 };  // lo sube pelear con peatones
 window.__sala = sala;
 
@@ -80,22 +81,13 @@ try {
 } catch { /* sin almacenamiento */ }
 // Un banco importado solo pertenece al modelo con esqueleto; una preferencia
 // anterior por el liviano no debe hacerse pasar por una carga Mixamo correcta.
-if (animaciones === 'mixamo-preview' || apariencia === 'street-preview') modelo = 'realista';
+if (animaciones === 'mixamo-preview' || modeloRealista) modelo = 'realista';
 
-$('sala-aspecto').value = apariencia;
-$('sala-aspecto').addEventListener('change', async () => {
-  const selected = $('sala-aspecto').value;
-  $('sala-aspecto').disabled = true;
-  try {
-    await sala.player.setAppearance(selected);
-    const url = new URL(location.href);
-    if (selected === 'street-preview') url.searchParams.set('aspecto', 'realista');
-    else url.searchParams.delete('aspecto');
-    history.replaceState(null, '', url);
-    $('sala-error').hidden = true;
-    updateAnimationStatus();
-  } catch (error) { showError(error); }
-  finally { $('sala-aspecto').disabled = false; }
+// Ropa y piel mojadas: en el juego las moja el clima, aquí se ven de una vez.
+$('sala-mojado').addEventListener('click', () => {
+  streetWetness.value = streetWetness.value > .5 ? 0 : 1;
+  $('sala-mojado').setAttribute('aria-pressed', String(streetWetness.value > .5));
+  setText('sala-mojado', streetWetness.value > .5 ? 'Secar' : 'Mojar con lluvia');
 });
 function setPanelVisible(visible) {
   $('sala-panel').hidden = !visible;
@@ -119,14 +111,9 @@ const PREVIEW_CLIPS = { reposo: 'idle', caminar: 'walk', correr: 'run' };
 const actionButtons = [];
 function updateAnimationStatus() {
   const character = sala.player.character;
-  const detailed = character.appearanceProfile === 'street-preview';
-  $('sala-aspecto-estado').dataset.profile = character.appearanceProfile ?? 'procedural';
-  setText('sala-aspecto-estado', sala.player.modelKind !== 'realista'
-    ? 'Selecciona el modelo Realista para ver los materiales.'
-    : detailed ? 'Piel, cabello y ropa con materiales diferenciados.' : 'Materiales actuales.');
   const status = character.animationStatus;
   const imported = status?.profile === 'mixamo-preview';
-  const source = imported ? 'Mixamo + Blender' : status ? 'Actual · ActionForge y poses procedurales' : 'Actual · modelo liviano procedural';
+  const source = imported ? 'Mixamo + Blender' : status ? 'Actual · andares horneados, ActionForge y poses procedurales' : 'Actual · modelo liviano procedural';
   setText('sala-banco-estado', imported ? `${source} · ${status.clips.length} clips cargados` : source);
   $('sala-banco-estado').dataset.profile = status?.profile ?? 'procedural';
   $('sala-banco-estado').dataset.source = status?.source ?? '';

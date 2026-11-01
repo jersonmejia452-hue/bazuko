@@ -26,7 +26,7 @@ export function createStats() {
 const silentAudio = new Proxy({}, { get: () => () => {} });
 
 export class Sala {
-  constructor(canvas, { animaciones = 'default', apariencia = 'default' } = {}) {
+  constructor(canvas, { animaciones = 'default' } = {}) {
     this.canvas = canvas;
     this.animationProfile = animaciones;
     this.renderer = new Renderer(canvas);
@@ -57,7 +57,7 @@ export class Sala {
     grid.position.y = 0.002;
     this.scene.add(grid);
 
-    this.player = new Player(this.scene, this.input, this.stats, this.audio, { animaciones, apariencia });
+    this.player = new Player(this.scene, this.input, this.stats, this.audio, { animaciones });
     this.player.game = this;
     this.player.position.set(0, 0, 0);
     this.player.root.position.copy(this.player.position);
@@ -98,7 +98,7 @@ export class Sala {
     return this.player.setModel(kind);
   }
 
-  /** Encuadres de inspección; mantienen la apariencia y el estado de la acción. */
+  /** Encuadres de inspección; mantienen la ropa y el estado de la acción. */
   frameCharacter(detail = false) {
     const camera = this.cameraRig;
     camera.releaseControls();

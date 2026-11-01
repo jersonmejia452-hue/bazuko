@@ -1,7 +1,8 @@
 // Identidad visual en coordenadas del mundo. No modifica tiles, destinos,
 // alturas ni navegación; los perfiles se comparten entre fachadas y andenes.
-const profile = (id, palette, signage) => Object.freeze({
-  id, palette: Object.freeze(palette), signage: Object.freeze(signage)
+const profile = (id, palette, signage, streets) => Object.freeze({
+  id, palette: Object.freeze(palette), signage: Object.freeze(signage),
+  ...(streets ? { streets: Object.freeze(streets) } : {})
 });
 
 export const NEIGHBORHOODS = Object.freeze({
@@ -24,12 +25,27 @@ export const NEIGHBORHOODS = Object.freeze({
     facadeBase: '#ddd8cf', facadeAccent: '#888b84', plinth: '#777872',
     trim: '#bcb9af', metal: '#717b7a', signBackground: '#555d5c',
     signText: '#e5e0d3', pavingTint: '#a6a49d'
-  }, { style: 'fascia', font: 'sans-serif', border: 'single', weathering: .3 })
+  }, { style: 'fascia', font: 'sans-serif', border: 'single', weathering: .3 }),
+  // Calles de adoquín sin pintura; quien pinta las líneas consulta streets.paintedLines.
+  candelaria: profile('candelaria', {
+    facadeBase: '#e6dcc4', facadeAccent: '#a65a3a', plinth: '#4d4a44',
+    trim: '#5b3d26', metal: '#2c2a28', signBackground: '#6e3f2a',
+    signText: '#f3e6c8', pavingTint: '#9c958a'
+  }, { style: 'painted', font: 'bold serif', border: 'single', weathering: .5 },
+  { cobbles: true, paintedLines: false }),
+  chapinero: profile('chapinero', {
+    facadeBase: '#a4563a', facadeAccent: '#7d3d2a', plinth: '#5e5a54',
+    trim: '#e6e0d2', metal: '#34383a', signBackground: '#2f4a44',
+    signText: '#efe6cf', pavingTint: '#b0a897'
+  }, { style: 'fascia', font: 'serif', border: 'double', weathering: .2 },
+  { cobbles: false, paintedLines: true })
 });
 
 /** Los límites siguen el recorrido del cambuche al comercio y al parque sur. */
 export function neighborhoodAt(x, z) {
   if (!Number.isFinite(x) || !Number.isFinite(z)) return NEIGHBORHOODS.centro;
+  // Al oriente de la Carrera 5; la avenida misma conserva el asfalto y sus líneas.
+  if (x >= 267) return z < 121 ? NEIGHBORHOODS.candelaria : NEIGHBORHOODS.chapinero;
   if (z >= 222) return NEIGHBORHOODS.lago;
   if (x >= 92 && x <= 144 && z >= 68 && z < 128) return NEIGHBORHOODS.cambuche;
   if (x >= 36 && x <= 184 && z >= 128 && z < 222) return NEIGHBORHOODS.comercio;

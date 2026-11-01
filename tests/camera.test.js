@@ -196,3 +196,23 @@ test('modo foto permite arrastrar sin bloquear el cursor y restaura el bloqueo a
   press();
   assert.equal(canvas.locks, 1);
 });
+
+test('con la cámara metida en el cuerpo avisa que no se dibuje, sin parpadear en el límite', () => {
+  const camera = rig();
+  const target = new THREE.Vector3();
+  camera.yaw = 0; camera.pitch = .1;
+  const wallAt = z => ({ queryStatic: () => [{ box: new THREE.Box3(new THREE.Vector3(-5, -1, z), new THREE.Vector3(5, 5, z + 1)) }] });
+  camera.follow(target, 1 / 60, wallAt(5));
+  assert.equal(camera.insideBody, false, 'Sin pared cerca');
+  camera.follow(target, 1 / 60, wallAt(.5));
+  assert.equal(camera.insideBody, true, 'De espaldas a la pared');
+  camera._armDistance = .85;
+  camera.follow(target, 0, wallAt(1.2));
+  assert.equal(camera.insideBody, true, 'Entre los dos límites conserva lo que tenía');
+  camera.follow(target, 1, wallAt(5));
+  assert.equal(camera.insideBody, false, 'Al alejarse vuelve');
+  camera.follow(target, 1 / 60, wallAt(.5));
+  camera.mode = 'isometric';
+  camera.follow(target, 1 / 60, wallAt(.5));
+  assert.equal(camera.insideBody, false, 'En isométrica nunca');
+});

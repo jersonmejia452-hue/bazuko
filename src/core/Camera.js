@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { GRAPHICS_PROFILES } from './GraphicsQuality.js';
 
+// Brazo de cámara con el que el cuerpo tapa la vista; al salir pide más, para que no parpadee en el límite.
+const INSIDE_BODY_IN = .75, INSIDE_BODY_OUT = 1;
+
 export class CameraRig {
   constructor(scene, canvas) {
     this.camera = new THREE.PerspectiveCamera(
@@ -22,6 +25,7 @@ export class CameraRig {
     this._box = new THREE.Box3();
     this._ray = new THREE.Ray();
     this._snap = true;
+    this.insideBody = false;
     this._drag = null;
     this.baseFov = 55;
     this.targetFov = 55;
@@ -230,6 +234,7 @@ export class CameraRig {
       else this._armDistance = THREE.MathUtils.lerp(this._armDistance, distance, 1 - Math.exp(-8 * dt));
       this.camera.position.copy(this._look).addScaledVector(this._direction, this._armDistance);
     }
+    this.insideBody = this.mode === 'third-person' && this._armDistance < (this.insideBody ? INSIDE_BODY_OUT : INSIDE_BODY_IN);
     // Orientación definida incluso si un obstáculo obliga a acercarse hasta el punto de mira.
     this._desired.copy(this._look);
     if (this.mode === 'third-person') this._desired.addScaledVector(this._direction, -1);

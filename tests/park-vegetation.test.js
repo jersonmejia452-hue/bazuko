@@ -153,9 +153,12 @@ test('viento compartido conserva PBR y permite congelar matrices sin tareas por 
   first.material.onBeforeCompile(shader);
   assert.equal(shader.uniforms.parkWindTime, windTime);
   assert.ok(shader.vertexShader.includes('attribute vec3 treeWind'));
-  for (const chunk of ['<lights_fragment_begin>', '<shadowmap_pars_fragment>', '<tonemapping_fragment>', '<fog_fragment>']) {
+  for (const chunk of ['<shadowmap_pars_fragment>', '<tonemapping_fragment>', '<fog_fragment>']) {
     assert.ok(shader.fragmentShader.includes(chunk));
   }
+  // El campo de sol despliega el trozo de luces para parchearlo: se comprueba que siga ahí, ya con su sombra.
+  assert.ok(shader.fragmentShader.includes('getDirectionalLightInfo'));
+  assert.ok(shader.fragmentShader.includes('sunFieldLit'));
   windTime.value = 20;
   assert.equal(shader.uniforms.parkWindTime.value, 20);
   assert.ok(first.matrixWorld.equals(previous));

@@ -15,6 +15,8 @@ Asfalto gris azulado, concreto tibio, ladrillo tolete, metal pintado y vegetaci�
 
 `textures.js` genera asfalto, andén, ladrillo, concreto, tierra, césped, tejas, placas y fachadas. Color, relieve y rugosidad se dibujan por separado: un aviso no se convierte en relieve y una mancha no se convierte en un agujero. El color usa sRGB; relieve y rugosidad usan datos lineales. Los materiales repiten en metros y comparten texturas entre edificios.
 
+`GroundDressing.js` viste el pasto y los andenes sin texturas por parque: una máscara de desgaste de un texel por metro sale del mapa de tiles, y el ruido que la cúpula ya tiene en memoria da manchas, matas y borde mordido. La ciudad detrás de la terminal arranca a unos 15 m de la reja, con retiros y calles entre bloques por donde se ven los de atrás.
+
 La humedad suaviza la rugosidad y oscurece ligeramente el suelo sin convertirlo en metal. En baja se conserva una respuesta más discreta a la lluvia. La ribera usa una sola malla, un material PBR y una textura de detalle pequeña, con mezcla por vértices; no modifica el fondo ni la profundidad física.
 
 `NeighborhoodIdentity.js` contiene perfiles y límites en coordenadas del mundo. `UrbanBuildings.js` aplica los perfiles a sus materiales conservando el plan físico y las alturas de los solares.

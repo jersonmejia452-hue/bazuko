@@ -22,6 +22,13 @@ const ROUTE_SAMPLE_STEP = 2;
 const CHASE_HEIGHT_TOLERANCE = .85;
 const CHASE_PROBE_STEP = .25;
 const CHASE_STEERING = [0, .45, -.45, .9, -.9, 1.35, -1.35, Math.PI / 2, -Math.PI / 2];
+const REJOIN_TIMEOUT = 6;
+const REJOIN_NODE_MARGIN = 4;
+const REJOIN_CLEAR_RADIUS = 9;
+const REJOIN_PERSON_RADIUS = 4;
+// A la vista del jugador el salto se nota: aguanta más, sin quedarse trancando la vía para siempre.
+const REJOIN_SEEN_RADIUS = 40;
+const REJOIN_SEEN_TIMEOUT = 30;
 
 function emit(type, detail) {
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
@@ -81,9 +88,14 @@ export class TrafficSystem {
   _spawn(scene, route, distance, police) {
     const random = this.random;
     route.sample(distance, this._position, this._direction);
+    // La flota sale por conteo y no gasta azar: una de cada doce es buseta, tres de cada diez taxi. Con huellas
+    // distintas por modelo, el mismo azar da así siempre el mismo tráfico.
+    const count = this._spawnCount = (this._spawnCount ?? 0) + 1;
+    const buseta = !police && count % 12 === 0;
+    const kind = police ? 'police' : buseta ? 'buseta' : count * 7 % 10 < 3 ? 'taxi' : 'carro';
     const car = new Car(scene, this._position, Math.atan2(-this._direction.z, this._direction.x),
-      { traffic: true, kind: police ? 'police' : null });
-    const cruiseSpeed = 10 + random() * 4;
+      { traffic: true, kind, variant: count * 37 });
+    const cruiseSpeed = (10 + random() * 4) * (buseta ? .8 : 1);
     this.vehicles.push({ car, route, distance, speed: 0, cruiseSpeed, patrolSpeed: cruiseSpeed, nextDistance: distance, nextSpeed: 0,
       acceleration: 0, accelerationLimit: 1.8 + random() * .7, braking: 2.2 + random() * .6,
       reactionTime: .18 + random() * .35, resumeDelay: 0, stopped: false,
@@ -176,6 +188,12 @@ export class TrafficSystem {
         if (score < bestScore) { bestScore = score; bestRoute = route; bestDistance = d; }
       }
     }
+    // No volver dentro de un cruce: ahí entra sin reserva y sobre la trayectoria de otro.
+    for (let tries = 0; tries < 30; tries++) {
+      bestRoute.sample(bestDistance, this._probePosition, this._probeDirection);
+      if (!this._nearNode(this._probePosition)) break;
+      bestDistance = (bestDistance + 3) % bestRoute.length;
+    }
     vehicle.route = bestRoute;
     vehicle.distance = vehicle.nextDistance = bestDistance;
     vehicle.recentRoutes = [bestRoute.key];
@@ -183,11 +201,77 @@ export class TrafficSystem {
     if (this.environment && vehicle.car.position.distanceTo(this._position) > .2) {
       // Regresar al carril también es movimiento físico; no saltar una manzana ni cambiar de planta.
       vehicle.rejoinTarget = this._position.clone();
+      vehicle._rejoinStuck = 0;
       return;
     }
     vehicle.rejoinTarget = null;
     vehicle.car.position.copy(this._position);
     vehicle.car.group.rotation.y = Math.atan2(-this._direction.z, this._direction.x);
+  }
+
+  _nearNode(point) {
+    const nodes = this.signals?.nodes;
+    if (!nodes) return false;
+    for (const node of nodes) {
+      if (point.x >= node.x0 - REJOIN_NODE_MARGIN && point.x <= node.x1 + REJOIN_NODE_MARGIN &&
+        point.z >= node.z0 - REJOIN_NODE_MARGIN && point.z <= node.z1 + REJOIN_NODE_MARGIN) return true;
+    }
+    return false;
+  }
+
+  _vehicleNear(point, vehicle, list) {
+    if (!list) return false;
+    for (const other of list) {
+      if (other !== vehicle && other.car.position.distanceToSquared(point) < REJOIN_CLEAR_RADIUS ** 2) return true;
+    }
+    return false;
+  }
+
+  _playerWithin(point, radius) {
+    const player = this._playerPosition;
+    if (!player) return false;
+    return (player.x - point.x) ** 2 + (player.z - point.z) ** 2 < radius ** 2;
+  }
+
+  _personNear(point) {
+    if (this._playerWithin(point, REJOIN_PERSON_RADIUS)) return true;
+    if (!this._personGrid) return false;
+    const r = REJOIN_PERSON_RADIUS;
+    this._personGrid.query(point.x - r, point.z - r, point.x + r, point.z + r, this._personCandidates);
+    return this._personCandidates.some(({ position }) => (position.x - point.x) ** 2 + (position.z - point.z) ** 2 < r * r);
+  }
+
+  /** Con un bus parado al lado no aguanta los 30 s: el bus no sale de ahí mientras la patrulla siga contra su costado. */
+  _blocksBus(vehicle) {
+    const { position } = vehicle.car;
+    return (this.busVehicles ?? []).some(({ car }) => car.speed < .1 && Math.abs(car.position.y - position.y) < 3 &&
+      Math.hypot(car.position.x - position.x, car.position.z - position.z) < car.length / 2 + 6);
+  }
+
+  /**
+   * Tope del regreso a ojo: si lleva rato sin avanzar (un poste, o un carro que justo espera a que él se quite), entra
+   * a su carril en el primer punto libre, sin cruce, vehículos ni personas cerca. A la vista del jugador espera más y
+   * busca un punto lejos de él. Si no lo hay en toda la ruta, sigue esperando.
+   */
+  _forceRejoin(vehicle) {
+    const overdue = vehicle._rejoinStuck > REJOIN_SEEN_TIMEOUT || this._blocksBus(vehicle);
+    if (!overdue && this._playerWithin(vehicle.car.position, REJOIN_SEEN_RADIUS)) return false;
+    const { route } = vehicle, point = this._position;
+    let distance = vehicle.distance;
+    for (let walked = 0; walked < route.length; walked += 3, distance = (distance + 3) % route.length) {
+      route.sample(distance, point, this._direction);
+      if ((!overdue && this._playerWithin(point, REJOIN_SEEN_RADIUS)) || this._nearNode(point) || this._personNear(point) ||
+        this._vehicleNear(point, vehicle, this.vehicles) || this._vehicleNear(point, vehicle, this.parkedCars) ||
+        this._vehicleNear(point, vehicle, this.busVehicles)) continue;
+      vehicle.distance = vehicle.nextDistance = distance;
+      vehicle.car.position.copy(point);
+      vehicle.car.group.rotation.y = Math.atan2(-this._direction.z, this._direction.x);
+      vehicle.rejoinTarget = null;
+      vehicle.speed = vehicle.nextSpeed = 0;
+      return true;
+    }
+    vehicle._rejoinStuck = 0;
+    return false;
   }
 
   /** Muestreo exclusivamente visual: no escribe el rumbo físico ni la planificación del tráfico. */
@@ -277,6 +361,10 @@ export class TrafficSystem {
 
   _carInPath(other, car) {
     if (Math.abs(other.car.position.y - car.position.y) > 3) return false;
+    // Quien viene detrás no estorba, tampoco en una curva, donde ya no van paralelos: avanzar solo aleja de él.
+    // Sin esto, el que dobla y el que lo sigue se esperan mutuamente sin límite.
+    const yaw = car.group.rotation.y;
+    if ((other.car.position.x - car.position.x) * Math.cos(yaw) - (other.car.position.z - car.position.z) * Math.sin(yaw) <= 0) return false;
     const dx = other.car.position.x - this._probePosition.x, dz = other.car.position.z - this._probePosition.z;
     const headingX = other.heading?.x ?? Math.cos(other.car.group.rotation.y);
     const headingZ = other.heading?.z ?? -Math.sin(other.car.group.rotation.y);
@@ -288,8 +376,13 @@ export class TrafficSystem {
     // Un seguidor en el mismo carril no debe bloquear al carro que lleva delante.
     if (headingDot > .9 && front <= 0) return false;
     const margin = along > .9 ? GAP : .35;
-    return Math.abs(front) < car.length / 2 + along * other.car.length / 2 + across * other.car.width / 2 + margin &&
-      Math.abs(side) < car.width / 2 + across * other.car.length / 2 + along * other.car.width / 2 + .15;
+    if (Math.abs(front) >= car.length / 2 + along * other.car.length / 2 + across * other.car.width / 2 + margin ||
+      Math.abs(side) >= car.width / 2 + across * other.car.length / 2 + along * other.car.width / 2 + .15) return false;
+    // Cruzados en ángulo, proyectar solo sobre los ejes propios agranda al otro: una buseta en el carril
+    // contrario frenaría a quien termina de doblar. También se separan por los ejes del otro.
+    const otherFront = dx * headingX + dz * headingZ, otherSide = -dx * headingZ + dz * headingX;
+    return Math.abs(otherFront) < other.car.length / 2 + along * car.length / 2 + across * car.width / 2 + margin &&
+      Math.abs(otherSide) < other.car.width / 2 + across * car.length / 2 + along * car.width / 2 + .15;
   }
 
   _overlapsNode(car, node, heading = null) {
@@ -326,11 +419,18 @@ export class TrafficSystem {
       }
       state.queue = state.queue.filter(vehicle => candidates.includes(vehicle));
       for (const vehicle of candidates) if (!state.queue.includes(vehicle)) state.queue.push(vehicle);
+      // La patrulla que vuelve entra de última a la cola, pero puede quedar adelante en el carril: el de atrás tendría
+      // la reserva sin poder usarla y quien la necesita esperaría para siempre. En un carril, primero el de adelante.
+      for (let i = 0; i < state.queue.length; i++) for (let j = i + 1; j < state.queue.length; j++) {
+        const a = state.queue[i], b = state.queue[j];
+        if (this._aheadInLane(a, b)) { state.queue[i] = b; state.queue[j] = a; }
+      }
       for (const [vehicle, claim] of state.owners) {
         const overlaps = this._overlapsNode(vehicle.car, node);
         claim.entered ||= overlaps;
         if ((claim.entered && !overlaps) || (!claim.entered &&
           (signalState(this.signals.time, claim.plan.axis) !== 0 || !candidates.includes(vehicle)))) state.owners.delete(vehicle);
+        else if (claim.entered) claim.from = this._planProgress(vehicle.car, claim.plan);
       }
       for (const vehicle of state.plans.keys()) if (!candidates.includes(vehicle) && !state.owners.has(vehicle)) state.plans.delete(vehicle);
       for (const vehicle of candidates) if (!state.plans.has(vehicle)) state.plans.set(vehicle, this._crossingPlan(vehicle, node));
@@ -356,7 +456,7 @@ export class TrafficSystem {
         const plan = state.plans.get(vehicle), entered = this._overlapsNode(vehicle.car, node);
         if (!entered && signalState(this.signals.time, plan.axis) !== 0) continue;
         const blocked = (busClaims && this._pathsConflict(plan, state.busPlan)) ||
-          [...state.owners.values()].some(claim => this._pathsConflict(plan, claim.plan)) ||
+          [...state.owners.values()].some(claim => this._claimConflict(plan, claim)) ||
           waiting.some(earlier => this._pathsConflict(plan, earlier));
         if (blocked && !entered) waiting.push(plan);
         else state.owners.set(vehicle, { entered, plan });
@@ -364,6 +464,17 @@ export class TrafficSystem {
       state.busBlocked = !!state.busPlan && [...state.owners.values()].some(claim => this._pathsConflict(claim.plan, state.busPlan));
       for (const vehicle of state.queue) vehicle.crossingNode ??= node;
     }
+  }
+
+  /** ¿`b` va delante de `a` en su carril? Dos rutas distintas pueden compartir el mismo tramo. */
+  _aheadInLane(a, b) {
+    if (a.route === b.route) return (b.distance - a.distance + a.route.length) % a.route.length < 40;
+    const yaw = a.car.group.rotation.y;
+    if (Math.cos(yaw - b.car.group.rotation.y) < .9) return false;
+    const hx = Math.cos(yaw), hz = -Math.sin(yaw);
+    const dx = b.car.position.x - a.car.position.x, dz = b.car.position.z - a.car.position.z;
+    const ahead = dx * hx + dz * hz;
+    return ahead > 0 && ahead < 40 && Math.abs(dz * hx - dx * hz) < 1;
   }
 
   _crossingPlan(vehicle, node) {
@@ -379,17 +490,44 @@ export class TrafficSystem {
       route.sample(distance + entry - .75, this._probePosition, this._probeDirection);
       if (!inside(this._probePosition)) break;
     }
+    // Dos cruces del desvío se montan sobre la carrera vecina. Lo que cae en el más angosto lo arbitra ese:
+    // si no, quien espera el rojo de la carrera le quita el verde del cruce ancho a los que pasan por ella.
+    const span = other => other.x1 - other.x0;
+    const narrower = this.signals.nodes.filter(other => other !== node && span(other) < span(node) &&
+      other.x0 < node.x1 && other.x1 > node.x0 && other.z0 < node.z1 && other.z1 > node.z0);
+    const delegated = point => narrower.some(other => point.x >= other.x0 - pad && point.x <= other.x1 + pad && point.z >= other.z0 - pad && point.z <= other.z1 + pad);
     const plan = { points: [], width: car.width, axis: 0, compatible: new WeakMap() };
     for (let ahead = entry; ahead < entry + 100; ahead += .75) {
       route.sample(distance + ahead, this._probePosition, this._probeDirection);
       if (!inside(this._probePosition)) break;
-      if (!plan.points.length) {
+      if (plan.hx === undefined) {
         plan.hx = this._probeDirection.x; plan.hz = this._probeDirection.z;
         plan.axis = Math.abs(plan.hx) >= Math.abs(plan.hz) ? 0 : 1;
       }
-      plan.points.push({ x: this._probePosition.x, z: this._probePosition.z });
+      if (!delegated(this._probePosition)) plan.points.push({ x: this._probePosition.x, z: this._probePosition.z });
     }
     return plan;
+  }
+
+  /** Primer punto de la trayectoria que el carro todavía no ha dejado atrás con la cola. */
+  _planProgress(car, plan) {
+    const hx = Math.cos(car.group.rotation.y), hz = -Math.sin(car.group.rotation.y);
+    const behind = car.length / 2 + .75;
+    let index = 0;
+    while (index < plan.points.length && (plan.points[index].x - car.position.x) * hx + (plan.points[index].z - car.position.z) * hz < -behind) index++;
+    return index;
+  }
+
+  /** Quien ya está dentro solo reserva lo que le falta: el tramo que dejó atrás ya no le estorba a nadie. */
+  _claimConflict(plan, claim) {
+    if (!this._pathsConflict(plan, claim.plan)) return false;
+    if (!claim.from) return true;
+    const margin = (plan.width + claim.plan.width) / 2 + .5;
+    for (let index = claim.from; index < claim.plan.points.length; index++) {
+      const p = claim.plan.points[index];
+      if (plan.points.some(q => (p.x - q.x) ** 2 + (p.z - q.z) ** 2 < margin ** 2)) return true;
+    }
+    return false;
   }
 
   _pathsConflict(a, b) {
@@ -397,9 +535,10 @@ export class TrafficSystem {
     const cached = a.compatible?.get(b);
     if (cached !== undefined) return cached;
     const startA = a.points[0], startB = b.points[0];
-    // Una misma entrada permite seguir al líder; el control de distancia impide alcanzarlo.
+    // Una misma entrada permite seguir al líder; el control de distancia impide alcanzarlo. Solo cuenta la separación
+    // lateral: cada plan empieza según la huella de su carro, y una buseta y un sedán del mismo carril no coinciden.
     const sameEntry = startA && startB && a.hx * b.hx + a.hz * b.hz > .99 &&
-      Math.hypot(startA.x - startB.x, startA.z - startB.z) < 1.2;
+      Math.abs((startB.x - startA.x) * -a.hz + (startB.z - startA.z) * a.hx) < 1.2;
     const margin = (a.width + b.width) / 2 + .5;
     const conflict = !sameEntry && a.points.some(p => b.points.some(q => (p.x - q.x) ** 2 + (p.z - q.z) ** 2 < margin ** 2));
     a.compatible?.set(b, conflict); b.compatible?.set(a, conflict);
@@ -646,6 +785,10 @@ export class TrafficSystem {
         travel = safeTravel;
         if (vehicle._chaseCanMove) vehicle.car.position.y = this._chaseSweepY;
       }
+      if (vehicle.rejoinTarget) {
+        vehicle._rejoinStuck = travel > 1e-3 ? 0 : (vehicle._rejoinStuck ?? 0) + stepTime;
+        if (vehicle._rejoinStuck > REJOIN_TIMEOUT && this._forceRejoin(vehicle)) return false;
+      }
       vehicle.car.position.x += nx * travel;
       vehicle.car.position.z += nz * travel;
       if (travel > 0) vehicle.car.group.rotation.y = Math.atan2(-nz, nx);
@@ -658,6 +801,7 @@ export class TrafficSystem {
   update(dt, { player = null, pedestrians = [], onPlayerHit = null } = {}) {
     if (dt <= 0) return;
     let caught = false;
+    this._playerPosition = player;
     this._coordinateIntersections();
     for (const vehicle of this.vehicles) {
       if (vehicle.state === 'chase' || vehicle.rejoinTarget) continue;

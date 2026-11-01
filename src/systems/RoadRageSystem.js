@@ -4,7 +4,7 @@
 // precarga durante la pantalla de carga y se reutiliza.
 import * as THREE from 'three';
 import { AngryDriver, ROAD_RAGE } from '../entities/AngryDriver.js';
-import { canReachCombatTarget } from './CombatGeometry.js';
+import { canReachCombatTarget, hasClearCombatLine } from './CombatGeometry.js';
 
 const toast = (text, type = 'info') => globalThis.window?.dispatchEvent?.(new CustomEvent('toast', { detail: { text, type } }));
 
@@ -26,6 +26,7 @@ export class RoadRageSystem {
     this.stopTimer = 0;
     this.onPlayerHurt = null;
     this._door = new THREE.Vector3();
+    this._doorSide = -1;     // lado por el que se bajó: por ahí mismo regresa
     this._people = null;
   }
 
@@ -93,15 +94,24 @@ export class RoadRageSystem {
     if (this.state === 'stopping') {
       this.stopTimer += dt;
       if (this.vehicle.speed > .05 && this.stopTimer < ROAD_RAGE.stopTimeout) return;
-      car.setDriverInside?.(false);
-      car.driverDoor(this._door);
+      // La puerta de la buseta da al andén: si ahí hay un parqueado o una pared, se baja por el otro lado.
+      this._doorSide = car.vehicle?.driverDoor?.side ?? -1;
+      car.driverDoor(this._door, this._doorSide);
       this._door.y = this._ground(this._door.x, this._door.z, car.position.y);
+      if (!hasClearCombatLine({ from: this._door, to: { x: this._door.x + .04, y: this._door.y, z: this._door.z + .04 }, collisions: this.collisions, chestHeight: .8 })) {
+        this._doorSide = -this._doorSide;
+        car.driverDoor(this._door, this._doorSide);
+        this._door.y = this._ground(this._door.x, this._door.z, car.position.y);
+      }
+      // Frenó tan lejos que ya no alcanzaría al jugador: sigue su camino en vez de anunciar la varilla y rendirse en el mismo cuadro.
+      if (Math.hypot(this._door.x - this.player.position.x, this._door.z - this.player.position.z) > ROAD_RAGE.giveUpDistance - .5) { this._release(); return; }
+      car.setDriverInside?.(false);
       this.driver.exitCar(car, this._door);
       this._people?.push(this.driver);
       this.state = 'out';
       toast('😡 ¡El conductor se bajó con una varilla! Corre (Shift).', 'death');
     }
-    car.driverDoor(this._door);
+    car.driverDoor(this._door, this._doorSide);
     this._door.y = this._ground(this._door.x, this._door.z, car.position.y);
     const result = this.driver.think(dt, { player: this.player.position, door: this._door, canChase });
     if (result === 'swing') this.audio?.playWhoosh?.();

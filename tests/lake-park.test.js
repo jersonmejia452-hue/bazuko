@@ -29,8 +29,10 @@ test('el lago permite entrar al jugador y conserva agua bloqueada para peatones 
   const nav = city._createPedestrianNavigation();
   assert.equal(nav.isWalkableAt(40, 262), false);
   assert.equal(nav.isWalkableAt(66, 262), false);
-  assert.equal(nav.isWalkableAt(70, 262), true);
-  assert.equal(nav.isWalkableAt(78, 270), true);
+  // El tablero es del bus: sobre el agua no hay red, y en tierra se pasa por debajo.
+  assert.equal(nav.isWalkableAt(70, 262), false);
+  assert.equal(nav.isWalkableAt(78, 270), false);
+  assert.equal(nav.isWalkableAt(78, 296), true);
   assert.equal(city.createGpsNavigation().isRoutable(40, 262), false);
 });
 

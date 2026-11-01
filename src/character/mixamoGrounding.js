@@ -1,8 +1,11 @@
 import { AnimationMixer, LoopOnce, Matrix4, Vector3, VectorKeyframeTrack } from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
-/** Soporte de los vértices visibles con skin, incluidas suelas y ropa. */
-export function createSkinSupport(root) {
+/**
+ * Soporte de los vértices visibles con skin, incluidas suelas y ropa. Con `bones` solo mira los
+ * vértices que dependen de esos huesos: de pie o andando, lo más bajo siempre es un pie.
+ */
+export function createSkinSupport(root, { bones = null } = {}) {
   const meshes = [];
   const point = new Vector3(), matrix = new Matrix4(), inverseRoot = new Matrix4();
   root.traverse(mesh => {
@@ -10,7 +13,15 @@ export function createSkinSupport(root) {
     const geometry = mesh.geometry;
     const position = geometry.attributes.position, indices = geometry.attributes.skinIndex, weights = geometry.attributes.skinWeight;
     if (!position || !indices || !weights) return;
-    const visible = geometry.index ? [...new Set(geometry.index.array)] : Array.from({ length: position.count }, (_, i) => i);
+    let visible = geometry.index ? [...new Set(geometry.index.array)] : Array.from({ length: position.count }, (_, i) => i);
+    if (bones) {
+      const wanted = mesh.skeleton.bones.map(bone => bones.test(bone.name));
+      visible = visible.filter(index => {
+        for (let j = 0; j < 4; j++) if (weights.getComponent(index, j) > 0 && wanted[indices.getComponent(index, j)]) return true;
+        return false;
+      });
+      if (!visible.length) return;
+    }
     const vertices = new Float64Array(visible.length * 3), joints = new Uint16Array(visible.length * 4), influence = new Float64Array(visible.length * 4);
     visible.forEach((index, i) => {
       point.fromBufferAttribute(position, index).applyMatrix4(mesh.bindMatrix).toArray(vertices, i * 3);

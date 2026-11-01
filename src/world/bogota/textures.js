@@ -113,7 +113,7 @@ export function asphalt(seed = 7, size = 1024) {
   size = THREE.MathUtils.clamp(Math.round(Number.isFinite(size) ? size : 1024), 64, 1024);
   const s = surface(size, size, '#41474c', 212);
   const { x, xb, xr } = s;
-  aggregate(s, r, Math.round(size * size * .065), ['#4b5054', '#383e43', '#555953', '#464b4e', '#62635c'], Math.max(1, size / 512));
+  aggregate(s, r, Math.round(size * size * .065), ['#4b5054', '#3b4146', '#505450', '#464b4e', '#585953'], Math.max(1, size / 512));
   for (let i = 0; i < 12; i++) {
     const px = r() * size, py = r() * size, radius = size * (.035 + r() * .13);
     softPatch(x, size, size, px, py, radius, radius * .7,
@@ -137,37 +137,66 @@ export function asphalt(seed = 7, size = 1024) {
   for (let i = 0; i < 15; i++) {
     const px = r() * size, py = r() * size;
     const rx = size * (.025 + r() * .10), ry = size * (.015 + r() * .055);
-    softPatch(xr, size, size, px, py, rx, ry, 'rgba(145,145,145,.9)');
+    softPatch(xr, size, size, px, py, rx, ry, 'rgba(185,185,185,.9)');
     softPatch(x, size, size, px, py, rx, ry, 'rgba(28,35,39,.10)');
   }
   return surfaceMaps(s);
 }
 
-/** Losas de andén con juntas, cantos biselados y reparaciones discretas. */
+/** Losas de andén fundidas una a una: juntas finas, tono propio, reparaciones y manchas grandes sin grano que parpadee. */
 export function sidewalk(seed = 11, { district = 'centro' } = {}) {
   const r = rng(seed);
   const palette = districtPalette(district), s = 512;
-  const maps = surface(s, s, '#73746d', 218), { x, xb, xr } = maps;
-  const tile = 64;
+  const maps = surface(s, s, '#5f5e56', 218), { x, xb, xr } = maps;
+  const tile = 64, gap = 1.5;
   for (let ty = 0; ty < s; ty += tile) {
     for (let tx = 0; tx < s; tx += tile) {
-      const v = 139 + Math.floor(r() * 28), repaired = r() < .09;
-      x.fillStyle = repaired ? '#a29c90' : `rgb(${v + 5},${v + 3},${v - 3})`;
-      x.fillRect(tx + 2, ty + 2, tile - 4, tile - 4);
+      const v = 136 + Math.floor(r() * 26), repaired = r() < .08, size = tile - gap * 2;
+      x.fillStyle = repaired ? '#a39e91' : `rgb(${v + 5},${v + 3},${v - 3})`;
+      x.fillRect(tx + gap, ty + gap, size, size);
       x.fillStyle = palette.pavingTint; x.globalAlpha = .16;
-      x.fillRect(tx + 2, ty + 2, tile - 4, tile - 4); x.globalAlpha = 1;
-      x.fillStyle = 'rgba(226,220,203,.24)'; x.fillRect(tx + 2, ty + 2, tile - 4, 1);
-      xb.fillStyle = '#717171'; xb.fillRect(tx, ty, tile, tile);
-      xb.fillStyle = repaired ? '#838383' : '#898989'; xb.fillRect(tx + 2, ty + 2, tile - 4, tile - 4);
-      xb.fillStyle = '#919191'; xb.fillRect(tx + 3, ty + 3, tile - 6, 1);
-      xr.fillStyle = gray(195 + Math.floor(r() * 28)); xr.fillRect(tx + 2, ty + 2, tile - 4, tile - 4);
+      x.fillRect(tx + gap, ty + gap, size, size); x.globalAlpha = 1;
+      // El polvo se junta contra las juntas; el centro de la losa queda más lavado por los pasos.
+      x.strokeStyle = 'rgba(58,54,44,.13)'; x.lineWidth = 5;
+      x.strokeRect(tx + gap + 2.5, ty + gap + 2.5, size - 5, size - 5);
+      xb.fillStyle = '#6a6a6a'; xb.fillRect(tx, ty, tile, tile);
+      xb.fillStyle = gray(repaired ? 129 : 134 + Math.floor(r() * 7)); xb.fillRect(tx + gap, ty + gap, size, size);
+      xr.fillStyle = gray(195 + Math.floor(r() * 28)); xr.fillRect(tx + gap, ty + gap, size, size);
+      // Una losa de cada tantas se partió o perdió una esquina.
+      if (r() < .13) {
+        let cx = tx + gap + r() * size, cy = ty + gap;
+        const vertical = r() < .5, end = 4 + Math.floor(r() * 3);
+        for (const [ctx, color] of [[x, 'rgba(44,41,36,.62)'], [xb, '#6e6e6e']]) {
+          ctx.strokeStyle = color; ctx.lineWidth = .9; ctx.beginPath(); ctx.moveTo(cx, cy);
+        }
+        for (let step = 1; step <= end; step++) {
+          cy = ty + gap + size * step / end; cx += (r() - .5) * 11;
+          cx = Math.max(tx + gap, Math.min(tx + tile - gap, cx));
+          const [px, py] = vertical ? [cx, cy] : [tx + (cy - ty), ty + (cx - tx)];
+          x.lineTo(px, py); xb.lineTo(px, py);
+        }
+        x.stroke(); xb.stroke();
+      }
+      if (r() < .1) {
+        const corner = 3 + r() * 5, ox = tx + gap + (r() < .5 ? 0 : size), oy = ty + gap + (r() < .5 ? 0 : size);
+        const sx = ox > tx + tile / 2 ? -1 : 1, sy = oy > ty + tile / 2 ? -1 : 1;
+        for (const [ctx, color] of [[x, '#5a574e'], [xb, '#696969']]) {
+          ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox + sx * corner, oy); ctx.lineTo(ox, oy + sy * corner); ctx.fill();
+        }
+      }
     }
   }
-  speckle(x, s, s, r, 6500, ['rgba(70,67,58,.16)', 'rgba(231,225,206,.18)'], 1.6);
-  for (let i = 0; i < 6; i++) {
-    const px = r() * s, py = r() * s, pr = 20 + r() * 60;
-    softPatch(x, s, s, px, py, pr, pr * .75, 'rgba(76,70,53,.17)');
-    softPatch(xr, s, s, px, py, pr, pr * .75, 'rgba(172,172,172,.3)');
+  // Solo un velo de grano: con más contraste los puntos titilan cuando la losa se aleja.
+  speckle(x, s, s, r, 3500, ['rgba(70,67,58,.07)', 'rgba(231,225,206,.08)'], 1.6);
+  for (let i = 0; i < 16; i++) {
+    const px = r() * s, py = r() * s, pr = 22 + r() * 70;
+    softPatch(x, s, s, px, py, pr, pr * .72, pick(r, ['rgba(70,64,48,.2)', 'rgba(52,50,44,.17)', 'rgba(190,184,164,.12)']));
+    softPatch(xr, s, s, px, py, pr, pr * .72, 'rgba(172,172,172,.3)');
+  }
+  // Chicles y goterones viejos: pocos, oscuros y de varios píxeles.
+  for (let i = 0; i < 26; i++) {
+    const px = r() * s, py = r() * s, pr = 1.6 + r() * 2.6;
+    softPatch(x, s, s, px, py, pr, pr * (.7 + r() * .3), 'rgba(38,36,32,.5)');
   }
   return surfaceMaps(maps);
 }
@@ -670,33 +699,43 @@ export function dirt(seed = 31) {
   return surfaceMaps(maps);
 }
 
-/** Césped de clima frío: mezcla oliva y paja corta, sin reutilizar la tierra coloreada. */
+/** Césped de clima frío, por matas: hojas oscuras, verdes y de paja sobre tierra que asoma entre ellas. */
 export function grass(seed = 61) {
   const r = rng(seed), s = 512;
-  const maps = surface(s, s, '#69734f', 232), { x, xb, xr } = maps;
-  for (let i = 0; i < 18; i++) {
-    const px = r() * s, py = r() * s, radius = 28 + r() * 85;
-    softPatch(x, s, s, px, py, radius, radius * .8,
-      pick(r, ['rgba(67,83,49,.24)', 'rgba(111,121,77,.16)', 'rgba(95,100,65,.18)']));
-    softPatch(xr, s, s, px, py, radius, radius * .8, 'rgba(202,202,202,.25)');
-  }
-  // Grano fino de césped cortado: la variación grande viene de matas, no de puntos claros aislados.
-  for (let i = 0; i < 12000; i++) {
-    const px = r() * s, py = r() * s, length = 1 + r() * 2.2, lean = (r() - .5) * 2;
-    for (const [ctx, color] of [[x, pick(r, ['rgba(112,125,83,.38)', 'rgba(94,109,71,.35)', 'rgba(117,128,87,.3)'])], [xb, gray(128 + Math.floor(r() * 6))]]) {
-      ctx.strokeStyle = color; ctx.lineWidth = .45; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + lean, py - length); ctx.stroke();
-    }
-  }
-  // Matas bajas de tamaños mezclados; todas las trazas repiten su geometría en el mapa de altura.
-  for (let i = 0; i < 170; i++) {
-    const cx = r() * s, cy = r() * s, spread = 2 + r() * 8, blades = 5 + Math.floor(r() * 10);
-    softPatch(x, s, s, cx, cy, spread * 1.6, spread, 'rgba(77,93,57,.14)');
-    for (let blade = 0; blade < blades; blade++) {
-      const px = cx + (r() - .5) * spread, py = cy + (r() - .5) * spread;
-      const length = 2.5 + r() * 4.5, lean = (r() - .5) * 5;
-      for (const [ctx, color] of [[x, pick(r, ['rgba(114,126,81,.38)', 'rgba(94,110,70,.4)', 'rgba(120,130,86,.32)'])], [xb, '#878787']]) {
-        ctx.strokeStyle = color; ctx.lineWidth = .55; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + lean, py - length); ctx.stroke();
+  const maps = surface(s, s, '#4d5a39', 236), { x, xb, xr } = maps;
+  // La hoja que cruza el borde se dibuja también al otro lado: la repetición no corta una mata.
+  const blade = (px, py, length, lean, width, color, height) => {
+    const margin = length + 8;
+    for (const ox of px < margin ? [0, s] : px > s - margin ? [0, -s] : [0]) {
+      for (const oy of py < margin ? [0, s] : py > s - margin ? [0, -s] : [0]) {
+        for (const [ctx, stroke] of [[x, color], [xb, height]]) {
+          ctx.strokeStyle = stroke; ctx.lineWidth = width; ctx.beginPath();
+          ctx.moveTo(px + ox, py + oy); ctx.lineTo(px + ox + lean, py + oy - length); ctx.stroke();
+        }
       }
+    }
+  };
+  for (let i = 0; i < 26; i++) {
+    const px = r() * s, py = r() * s, radius = 24 + r() * 70;
+    softPatch(x, s, s, px, py, radius, radius * .8, pick(r, ['rgba(42,58,31,.34)', 'rgba(108,116,66,.22)', 'rgba(82,75,48,.22)']));
+    softPatch(xr, s, s, px, py, radius, radius * .8, 'rgba(204,204,204,.25)');
+  }
+  // Tierra entre matas: de lejos no se ve cada una, pero el conjunto deja de ser una alfombra.
+  for (let i = 0; i < 230; i++) {
+    const px = r() * s, py = r() * s, radius = 2.5 + r() * 7;
+    softPatch(x, s, s, px, py, radius, radius * .75, 'rgba(50,43,30,.46)');
+    softPatch(xb, s, s, px, py, radius, radius * .75, 'rgba(96,96,96,.4)');
+  }
+  for (let i = 0; i < 5000; i++) {
+    blade(r() * s, r() * s, 2 + r() * 4, (r() - .5) * 3, .7, pick(r, ['rgba(74,92,52,.6)', 'rgba(101,118,70,.5)', 'rgba(60,76,44,.6)']), gray(122 + Math.floor(r() * 16)));
+  }
+  // Matas de tamaños mezclados, cada una con su tono; todas repiten su trazo en el mapa de altura.
+  const tones = [['#3e5230', '#4c6238'], ['#4f6438', '#5f7541'], ['#5f7342', '#6f834b'], ['#74794a', '#838653']];
+  for (let i = 0; i < 960; i++) {
+    const cx = r() * s, cy = r() * s, spread = 2 + r() * 8, blades = 5 + Math.floor(r() * 9);
+    const pair = r(), [dark, light] = tones[pair < .3 ? 0 : pair < .68 ? 1 : pair < .94 ? 2 : 3];
+    for (let n = 0; n < blades; n++) {
+      blade(cx + (r() - .5) * spread, cy + (r() - .5) * spread, 3 + r() * 6, (r() - .5) * 6, .6 + r() * .7, r() < .55 ? dark : light, gray(134 + Math.floor(r() * 36)));
     }
   }
   return surfaceMaps(maps);

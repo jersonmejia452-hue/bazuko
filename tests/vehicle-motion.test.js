@@ -107,14 +107,22 @@ test('frenos y direccionales son independientes entre lados y carros; la lluvia 
 
 test('precarga mantiene carrocería, conductor que entra/sale y los únicos dos espejos robables; libera recursos una sola vez', async () => {
   const car = makeCar(), v = car.vehicle, driver = car.driver;
-  const resources = new Map();
-  for (const owned of [car.driver, ...car.mirrors, car.marker]) owned.traverse(object => {
-    for (const resource of [object.geometry, ...[object.material].flat()]) {
-      if (!resource || resources.has(resource)) continue;
-      resources.set(resource, 0);
-      resource.addEventListener('dispose', () => resources.set(resource, resources.get(resource) + 1));
-    }
-  });
+  const watch = objects => {
+    const resources = new Map();
+    for (const owned of objects) owned.traverse(object => {
+      for (const resource of [object.geometry, ...[object.material].flat()]) {
+        if (!resource || resources.has(resource)) continue;
+        resources.set(resource, 0);
+        resource.addEventListener('dispose', () => resources.set(resource, resources.get(resource) + 1));
+      }
+    });
+    return resources;
+  };
+  // Lo propio del carro se libera una vez; conductor, espejos y contorno se comparten con el resto de la flota.
+  const resources = watch([]), sharedResources = watch([car.driver, ...car.mirrors, car.marker]);
+  resources.set(v.wetMaterials[0], 0);
+  v.wetMaterials[0].addEventListener('dispose', () => resources.set(v.wetMaterials[0], resources.get(v.wetMaterials[0]) + 1));
+  assert.ok(sharedResources.size > 0);
   await car.preloadModel();
   assert.equal(car.vehicle, v);
   assert.equal(car.driver, driver);
@@ -131,6 +139,7 @@ test('precarga mantiene carrocería, conductor que entra/sale y los únicos dos 
   assert.equal(driver.visible, true);
   car.dispose(); car.dispose();
   assert.ok([...resources.values()].every(count => count === 1));
+  assert.ok([...sharedResources.values()].every(count => count === 0));
 });
 
 test('el tráfico anticipa el giro, orienta ruedas sin cambiar la ruta y enciende stops solo al frenar o esperar', () => {

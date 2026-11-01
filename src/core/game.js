@@ -23,6 +23,7 @@ import { SellPoint } from '../entities/SellPoint.js';
 import { Cambuche } from '../entities/Cambuche.js';
 import { Shop } from '../entities/Shop.js';
 import { Car } from '../entities/Car.js';
+import { parkCar } from '../world/bogota/parkedCars.js';
 import { DrugDealer } from '../entities/DrugDealer.js';
 import { CraftingStation } from '../entities/CraftingStation.js';
 import { Cart } from '../entities/Cart.js';
@@ -68,9 +69,11 @@ import { Menu } from '../ui/Menu.js';
 import { createCreator } from '../ui/Creator.js';
 import { openRecycler, openShop, openCambuche } from '../ui/placeMenus.js';
 import { DEFAULT_LOOK, normalizeLook } from '../character/look.js';
+import { streetWetness } from '../character/streetMaterials.js';
 import { ITEMS, COSTAL_BONUS, isForSale } from '../data/items.js';
 import { SLEEP } from '../data/cambuche.js';
 import { cop } from '../utils/money.js';
+import { makeParkedMotos, MOTO_SIZE } from '../world/bogota/motos.js';
 
 import {
   MENTAL_RESTORE_SLEEP, MENTAL_LOW_THRESHOLD,
@@ -81,7 +84,8 @@ import {
 const RENAMED_PLACES = { Recicladora: 'Recicladora El Progreso', Tienda: 'Tienda La Esquinita' };
 
 export class Game {
-  constructor(canvas, { animaciones = 'default', apariencia = 'default' } = {}) {
+  constructor(canvas, { animaciones = 'default', modeloRealista = false } = {}) {
+    this.modeloRealista = modeloRealista;
     this.canvas = canvas;
     this.renderer = new Renderer(canvas);
     this.sceneMgr = new SceneManager();
@@ -107,7 +111,7 @@ export class Game {
 
     // Mundo + jugador
     this.world = new World(this.sceneMgr.scene);
-    this.player = new Player(this.sceneMgr.scene, this.input, this.stats, this.audio, { animaciones, apariencia });
+    this.player = new Player(this.sceneMgr.scene, this.input, this.stats, this.audio, { animaciones });
     this.waterEffects = new WaterEffects(this.sceneMgr.scene);
     this.contactShadows = new ContactShadows(this.sceneMgr.scene);
     this._contactShadowFrame = {
@@ -147,6 +151,7 @@ export class Game {
     this.interaction.getTraffic = () => this.traffic;
 
     this.steal = new StealSystem(this);
+    this.interaction.personCloserThan = (distance) => this.steal.personCloserThan(distance);
 
     // HUD, menús y creador de personaje
     this.hud = new HUD();
@@ -260,6 +265,7 @@ export class Game {
     }
 
     this.weather?.update(0, this.player.position, this.renderer.quality === 'baja' ? null : district, this.clock);
+    streetWetness.value = this.weather?.wetness ?? 0;
 
     if (!this.look) {
       await this._createCharacter(loading);
@@ -269,7 +275,7 @@ export class Game {
     try { modelo = localStorage.getItem('bazuko.modelo'); } catch { /* sin almacenamiento */ }
     // La vista explícita de animaciones requiere el rig realista. La preferencia
     // guardada sigue disponible cuando se abre el juego con su URL habitual.
-    if (this.player.realisticAnimationProfile === 'mixamo-game-preview' || this.player.realisticAppearanceProfile === 'street-preview') modelo = 'realista';
+    if (this.player.realisticAnimationProfile === 'mixamo-game-preview' || this.modeloRealista) modelo = 'realista';
     const importedEntities = [
       ...(this.cars ?? []),
       ...(this.traffic?.vehicles ?? []).map(vehicle => vehicle.car),
@@ -304,9 +310,11 @@ export class Game {
     this.sceneMgr.setTimeOfDay(this.clock.hour, this.weather, this.clock.day);
     this.sceneMgr.followTarget(this.player.position);
     this._wasNight = this.clock.isNight;
-    district?.setNightMode?.(this._wasNight);
+    this._wasLights = this.clock.lightsOn;
+    district?.setNightMode?.(this._wasLights);
+    this.cambuche?.setNight(this._wasLights);
     for (const car of [...(this.cars ?? []), ...(this.traffic?.vehicles ?? []).map(vehicle => vehicle.car)]) {
-      car.setNight?.(this._wasNight, this.weather?.isRaining ?? false);
+      car.setNight?.(this._wasLights, this.weather?.isRaining ?? false, this.weather?.weather === 'niebla');
     }
     this.dealer?.setNight(this._wasNight);
     this.world.update(0, this.player.position, this.cameraRig.camera);
@@ -529,9 +537,51 @@ export class Game {
       const pos = spot ? new THREE.Vector3(spot.x, 0, spot.z) : findValidSpawn(null, 6);
       const rot = spot ? spot.rot : Math.random() * Math.PI * 2;
       const car = new Car(this.sceneMgr.scene, pos, rot);
+      // Cada modelo tiene su ancho: se aparta del andén lo que permita el paso de la buseta por el carril.
+      if (spot) parkCar(car, spot);
       this.cars.push(car);
       this.interaction.register(car);
     }
+    // Motos en batería contra el andén, solo donde no alcanzan el carril: la cola al andén y la trompa algo sesgada.
+    this.parkedMotos?.removeFromParent();
+    this.parkedMotos?.dispose();
+    if (this._motoColliders) {
+      const old = this._motoColliders;
+      this.collisions.colliders = this.collisions.colliders.filter(entry => !old.has(entry));
+      this.collisions.invalidateStaticIndex();
+    }
+    this._motoColliders = new Set();
+    const lanes = [], lanePoint = new THREE.Vector3(), laneDirection = new THREE.Vector3();
+    const motoRoutes = district.getTrafficRoutes?.() ?? [];
+    for (const route of [...motoRoutes, ...(motoRoutes.alternatives ?? [])]) {
+      for (let d = 0; d < route.length; d += 2) { route.sample(d, lanePoint, laneDirection); lanes.push(lanePoint.x, lanePoint.z); }
+    }
+    const clearOfLanes = (x, z, radius) => {
+      for (let i = 0; i < lanes.length; i += 2) if ((lanes[i] - x) ** 2 + (lanes[i + 1] - z) ** 2 < radius * radius) return false;
+      return true;
+    };
+    const motos = [], clusters = [];
+    for (const spot of parking) {
+      if (clusters.length >= 10) break;
+      if (placed.some(q => Math.hypot(spot.x - q.x, spot.z - q.z) < 6) || clusters.some(q => Math.hypot(spot.x - q.x, spot.z - q.z) < 12)) continue;
+      const alongZ = Math.abs(spot.rot - Math.PI / 2) < .01, side = Math.sign(alongZ ? spot.x - Math.round(spot.x / 2) * 2 : spot.z - Math.round(spot.z / 2) * 2);
+      const curb = .6 - MOTO_SIZE.length / 2 - .12;
+      if (!clearOfLanes(alongZ ? spot.x + side * curb : spot.x, alongZ ? spot.z : spot.z + side * curb, 2.2)) continue;
+      clusters.push(spot);
+      const count = 1 + (clusters.length * 7) % 3;
+      for (let i = 0; i < count; i++) {
+        const along = (i - (count - 1) / 2) * .95;
+        const x = alongZ ? spot.x + side * curb : spot.x + along, z = alongZ ? spot.z + along : spot.z + side * curb;
+        const tailToCurb = alongZ ? (side > 0 ? Math.PI : 0) : (side > 0 ? Math.PI / 2 : -Math.PI / 2);
+        motos.push({ x, z, rot: tailToCurb + .22, seed: motos.length * 3 + clusters.length, group: clusters.length });
+        const holder = new THREE.Object3D();
+        holder.position.set(x, 0, z);
+        this.collisions.add(holder, new THREE.Vector3(alongZ ? MOTO_SIZE.length * .8 : MOTO_SIZE.width, MOTO_SIZE.height, alongZ ? MOTO_SIZE.width : MOTO_SIZE.length * .8));
+        this._motoColliders.add(this.collisions.colliders.at(-1));
+      }
+    }
+    this.parkedMotos = motos.length ? makeParkedMotos(motos) : null;
+    if (this.parkedMotos) this.sceneMgr.scene.add(this.parkedMotos);
     if (district.getTrafficRoutes) {
       this.traffic = new TrafficSystem(this.sceneMgr.scene, district.getTrafficRoutes(), { policeCount: 2 });
       this.traffic.setParkedCars(this.cars);
@@ -685,6 +735,7 @@ export class Game {
     }
 
     this.isSleeping = true;
+    if (this.steal?.minigameActive) this.steal._endMinigame(false, 'cancel');
     this.substanceEffects?.end();
     this.psychosis?.clearInduced?.();
     window.dispatchEvent(new CustomEvent('sleep-start'));
@@ -777,6 +828,7 @@ export class Game {
     if (this.player.isRagdollActive) return false;
 
     this._deathPending = true;
+    if (this.steal?.minigameActive) this.steal._endMinigame(false, 'cancel');
     this.substanceEffects?.end();
     this.psychosis?.clearInduced?.();
     this.deathCount++;
@@ -821,6 +873,7 @@ export class Game {
   _policeArrest() {
     if (this._arrestPending || this._deathPending || this.stats.salud <= 0) return;
     this._arrestPending = true;
+    if (this.steal?.minigameActive) this.steal._endMinigame(false, 'cancel');
     this.input.keys = {};
     this.input.endFrame();
     this.audio.updateSteps(false, false);
@@ -938,11 +991,13 @@ export class Game {
     this.collisions.setVehicles(cars, this.world.active?.busServices ?? this.world.active?.busService);
   }
 
-  _loop = () => {
+  _loop = (stamp) => {
     if (!this._running) return;
     requestAnimationFrame(this._loop);
 
     const now = performance.now();
+    // El intervalo entre cuadros se mide con el sello de rAF: el reloj al entrar aquí oscila y cuenta como lentitud lo que no lo es.
+    this._frameStamp = stamp ?? now;
     const dt = Math.min((now - this._lastTime) / 1000, 0.1);
     this._lastTime = now;
 
@@ -978,6 +1033,7 @@ export class Game {
     }
     // Deja ver el lanzamiento y la caída antes de abrir la recuperación fatal.
     if (this.stats.salud <= 0 && this.player.isRagdollActive) {
+      if (this.steal?.minigameActive) this.steal._endMinigame(false, 'cancel');
       this._syncVehicleColliders();
       this.player.update(dt, this.cameraRig.camera, this.collisions);
       this.world.update(dt, this.player.position, this.cameraRig.camera, this.traffic?.vehicles ?? []);
@@ -1004,14 +1060,18 @@ export class Game {
     this.sceneMgr.update(dt);
     const isNight = this.clock.isNight;
     const isRainingNow = this.weather?.isRaining ?? false;
-    if (this._wasNight !== isNight || this._wasRaining !== isRainingNow) {
+    const lights = this.clock.lightsOn, foggy = this.weather?.weather === 'niebla';
+    if (this._wasNight !== isNight || this._wasRaining !== isRainingNow || this._wasLights !== lights || this._wasFoggy !== foggy) {
       this._wasNight = isNight;
       this._wasRaining = isRainingNow;
-      this.world.active?.setNightMode?.(isNight);
+      this._wasLights = lights;
+      this._wasFoggy = foggy;
+      this.world.active?.setNightMode?.(lights);
+      this.cambuche?.setNight(lights);
       this.dealer?.setNight(isNight);
-      for (const car of this.cars) car.setNight?.(isNight, isRainingNow);
+      for (const car of this.cars) car.setNight?.(lights, isRainingNow, foggy);
       if (this.traffic) {
-        for (const v of this.traffic.vehicles) v.car?.setNight?.(isNight, isRainingNow);
+        for (const v of this.traffic.vehicles) v.car?.setNight?.(lights, isRainingNow, foggy);
       }
       if (typeof document !== 'undefined') {
         document.body?.classList?.toggle('night-mode', isNight);
@@ -1065,6 +1125,7 @@ export class Game {
       if (this.player.isSwimming) this.interaction.currentTarget = this.interaction.currentTargetType = null;
     }
     if (!this.player.isSwimming) this.steal?.update(dt);
+    else if (this.steal?.minigameActive) this.steal._endMinigame(false, 'cancel');
     if (this._handleDeath()) return;
 
     // 7b. Mecánica de popó y lanzamiento a peatones
@@ -1089,6 +1150,8 @@ export class Game {
     this.psychosis.update(dt, this.cameraRig);
     this.substanceEffects?.update(dt);
     this.profiler?.mark('sistemas');
+    // Los peatones se tapan la nariz si el jugador huele mal.
+    if (this.world.active) this.world.active.playerHygiene = this.stats.higiene;
     this.world.update(dt, this.player.position, this.cameraRig.camera, this.traffic?.vehicles ?? []);
     this.profiler?.mark('mundoNPC');
     this.traffic?.update(dt, { player: this.player.position, pedestrians: this.world.active?.trafficPedestrians ?? this.world.active?.npcs ?? [], onPlayerHit: this._onVehicleImpact });
@@ -1104,11 +1167,12 @@ export class Game {
     if (this._handleDeath()) return;
 
     this.weather?.update(dt, this.player.position, this.world.active, this.clock);
+    streetWetness.value = this.weather?.wetness ?? 0;
     this.audio.setRainLevel?.(this.weather?.isRaining ? this.weather.rainIntensity : 0);
 
     // 9. Entidades
-    for (const p of this.pickups) p.update(dt);
-    for (const c of this.cars) c.update(dt);
+    this._updatePickups(dt);
+    for (const c of this.cars) c.update(dt, this.player.position);
     for (const { car } of this.traffic?.vehicles ?? []) car.update(dt);
     this.cambuche?.update(dt);
     this.dealer?.update(dt);
@@ -1162,6 +1226,12 @@ export class Game {
     };
   }
 
+  /** Las bolsas siguen funcionando lejos; el límite de dibujo solo existe en calidad baja. */
+  _updatePickups(dt) {
+    const farDetail = this.world.active?.farDetailDistance ?? Infinity;
+    for (const p of this.pickups) { p.update(dt); p.limitDrawDistance(this.player.position, farDetail); }
+  }
+
   _renderFrame(now, active) {
     const quality = this.renderer.effectiveQuality;
     if (this._effectiveQuality !== quality) {
@@ -1171,6 +1241,7 @@ export class Game {
       this.cameraRig.setQuality?.(quality);
       if (this.world.active) {
         this.world.active.animationBudget = GRAPHICS_PROFILES[quality].animationBudget;
+        this.world.active.farDetailFog = GRAPHICS_PROFILES[quality].farDetailFog ?? 0;
         this.world.active.graphicsQuality = quality;
       }
       this.world.active?.setWetness?.(this.weather?.wetness ?? 0);
@@ -1191,9 +1262,13 @@ export class Game {
       (this.collisions.mayOccludePlayer?.(this.cameraRig.camera.position, this.player.position) ?? true);
     // El efecto de consumo mueve la cámara solo durante este render y captura su estela al terminar.
     this.substanceEffects?.beforeRender(this.cameraRig.camera, { quality, paused: !active });
-    this.renderer.render(this.sceneMgr.scene, this.cameraRig.camera, this.player.root, [this.sceneMgr.sun], showSilhouette);
+    // De espaldas a una pared la cámara queda dentro del cuerpo y lo único que se vería es su interior.
+    const insideBody = this.cameraRig.insideBody && this.player.root.visible;
+    if (insideBody) this.player.root.visible = false;
+    this.renderer.render(this.sceneMgr.scene, this.cameraRig.camera, this.player.root, [this.sceneMgr.sun], showSilhouette && !insideBody);
+    if (insideBody) this.player.root.visible = true;
     this.substanceEffects?.afterRender(this.cameraRig.camera);
-    if (this.performanceHUD.update(now, this.player.position, this.renderer, active, this.localLights)) {
+    if (this.performanceHUD.update(this._frameStamp ?? now, this.player.position, this.renderer, active, this.localLights)) {
       this.renderer.adaptResolution(this.performanceHUD.metrics.frameMs, performance.now() - now);
     } else this.renderer.resolution.resetWindow();
   }
@@ -1232,6 +1307,26 @@ export class Game {
 
   setGraphicsQuality(level, notify = true) {
     const quality = ['baja', 'media', 'alta'].includes(level) ? level : 'alta';
+    const shadows = quality !== 'baja', renderer = this.renderer;
+    this.chosenQuality = quality;
+    // Prender o apagar las sombras cambia el programa de todos los materiales: se compila sin bloquear
+    // y se aplica al terminar. Lo elegido vale desde ya: se guarda ahora y Ajustes lo muestra.
+    if (renderer._lastFrame && renderer.instance.shadowMap.enabled !== shadows) {
+      renderer.rememberQuality(quality);
+      const ticket = this._qualityTicket = {};
+      renderer.prepareVariant(shadows).then(() => {
+        if (this._qualityTicket !== ticket) return;
+        this._applyGraphicsQuality(quality, notify);
+        // Ajustes pudo quedar pintado con la calidad de antes; no se repinta bajo un control que se está arrastrando.
+        if (this.menu?.isOpen && !globalThis.document?.querySelector?.('input[type="range"]:active')) this.menu.refresh();
+      });
+      return;
+    }
+    this._qualityTicket = null;
+    this._applyGraphicsQuality(quality, notify);
+  }
+
+  _applyGraphicsQuality(quality, notify) {
     this.renderer.setQuality(quality);
     this.sceneMgr.setQuality(quality);
     this.cameraRig.setQuality?.(quality);
@@ -1271,6 +1366,7 @@ export class Game {
     for (const bus of district?.busServices ?? [district?.busService].filter(Boolean)) culling.register(bus.group, { dynamic: true, margin: .5 });
     for (const car of this.cars) culling.register(car.group, { dynamic: true, margin: .5 });
     for (const { car } of this.traffic?.vehicles ?? []) culling.register(car.group, { dynamic: true, margin: .5 });
+    for (const motos of this.parkedMotos?.children ?? []) culling.register(motos);
   }
 
   stop() {

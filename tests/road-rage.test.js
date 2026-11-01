@@ -15,6 +15,8 @@ const { RoadRageSystem } = await import('../src/systems/RoadRageSystem.js');
 const { ROAD_RAGE } = await import('../src/entities/AngryDriver.js');
 const { TrafficSystem } = await import('../src/systems/TrafficSystem.js');
 const { TrafficRoute } = await import('../src/world/bogota/TrafficRoute.js');
+const { CollisionSystem } = await import('../src/systems/CollisionSystem.js');
+const { Car } = await import('../src/entities/Car.js');
 const { StatsSystem } = await import('../src/systems/StatsSystem.js');
 const { PLAYER_SPEED_WALK, PLAYER_SPEED_RUN } = await import('../src/utils/constants.js');
 
@@ -61,6 +63,98 @@ function triggerAndExit(system, traffic, vehicle, player) {
     system.update(1 / 30);
   }
 }
+
+/** Carro detenido por el robo, aún con el conductor adentro, y sus dos puertas libres de obstáculos. */
+function stoppedWithCollisions() {
+  const scene = new THREE.Scene();
+  const traffic = new TrafficSystem(scene, [new TrafficRoute(0, 200, 0, 200, 3.2)], { carsPerRoute: 1, random: () => .5 });
+  const vehicle = traffic.vehicles[0];
+  const player = { position: new THREE.Vector3(), isStunned: false, hits: 0, receiveHit() { this.hits++; } };
+  const collisions = new CollisionSystem();
+  const system = new RoadRageSystem(scene, { player, stats: new StatsSystem(), random: () => 0 });
+  system.setup({ isWalkableAt: () => true, getGroundHeight: () => 0 }, traffic, [], { collisions });
+  return { scene, traffic, vehicle, player, collisions, system };
+}
+
+function stopNearPlayer({ traffic, vehicle, system, player }) {
+  for (let t = 0; t < 6; t += 1 / 30) traffic.update(1 / 30);
+  system.trigger(vehicle.car);
+  for (let t = 0; t < 12 && vehicle.speed > .01; t += 1 / 30) {
+    traffic.update(1 / 30);
+    player.position.copy(vehicle.car.position).add(new THREE.Vector3(5, 0, 5));
+  }
+  assert.ok(vehicle.speed <= .01);
+}
+
+test('si la puerta da contra un parqueado, se baja por el otro lado, persigue y regresa por ahí', () => {
+  const world = stoppedWithCollisions(), { traffic, vehicle, player, collisions, system, scene } = world;
+  stopNearPlayer(world);
+  const car = vehicle.car, normalSide = car.vehicle.driverDoor.side;
+  const blocked = car.driverDoor(), free = car.driverDoor(new THREE.Vector3(), -normalSide);
+  assert.ok(blocked.distanceTo(free) > car.width, 'son las dos puertas');
+  // Un parqueado de verdad sobre la puerta: es una caja dinámica, igual que en el juego.
+  const parked = new Car(scene, blocked.clone(), car.group.rotation.y, { kind: 'carro', model: 'citadino', variant: 3 });
+  collisions.setVehicles([parked]);
+  player.position.copy(free).add(new THREE.Vector3(8, 0, 8).setLength(9));
+  system.update(1 / 30);
+  assert.equal(system.state, 'out');
+  // En el mismo cuadro ya dio el primer paso de la persecución.
+  const start = system.driver.position.clone();
+  assert.ok(start.distanceTo(free) < .3, `salió en ${start.toArray()} y la puerta libre es ${free.toArray()}`);
+  assert.ok(toasts.some(text => /varilla/.test(text)));
+
+  run(system, traffic, player, 1);
+  assert.ok(system.driver.position.distanceTo(start) > 2, 'no quedó encerrado: camina');
+  assert.ok(system.driver.position.distanceTo(player.position) < start.distanceTo(player.position), 'y persigue');
+
+  // Se aburre y vuelve a la misma puerta, no a la que está tapada.
+  player.position.copy(free).add(new THREE.Vector3(60, 0, 60));
+  run(system, traffic, player, 2);
+  assert.equal(system.driver.state, 'return');
+  let walked = 0;
+  while (system.state !== 'idle' && walked < ROAD_RAGE.returnTimeout + 1) { traffic.update(1 / 30); system.update(1 / 30); walked += 1 / 30; }
+  assert.equal(system.state, 'idle');
+  // Hacia la puerta tapada el carro le corta el paso y solo subiría al agotar el tope.
+  assert.ok(walked < ROAD_RAGE.returnTimeout / 2, `tardó ${walked.toFixed(1)} s en subir`);
+  assert.equal(vehicle.hold, false, 'y el carro sigue');
+  parked.dispose();
+});
+
+test('con la puerta libre se baja por donde corresponde a su modelo', () => {
+  const world = stoppedWithCollisions(), { vehicle, player, system } = world;
+  stopNearPlayer(world);
+  system.update(1 / 30);
+  assert.equal(system.state, 'out');
+  assert.equal(system._doorSide, vehicle.car.vehicle.driverDoor.side);
+  assert.ok(system.driver.position.distanceTo(vehicle.car.driverDoor()) < .3);
+});
+
+test('si frena tan lejos que no alcanzaría al jugador, no se baja ni avisa, y el carro sigue', () => {
+  const world = stoppedWithCollisions(), { traffic, vehicle, player, system } = world;
+  stopNearPlayer(world);
+  toasts.length = 0;
+  player.position.copy(vehicle.car.driverDoor()).add(new THREE.Vector3(0, 0, ROAD_RAGE.giveUpDistance));
+  system.update(1 / 30);
+  assert.equal(system.state, 'idle');
+  assert.equal(system.driver.active, false, 'nunca se bajó');
+  assert.deepEqual(toasts, [], 'ni la varilla ni el que se rindió');
+  assert.equal(vehicle.hold, false);
+  assert.equal(vehicle.car.driver.visible, true, 'sigue sentado');
+  for (let t = 0; t < 3; t += 1 / 30) traffic.update(1 / 30);
+  assert.ok(vehicle.speed > 1, `${vehicle.speed}`);
+});
+
+test('justo dentro del alcance sí se baja y persigue', () => {
+  const world = stoppedWithCollisions(), { vehicle, player, system } = world;
+  stopNearPlayer(world);
+  toasts.length = 0;
+  player.position.copy(vehicle.car.driverDoor()).add(new THREE.Vector3(0, 0, ROAD_RAGE.giveUpDistance - 1));
+  system.update(1 / 30);
+  assert.equal(system.state, 'out');
+  assert.equal(system.driver.state, 'chase');
+  assert.equal(toasts.length, 1);
+  assert.match(toasts[0], /varilla/);
+});
 
 test('los carros en circulación llevan conductor visible y los estacionados no', () => {
   const { vehicle } = setup();
@@ -162,6 +256,25 @@ test('se rinde si el jugador escapa, vuelve a su carro y el tráfico continúa',
   assert.ok(!people.includes(system.driver));
   run(system, traffic, player, 3);
   assert.ok(vehicle.speed > 1);
+});
+
+test('si una caja le corta el regreso, sube igual y el tráfico continúa', () => {
+  const { system, traffic, vehicle, player } = setup();
+  cruise(traffic, player);
+  triggerAndExit(system, traffic, vehicle, player);
+  system.driver.position.x += 6;
+  player.position.set(system.driver.position.x + ROAD_RAGE.giveUpDistance + 5, 0, system.driver.position.z);
+  run(system, traffic, player, 1 / 30);
+  assert.equal(system.driver.state, 'return');
+  // Sin poder dar un paso, como contra una pared.
+  system.driver.isWalkable = () => false;
+  const stuckAt = system.driver.position.clone();
+  run(system, traffic, player, ROAD_RAGE.returnTimeout - 1);
+  assert.equal(system.driver.state, 'return');
+  assert.ok(system.driver.position.distanceTo(stuckAt) < .01);
+  run(system, traffic, player, 2);
+  assert.equal(system.active, false);
+  assert.equal(vehicle.hold, false);
 });
 
 test('al recuperarse tras morir, el conductor ya está en su carro', () => {

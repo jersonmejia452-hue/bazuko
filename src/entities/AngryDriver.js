@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { Npc } from './Npc.js';
 import { canReachCombatTarget, resolveCombatWalk } from '../systems/CombatGeometry.js';
+import { koHandDown, smooth } from '../character/BodyLanguage.js';
 
 export const ROAD_RAGE = {
   chance: .35,          // probabilidad de bajarse al robarle un retrovisor en circulación
@@ -16,8 +17,15 @@ export const ROAD_RAGE = {
   damage: [10, 16],
   giveUpTime: 18,
   giveUpDistance: 28,
+  returnTimeout: 30,    // respaldo si una caja le corta el regreso: 28 m a pie son unos 18 s
   stopTimeout: 10       // respaldo si el carro no logra detenerse (frenar desde crucero tarda ~6 s)
 };
+
+// La varilla colgando a un lado, y en el piso a lo largo del cuerpo, donde apoya la mano al pararse.
+const _barHanging = { x: -.26, y: .95, z: .08, tilt: -.35 };
+const BAR_LIES = { x: -.36, y: .03, z: 0, tilt: Math.PI / 2 };
+const BAR_LENGTH = .895; // de la mano a la punta
+const BAR_FALLS_BY = .55; // de la caída: ya tocó el piso cuando el cuerpo sigue bajando
 
 const _dir = new THREE.Vector3();
 
@@ -53,7 +61,7 @@ export class AngryDriver extends Npc {
     rod.castShadow = true;
     pivot.add(rod);
     // Frente del Npc hacia +Z local: la derecha queda en −X.
-    pivot.position.set(-.26, .95, .08);
+    pivot.position.set(_barHanging.x, _barHanging.y, _barHanging.z);
     return { pivot, geometry, material, pose: 0 };
   }
 
@@ -106,8 +114,32 @@ export class AngryDriver extends Npc {
       collisions: this.collisions, getWaterInfo: this.getWaterInfo });
   }
 
+  /** Se le cae la varilla: lo que traía en el aire se le suelta desde donde estaba. */
+  _startKnockout(bench) {
+    super._startKnockout(bench);
+    this.bar.pose = 0;
+    this._barFrom = { x: this.bar.pivot.position.x, y: this.bar.pivot.position.y, z: this.bar.pivot.position.z, tilt: this.bar.pivot.rotation.x };
+  }
+
+  /** Noqueado no corre `_walk`: la varilla cae con él y la recoge cuando la mano llega al piso. */
+  _updateReaction(dt) {
+    super._updateReaction(dt);
+    if (!this._barFrom) return;
+    const pivot = this.bar.pivot, ko = smooth(this._koBlend);
+    const rising = this.koState === 'rising' || !this.koState;
+    const from = rising ? _barHanging : this._barFrom;
+    const k = this.koState ? smooth(Math.min(1, rising ? ko / (1 - koHandDown(this._koPlan)) : this._koBlend / BAR_FALLS_BY)) : 0;
+    const tilt = from.tilt + (BAR_LIES.tilt - from.tilt) * k;
+    // La punta de abajo se apoya en el piso mientras gira: el extremo de la mano es el que baja y sube.
+    const y = Math.max(from.y + (BAR_LIES.y - from.y) * k, BAR_LIES.y + BAR_LENGTH * Math.cos(tilt));
+    pivot.position.set(from.x + (BAR_LIES.x - from.x) * k, y, from.z + (BAR_LIES.z - from.z) * k);
+    pivot.rotation.x = tilt;
+    if (!this.koState) this._barFrom = null;
+  }
+
   /** La IA se resuelve en think(); aquí solo se anima la varilla. */
   _walk(dt) {
+    this.fleeTimer = 0; // lo que corre es think(): el golpe que recibe no lo pone a huir
     const target = { windup: 1, strike: -1 }[this.state] ?? 0;
     const bar = this.bar;
     bar.pose += (target - bar.pose) * Math.min(1, dt * (this.state === 'strike' ? 28 : 9));
@@ -125,11 +157,17 @@ export class AngryDriver extends Npc {
   think(dt, { player, door, canChase }) {
     this.moving = false;
     if (!this.active || dt <= 0) return null;
+    if (this.koState) {
+      // Noqueado no piensa: ni corre el reloj, ni gira, ni termina el golpe que traía.
+      if (this.state === 'windup' || this.state === 'strike') { this.state = 'chase'; this.action = null; }
+      return null;
+    }
     this.timer += dt;
     this.attackTimer = Math.max(0, this.attackTimer - dt);
     const toPlayer = Math.hypot(player.x - this.position.x, player.z - this.position.z);
     if (this.state !== 'return' && (!canChase || this.timer > ROAD_RAGE.giveUpTime || toPlayer > ROAD_RAGE.giveUpDistance)) {
       this.state = 'return';
+      this.timer = 0;
       this.action = null;
       return 'giveup';
     }
@@ -137,7 +175,8 @@ export class AngryDriver extends Npc {
       this.walkSpeed = ROAD_RAGE.walkSpeed;
       const left = this._moveTowards(door, ROAD_RAGE.walkSpeed, dt, .25);
       this._face(door.x, door.z, dt, 6);
-      if (left <= .3) { this.enterCar(); return 'home'; }
+      // Camina en línea recta: si no llega, sube igual para que su carro no quede parado para siempre.
+      if (left <= .3 || this.timer > ROAD_RAGE.returnTimeout) { this.enterCar(); return 'home'; }
       return null;
     }
     this.walkSpeed = ROAD_RAGE.chaseSpeed;

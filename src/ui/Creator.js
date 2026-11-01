@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { PALETTES, COLOR_NAMES, NAME_IDEAS, WEAR_LEVELS, ACCESSORIES, normalizeLook, randomLook, cleanName } from '../character/look.js';
 import { STREET_PRESETS, applyStreetPreset } from '../character/presets.js';
+import { garmentAllowed } from '../character/archetypes.js';
 import { createRealisticCharacter, loadCatalog, optionsFor, normalizeReal, randomReal } from '../character/RealisticCharacter.js';
 import { ORIGINS } from '../data/origins.js';
 import { el } from './dom.js';
@@ -305,7 +306,7 @@ export function createCreator({ audio }) {
       case 'ropa': {
         const hats = optionsFor(catalog, 'cabeza', L.real.sexo);
         body = [
-          section('Ropa', realChips('ropa', optionsFor(catalog, 'ropa', L.real.sexo))),
+          section('Ropa', realChips('ropa', optionsFor(catalog, 'ropa', L.real.sexo).filter((o) => garmentAllowed(o.id, L.real.edad)))),
           section('Calzado', realChips('calzado', optionsFor(catalog, 'calzado', L.real.sexo))),
           hats.length > 1 && section('Cabeza', realChips('cabeza', hats)),
           section('Accesorios', accessoryChips()),

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createBuildingShell } from './BuildingVisibility.js';
 import { neighborhoodAt } from './NeighborhoodIdentity.js';
 import { addBuildingDetails } from './BuildingDetails.js';
+import { BASE_CITY_WIDTH } from './EastZones.js';
 
 const hash=(x,z)=>((Math.imul(x+17,73856093)^Math.imul(z+31,19349663))>>>0);
 const FLOOR_SEQUENCE=[3,5,8,12,4,18,6,24,10,30,7,16];
@@ -39,7 +40,10 @@ function paletteForNeighborhood(base, profile) {
 /** Solo sustituye solares de casas genéricas; nunca calles, ruinas o hitos. */
 export function planUrbanBuildings(map) {
   const lots=[],occupied=new Set();
-  for(let z=3;z<map.length-6;z+=3) for(let x=3;x<map[0].length-6;x+=3) {
+  // Los barrios del oriente tienen su propia arquitectura; la secuencia de pisos y diseños
+  // depende del orden de los lotes, así que el recorrido se detiene donde terminaba el mapa.
+  const xEnd=Math.min(map[0].length,BASE_CITY_WIDTH)-6;
+  for(let z=3;z<map.length-6;z+=3) for(let x=3;x<xEnd;x+=3) {
     const seed=hash(x,z);
     if(seed%100>54)continue;
     let size=6;

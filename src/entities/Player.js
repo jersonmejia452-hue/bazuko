@@ -8,7 +8,6 @@ import {
 } from '../utils/constants.js';
 import { createCharacter } from '../character/character.js';
 import { createRealisticCharacter, REALISTIC_SCALE } from '../character/RealisticCharacter.js';
-import { resolveAppearanceProfile } from '../character/streetMaterials.js';
 import { PlayerRagdoll } from '../systems/PlayerRagdoll.js';
 import { MeleeCombat } from '../systems/MeleeCombat.js';
 import { WaterMovement } from '../systems/WaterMovement.js';
@@ -17,15 +16,32 @@ import { SMOKE_DURATION, PUFF_INTERVAL, FIRST_PUFF, PUFF, PUFF_LENGTH, isExhalin
 import { BASUCO, BASUCO_LENGTH, BASUCO_TOTAL, isBasucoExhaling } from '../character/pipe.js';
 
 const shortestTurn = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
+// El protagonista vive en la calle: anda cansado aunque tenga energía.
+export const PLAYER_GAIT = 'trote';
+const GESTURE_DELAY = 6; // segundos quieto antes del primer gesto
+// Con un arma en la mano no se cruza de brazos ni se rasca: solo mira y cambia de peso.
+const ARMED_GESTURES = new Set(['mirar-izquierda', 'mirar-derecha', 'cambiar-peso']);
+
+/** Gesto de espera. El frío y el hambre pesan más que la costumbre. */
+export function pickGesture({ cold = false, hungry = false, tired = false, raining = false, armed = false } = {}, random = Math.random) {
+  if (armed) return [...ARMED_GESTURES][Math.floor(random() * ARMED_GESTURES.size)];
+  const table = [['mirar-izquierda', 2], ['mirar-derecha', 2], ['cambiar-peso', 3], ['rascarse', 1.5], ['bolsillos', 2], ['brazos-cruzados', 1.5]];
+  if (cold) table.push(['frotarse', 9]);
+  if (raining) table.push(['frotarse', 3], ['bolsillos', 2]);
+  if (hungry) table.push(['barriga', 8]);
+  if (tired) table.push(['cambiar-peso', 3]);
+  let roll = random() * table.reduce((sum, [, weight]) => sum + weight, 0);
+  for (const [name, weight] of table) if ((roll -= weight) <= 0) return name;
+  return table[0][0];
+}
 const emit = (type, detail) => {
   if (typeof window !== 'undefined' && window.dispatchEvent) window.dispatchEvent(new CustomEvent(type, { detail }));
 };
 
 export class Player {
-  constructor(scene, input, stats=null, audio=null, { animaciones = 'default', apariencia = 'default' } = {}) {
+  constructor(scene, input, stats=null, audio=null, { animaciones = 'default' } = {}) {
     this.audio = audio;
     this.realisticAnimationProfile = animaciones;
-    this.realisticAppearanceProfile = resolveAppearanceProfile(apariencia);
     this.jumpVelocity = 0;
     this.isGrounded = true;
     this.groundSurface = null;
@@ -96,6 +112,12 @@ export class Player {
 
     // Basuco: `basuco` = { t, inhaled, stowed } mientras dura la pipa y la bocanada
     this.basuco = null;
+    // Forma de llevar el cuerpo y gesto de espera; los decide _updateBodyLanguage
+    this.bodyStyle = { stoop: 0, headDown: 0, swing: 1 };
+    this.gesture = null;
+    this._gestureLeft = 0;
+    this._stillTime = 0;
+    this._gestureDelay = GESTURE_DELAY;
     // Paranoia (0 a 1) y la alucinación más cercana; las pone PsychosisSystem
     this.paranoia = 0;
     this.paranoiaFocus = null;
@@ -300,20 +322,6 @@ export class Player {
     return this._realistic?.setLook(look);
   }
 
-  /** Materiales optativos, independientes del modelo y de las animaciones. */
-  async setAppearance(value) {
-    const next = resolveAppearanceProfile(value);
-    const previous = this.realisticAppearanceProfile;
-    this.realisticAppearanceProfile = next;
-    try {
-      const character = this._realistic ?? (this._realisticPromise ? await this._realisticPromise : null);
-      await character?.setAppearance(next);
-    } catch (error) {
-      if (this.realisticAppearanceProfile === next) this.realisticAppearanceProfile = previous;
-      throw error;
-    }
-  }
-
   /** Cambia entre el personaje realista (MakeHuman, por defecto) y el procedural (liviano) */
   async setModel(kind) {
     if (kind === this.modelKind) return;
@@ -322,7 +330,7 @@ export class Player {
     this.modelKind = kind;
     if (kind === 'realista') {
       this._realisticPromise ??= createRealisticCharacter(this.look ?? {}, {
-        animaciones: this.realisticAnimationProfile, apariencia: this.realisticAppearanceProfile
+        animaciones: this.realisticAnimationProfile, andar: PLAYER_GAIT
       });
       try {
         this._realistic = await this._realisticPromise;
@@ -349,6 +357,42 @@ export class Player {
       this.procedural.setBasuco?.(!!this.basuco && !this.basuco.stowed);
     }
     this.root.add(this.character.group);
+  }
+
+  /**
+   * Cómo lleva el cuerpo: más encorvado con poca energía y encogido bajo la lluvia. Tras varios
+   * segundos quieto hace un gesto de espera según su estado y el clima. Es solo visual: `busy` lo
+   * corta en el mismo cuadro y ningún control espera a que termine.
+   */
+  _updateBodyLanguage(dt, busy) {
+    const energy = this.stats?.energia ?? 100, hunger = this.stats?.hambre ?? 100;
+    // Bajo techo no le cae agua encima: no se encoge aunque esté lloviendo afuera.
+    const raining = !!this.game?.weather?.isRaining && !this.game.world?.active?.isRoofedAt?.(this.position.x, this.position.z);
+    const armed = this.equippedWeapon !== DEFAULT_WEAPON;
+    const tired = Math.max(0, 1 - energy / 45);
+    this.bodyStyle.stoop = tired * .75 + (raining ? .25 : 0) + (hunger < 20 ? .12 : 0);
+    this.bodyStyle.headDown = tired * .4 + (raining ? .2 : 0);
+    this.bodyStyle.swing = 1 - tired * .4;
+    if (busy) {
+      this.gesture = null;
+      this._gestureLeft = 0;
+      this._stillTime = 0;
+    } else {
+      this._stillTime += dt;
+      if (this.gesture && armed && !ARMED_GESTURES.has(this.gesture)) this.gesture = null; // sacó el arma a mitad del gesto
+      if (this.gesture) {
+        if ((this._gestureLeft -= dt) <= 0) {
+          this.gesture = null;
+          this._stillTime = 0;
+          this._gestureDelay = GESTURE_DELAY * (.6 + Math.random() * .8);
+        }
+      } else if (this._stillTime >= this._gestureDelay) {
+        this.gesture = pickGesture({ cold: !!this.stats?.isFreezing, hungry: hunger < 35, tired: tired > 0, raining, armed });
+        this._gestureLeft = 2.5 + Math.random() * 3;
+      }
+    }
+    // Bajo la lluvia se encoge si va despacio; al trote bastan la espalda y la cabeza.
+    return this.gesture ?? (raining && !armed && this.speed < 2 && !this.action ? 'encogido' : null);
   }
 
   /** Voltea en el sitio hacia un punto; echar a andar le devuelve el control. */
@@ -666,8 +710,13 @@ export class Player {
       turnRate: dt > 0 ? (this.root.rotation.y - previousYaw) / dt : 0
     });
 
+    const stance = this._updateBodyLanguage(dt, moving || this.speed >= .25 || stunned || !this.isGrounded || this.isSwimming
+      || !!this.action || this.sorting || !!this.attack || !!this.smoking || !!this.basuco);
+
     // Animación del personaje (velocidad en metros del modelo, no del mundo)
     this.character.update(dt, {
+      stance,
+      style: this.bodyStyle,
       speed: stunned ? 0 : this.speed / this.modelScale,
       running,
       action: stunned ? null : this.isSwimming ? null : !this.isGrounded ? 'saltar' : (this.sorting ? 'buscar' : this.action),

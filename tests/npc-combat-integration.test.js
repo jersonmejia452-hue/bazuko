@@ -65,16 +65,17 @@ test('KO conserva modelo, rechaza impactos y recupera salud sin renovar el botí
   const timer = npc.koTimer;
   assert.equal(npc.takeHit({ damage: 100, attacker, attackId: 2 }), false);
   assert.equal(npc.koTimer, timer);
-  tick(npc, .5);
+  tick(npc, NPC_COMBAT.fall + .1);
   assert.equal(npc._koBlend, 1);
-  assert.ok(npc.character.group.rotation.x < -1.5);
+  assert.equal(npc.character.last.ko, 1);
   assert.ok(scene.children.includes(npc.root));
   const alternate = character(); npc._show(alternate);
-  assert.ok(alternate.group.rotation.x < -1.5, 'el KO sigue al cambio de detalle');
+  npc.update(.016);
+  assert.equal(npc.character.last.ko, 1, 'el KO sigue al cambio de detalle');
   tick(npc, NPC_COMBAT.downMin + NPC_COMBAT.downExtra + NPC_COMBAT.rise + .5);
   assert.equal(npc.isKnockedOut, false); assert.equal(npc.health, npc.maxHealth);
   assert.equal(npc.looted, true); assert.ok(npc.fleeTimer > 0);
-  assert.equal(npc.character.group.rotation.x, 0);
+  assert.equal(npc.character.last.ko, 0);
   assert.equal(npc.takeHit({ damage: 1, attacker, attackId: 3 }), 0);
   assert.equal(npc.takeHit({ damage: 1, attacker, attackId: 1 }), false, 'recuperarse no repite IDs aceptados');
   npc.dispose();
@@ -193,4 +194,20 @@ test('la base conserva state, action y poseParams de las IA derivadas sin combat
   assert.equal(npc.character.last.gazeTarget, npc.poseParams.gazeTarget);
   assert.equal(npc.character.last.pointing, true);
   npc.dispose();
+});
+
+test('al pillarlo robando huye y grita por el robo, sin mancha ni quejas de popó', async () => {
+  const { npc } = await fixture();
+  const toasts = [];
+  window.addEventListener('toast', event => toasts.push(event.detail.text));
+  npc.alarmedByTheft(new THREE.Vector3(-2, 0, 1));
+  assert.equal(npc.fleeTimer, 8);
+  assert.ok(npc.fleeDir.x > .9, 'Se aleja de quien le mete la mano');
+  assert.ok(!npc.isSplatted && !npc.splatMesh, 'Sin mancha');
+  assert.equal(toasts.length, 1);
+  assert.doesNotMatch(toasts[0], /MOJÓN|POPÓ|MIERDA|COCHINADA|PESTILENCIA|EMBARRARON/);
+  toasts.length = 0;
+  npc.hitByPoop(new THREE.Vector3());
+  assert.ok(npc.isSplatted && npc.splatMesh, 'El popó sigue dejando su mancha');
+  assert.equal(toasts.length, 1);
 });

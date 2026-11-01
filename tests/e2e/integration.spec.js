@@ -239,6 +239,8 @@ test('foto congela patrulla, agresores, sustancias y radio y reanuda la simulaci
     const civilian = game.traffic.vehicles.find(vehicle => !vehicle.police);
     if (!police || !civilian) throw new Error('Faltan vehículos reales en la ciudad');
     game.traffic._startChase(police);
+    // La bronca pasa junto al jugador: un carro que frena lejos sigue su camino sin que nadie se baje.
+    game.player.position.copy(civilian.car.driverDoor()).add({ x: 6, y: 0, z: 0 });
     const previousRandom = game.roadRage.random;
     game.roadRage.random = () => 0;
     const driverTriggered = game.roadRage.trigger(civilian.car);

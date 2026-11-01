@@ -84,3 +84,16 @@ export function locomotionBlend(speed, locomotion) {
   }
   return { run: share, rate: locomotionRate(speed, locomotion, share) };
 }
+
+/**
+ * Tres pasos en vez de dos: andar, trote y correr, con el trote como andar del segundo tramo. El
+ * resultado va de 0 (andar) a 2 (correr) pasando por 1 (trote). `low` mide andar/trote y `high`, trote/correr.
+ */
+export function gaitStage(speed, low, high) {
+  const first = locomotionBlend(speed, low).run;
+  return first < 1 ? first : 1 + locomotionBlend(speed, high).run;
+}
+
+export function stageRate(speed, low, high, stage) {
+  return stage <= 1 ? locomotionRate(speed, low, stage) : locomotionRate(speed, high, stage - 1);
+}

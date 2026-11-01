@@ -391,7 +391,7 @@ export class MapView {
           const [, sy] = this._toScreen(0, label.z);
           if (sy < 20 || sy > h - 20) { ctx.restore(); continue; }
           // Sobre la parte visible del plano, no en el vacío fuera de la ciudad.
-          const [left] = this._toScreen(r?.originX ?? 0, 0), [right] = this._toScreen((r?.originX ?? 0) + (r?.worldWidth ?? 0), 0);
+          const [left] = this._toScreen(Math.max(r?.originX ?? 0, label.minX ?? -Infinity), 0), [right] = this._toScreen((r?.originX ?? 0) + (r?.worldWidth ?? 0), 0);
           ctx.translate(Math.min(Math.max(w * .3, left + 50), right - 50), sy);
         }
         ctx.fillText(label.name.toUpperCase(), 0, 0);

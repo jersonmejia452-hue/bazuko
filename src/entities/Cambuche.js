@@ -4,7 +4,8 @@
 import * as THREE from 'three';
 import { CHARACTER_SCALE } from '../utils/constants.js';
 import { createImportedModel, disposeImportedInstance } from '../utils/ImportedModels.js';
-import { createFlame, stepFlames } from '../world/bogota/flame.js';
+import { createFlame, fireGlow, stepFlames } from '../world/bogota/flame.js';
+import { cardboard } from '../world/bogota/textures.js';
 
 export class Cambuche {
   constructor(scene, position) {
@@ -21,7 +22,8 @@ export class Cambuche {
     root.scale.setScalar(CHARACTER_SCALE);
     this.group.add(root);
 
-    const cardMat = new THREE.MeshStandardMaterial({ color: '#a8865a', roughness: 0.92 });
+    this._cardMap = cardboard(21).map;
+    const cardMat = new THREE.MeshStandardMaterial({ map: this._cardMap, roughness: 0.92 });
     const pieces = {};
 
     // Cartones sueltos que marcan el sitio antes de armar
@@ -109,6 +111,7 @@ export class Cambuche {
     fogon.add(this.fire);
     this.fireLight = new THREE.PointLight(0xff8a2a, 2.5, 5);
     this.fireLight.position.y = 0.4;
+    this.fireGlow = fireGlow();
     fogon.add(this.fireLight);
     fogon.position.set(1.0, 0, 1.3);
     pieces.fogon = fogon;
@@ -176,12 +179,12 @@ export class Cambuche {
     const t = this.t;
     stepFlames(t);
     this.fire.scale.y = 0.66 * (1 + Math.sin(t * 1.9) * 0.05);
-    this.fireLight.intensity = 2.85 + Math.sin(t * 2.4) * 0.2;
-    this.flame.scale.setScalar(0.9 + Math.sin(t * 11) * 0.1);
+    this.fireLight.intensity = (2.85 + Math.sin(t * 2.4) * 0.2) * this.fireGlow.step(dt);
+    this.flame.scale.setScalar(0.9 + Math.sin(t * 2.7) * 0.1);
     this.marker.material.opacity = 0.35 + Math.sin(t * 2) * 0.15;
   }
 
-  setNight() {}
+  setNight(isNight) { this.fireGlow.setNight(isNight); }
 
   dispose() {
     this._disposed = true;
@@ -191,5 +194,6 @@ export class Cambuche {
       o.geometry?.dispose?.();
       o.material?.dispose?.();
     });
+    this._cardMap?.dispose?.();
   }
 }

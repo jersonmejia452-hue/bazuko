@@ -29,11 +29,28 @@ test('los detalles son deterministas, agrupados y caben dentro de la planta y al
     assert.deepEqual(detailGeometry(shell), detailGeometry(copy));
     assert.ok(stats.windows >= 4 && stats.balconies > 0);
     assert.ok(stats.meshes <= 8, 'seis materiales de fachada y dos del techo');
-    const bounds = new THREE.Box3().setFromObject(shell.root);
+    // El volumen sigue en su planta y altura; los tanques, las varillas y el toldo son vida aparte (abajo).
+    const bounds = new THREE.Box3(), life = new THREE.Box3();
+    shell.root.updateWorldMatrix(true, true);
+    shell.root.traverse(o => {
+      if (!o.isMesh) return;
+      o.geometry.computeBoundingBox();
+      (o.userData.streetLife ? life : bounds).union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));
+    });
     assert.ok(bounds.min.x >= 6 - 1e-6 && bounds.max.x <= 14 + 1e-6);
     assert.ok(bounds.min.z >= 17 - 1e-6 && bounds.max.z <= 23 + 1e-6);
     assert.ok(Math.abs(bounds.max.y - 12) < 1e-6);
     assert.equal(shell.height, 12);
+    // Lo que sobresale solo puede ser un toldo por encima de la cabeza y lo que asoma del pretil.
+    assert.ok(stats.lifeMeshes <= 3, 'una malla de vida y otra de humedad por pared, y una de azotea');
+    assert.ok(life.max.y <= 12 + 3.6, 'la azotea no crece más que una antena');
+    shell.root.traverse(o => {
+      if (!o.userData.streetLife) return;
+      const box = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
+      if (box.min.x < 6 - 1e-6 || box.max.x > 14 + 1e-6 || box.min.z < 17 - 1e-6 || box.max.z > 23 + 1e-6) {
+        assert.ok(box.max.x <= 14 + 1.2 && box.min.x >= 6 - 1.2 && box.max.z <= 23 + 1.2 && box.min.z >= 17 - 1.2, 'el toldo sale poco del frente');
+      }
+    });
     const before = detailGeometry(shell);
     assert.equal(addBuildingDetails({ shell, ...opts }).meshes, 0, 'no duplica una fachada');
     assert.deepEqual(detailGeometry(shell), before);
@@ -112,6 +129,27 @@ test('BuildingVisibility incorpora y oculta los lotes con su pared sin perder tr
   assert.equal(front.object.visible, false);
   assert.ok(front.materials.every(m => m.opacity === 0));
   assert.ok(closed.children.every(o => o.material.opacity === 1), 'la versión agrupada no hereda el fundido');
+});
+
+test('al volver a aparecer, una pared recupera cómo se mezclaba cada material de fábrica', () => {
+  const shell = house(), wall = shell.walls.get(4);
+  // Como las manchas de humedad: si quedara opaco, sin alfa se vería un rectángulo oscuro.
+  const stain = new THREE.MeshStandardMaterial({ name: 'Mancha', transparent: true, depthWrite: false, opacity: .8 });
+  wall.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), stain));
+  const visibility = new BuildingVisibility(), building = visibility.register(shell);
+  const part = building.wallParts.find(p => p.object === wall);
+  const copy = part.materials.find(m => m.name === 'Mancha'), solid = part.materials.find(m => m.name !== 'Mancha');
+  assert.ok(copy && solid);
+  visibility._fade(part, true, .1);
+  assert.ok(part.opacity > 0 && part.opacity < 1);
+  assert.ok(Math.abs(copy.opacity - .8 * part.opacity) < 1e-6, 'el fundido parte de su opacidad propia');
+  assert.equal(solid.transparent, true);
+  assert.equal(solid.depthWrite, false);
+  visibility._fade(part, true, 60);
+  visibility._fade(part, false, 60);
+  assert.equal(part.opacity, 1);
+  assert.deepEqual([copy.transparent, copy.depthWrite, copy.opacity], [true, false, .8]);
+  assert.deepEqual([solid.transparent, solid.depthWrite, solid.opacity], [false, true, 1]);
 });
 
 test('el tanque y pretil de una torre retranqueada permanecen dentro de su coronación', () => {

@@ -1,6 +1,7 @@
 // src/features/steal.js
 import { ITEMS } from '../data/items.js';
 import { cop } from '../utils/money.js';
+import { LOW_STANCES } from '../character/archetypes.js';
 
 export const CONFIG = {
   stealDistance: 1.8,
@@ -8,12 +9,15 @@ export const CONFIG = {
   npcCooldown: 30.0,
   markerSpeed: 1.8,
   baseZoneSize: 0.35,
-  lootMoneyCosquilleo: [3000, 18000],
+  lootMoneyCosquilleo: [800, 4000],
   lootMoneyDirect: [12000, 45000],
   lootItems: ['pan', 'lataComida', 'cigarrillo', 'tintico', 'moneda', 'reloj'],
   directDamageMin: 6,
   directDamageMax: 16
 };
+
+/** Objetivos con los que la Q ya hace otra cosa. */
+const QUIET_Q_TARGETS = new Set(['pickup', 'dealer']);
 
 export class StealSystem {
   // Inicializa el sistema de robo a peatones.
@@ -27,8 +31,12 @@ export class StealSystem {
     this.markerDir = 1;
     this.zoneStart = 0.35;
     this.zoneSize = CONFIG.baseZoneSize;
+    this._spaceOwned = false;
+    if (typeof window !== 'undefined') window.addEventListener('keyup', (e) => { if (e.code === 'Space') this._spaceOwned = false; }, true);
     this._dom = null;
     this._buildUI();
+    // En captura, como los paneles: el jugador gasta Espacio antes de que la barra se actualice y Esc abriría la pausa.
+    globalThis.window?.addEventListener?.('keydown', (e) => this._onMinigameKey(e), true);
   }
 
   // Construye la interfaz HTML para el minijuego de cosquilleo.
@@ -60,7 +68,9 @@ export class StealSystem {
       if (n._robadoTimer > 0) n._robadoTimer = Math.max(0, n._robadoTimer - dt);
     }
     if (this.minigameActive) {
-      this._updateMinigame(dt);
+      // Tirado por un carro no se le mete la mano a nadie.
+      if (this.game.player?.isStunned) this._endMinigame(false, 'cancel');
+      else this._updateMinigame(dt);
       return;
     }
     this._checkProximity(npcs);
@@ -69,14 +79,15 @@ export class StealSystem {
   // Encuentra el NPC más cercano y procesa las teclas de interacción E y Q.
   _checkProximity(npcs) {
     const playerPos = this.game?.player?.position;
-    if (!playerPos || this.game.paused) {
+    if (!playerPos || this.game.paused || this.game.player?.isStunned) {
       this.targetNpc = null;
       return;
     }
     let nearest = null;
     let minD = CONFIG.stealDistance;
     for (const n of npcs) {
-      if (!n?.position || (n._robadoTimer ?? 0) > 0) continue;
+      // Ni al desmayado ni a quien atiende un puesto: su aviso es la tienda.
+      if (!n?.position || (n._robadoTimer ?? 0) > 0 || n.koState || n.isVendor) continue;
       const d = playerPos.distanceTo(n.position);
       if (d < minD) {
         minD = d;
@@ -89,7 +100,14 @@ export class StealSystem {
       this.game.interaction.stealPrompt = '[E] Cosquilleo (sigiloso) · [Q] Robo directo';
     }
     if (this.game.input.consumePress('KeyE')) this.startCosquilleo(nearest);
-    else if (this.game.input.consumePress('KeyQ')) this.executeRoboDirecto(nearest);
+    // Junto a basura o al dealer, Q ya tiene otro uso: no se le roba al que justo va pasando.
+    else if (!QUIET_Q_TARGETS.has(this.game.interaction?.currentTargetType) && this.game.input.consumePress('KeyQ')) this.executeRoboDirecto(nearest);
+  }
+
+  // Dice si hay a quién hacerle cosquilleo a menos de esa distancia: un carro más lejano le cede el aviso y la tecla.
+  personCloserThan(distance) {
+    if (!this.targetNpc || this.cooldown > 0) return false;
+    return this.game.player.position.distanceTo(this.targetNpc.position) < distance;
   }
 
   // Inicia el minijuego de timing para el cosquilleo.
@@ -108,9 +126,32 @@ export class StealSystem {
     }
   }
 
-  // Actualiza la oscilación del marcador y procesa la entrada del minijuego.
+  // Mientras dura la barra, Espacio la detiene sin saltar y Esc la cancela sin abrir la pausa.
+  _onMinigameKey(e) {
+    // El Espacio que detuvo la barra sigue siendo suyo hasta soltarlo: su repetición no es un salto.
+    if (this._spaceOwned && e.code === 'Space' && e.repeat) {
+      e.preventDefault?.();
+      e.stopImmediatePropagation();
+      return;
+    }
+    if (!this.minigameActive || this.game.paused) return;
+    if (e.code === 'Escape') {
+      e._panelHandled = true;
+      this._endMinigame(false, 'cancel');
+    } else if (e.code === 'Space') {
+      e.preventDefault?.();
+      e.stopImmediatePropagation();
+      if (e.repeat) return;
+      this._spaceOwned = true;
+      const success = this.markerPos >= this.zoneStart && this.markerPos <= (this.zoneStart + this.zoneSize);
+      this._endMinigame(success, 'play');
+    }
+  }
+
+  // Actualiza la oscilación del marcador; si el jugador y la persona se separan, ya no hay a quién robarle.
   _updateMinigame(dt) {
-    if (this.game.input.consumePress('Escape')) {
+    const npc = this.targetNpc, player = this.game.player?.position;
+    if (npc?.position && player && player.distanceTo(npc.position) > CONFIG.stealDistance * 2) {
       this._endMinigame(false, 'cancel');
       return;
     }
@@ -125,10 +166,6 @@ export class StealSystem {
     }
     if (this._dom) {
       this._dom.marker.style.left = `${this.markerPos * 100}%`;
-    }
-    if (this.game.input.consumePress('Space')) {
-      const success = this.markerPos >= this.zoneStart && this.markerPos <= (this.zoneStart + this.zoneSize);
-      this._endMinigame(success, 'play');
     }
   }
 
@@ -147,8 +184,10 @@ export class StealSystem {
       const bonus = this.game?.dog?.distractionBonus?.(this.game.player?.position) ?? 0;
       const noticeChance = Math.max(0.2, (npc?.alerta ?? 0.5) - bonus);
       if (Math.random() < noticeChance) {
-        npc?.hitByPoop?.(this.game.player.position);
+        npc?.alarmedByTheft?.(this.game.player.position);
         this._toast('🚨 ¡Lo cogieron con las manos en la masa! El peatón gritó.', 'death');
+        // De último: los avisos caen uno encima del otro y este es el que hay que alcanzar a leer.
+        this._alertPolice();
       } else {
         this._toast('💨 Fallaste el cosquilleo, pero lograste disimular.', 'warn');
       }
@@ -161,8 +200,10 @@ export class StealSystem {
     npc._robadoTimer = CONFIG.npcCooldown;
     this.buscado = Math.min(3, this.buscado + 1);
     this._giveLoot(CONFIG.lootMoneyDirect, false);
-    npc.hitByPoop?.(this.game.player.position);
-    const isStrong = (npc.look?.real?.edad === 'adulto' || Math.random() < 0.45);
+    // Quien está en el piso o en la banca no alcanza a defenderse: bastante hace con pararse.
+    const down = LOW_STANCES.has(npc.stance);
+    npc.alarmedByTheft?.(this.game.player.position);
+    const isStrong = !down && (npc.look?.real?.edad === 'adulto' || Math.random() < 0.45);
     if (isStrong && this.game.stats) {
       const dmg = Math.floor(CONFIG.directDamageMin + Math.random() * (CONFIG.directDamageMax - CONFIG.directDamageMin));
       this.game.stats.salud = Math.max(0, this.game.stats.salud - dmg);
@@ -170,18 +211,26 @@ export class StealSystem {
     } else {
       this._toast(`⚡ ¡Robo directo ejecutado! Peatón asustado. Buscado: ${this.buscado}/3`, 'warn');
     }
+    this._alertPolice();
+  }
+
+  // Una patrulla que lo ve lo persigue, igual que por un retrovisor robado.
+  _alertPolice() {
+    if (this.game.traffic?.alertForTheft?.(this.game.player.position) && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('police-chase', {}));
+    }
   }
 
   // Otorga botín aleatorio entre dinero e ítems al inventario del jugador.
   _giveLoot(moneyRange, includeItemChance) {
-    const money = Math.floor(moneyRange[0] + Math.random() * (moneyRange[1] - moneyRange[0]));
+    const money = Math.round((moneyRange[0] + Math.random() * (moneyRange[1] - moneyRange[0])) / 100) * 100;
     if (this.game.stats) this.game.stats.dinero += money;
     this._toast(`💰 +${cop(money)}`, 'sell');
     if (includeItemChance && Math.random() < 0.4 && this.game.inventory) {
       const itemId = CONFIG.lootItems[Math.floor(Math.random() * CONFIG.lootItems.length)];
       if (ITEMS[itemId]) {
-        this.game.inventory.add(ITEMS[itemId], 1);
-        this._toast(`📦 Objeto obtenido: ${ITEMS[itemId].name}`, 'info');
+        if (this.game.inventory.add(ITEMS[itemId], 1)) this._toast(`📦 Objeto obtenido: ${ITEMS[itemId].name}`, 'info');
+        else this._toast(`🎒 No te cabe más en el costal: dejaste ${ITEMS[itemId].name}.`, 'warn');
       }
     }
   }

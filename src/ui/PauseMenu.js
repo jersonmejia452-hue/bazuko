@@ -19,7 +19,7 @@ export const PAUSE_TABS = [
 
 const CONTROL_GROUPS = [
   ['Movimiento', [['WASD', 'Caminar'], ['Shift', 'Correr'], ['Espacio', 'Saltar'], ['Ratón', 'Clic fija la cámara ∙ rueda acerca'], ['V', 'Vista tercera persona / isométrica']]],
-  ['Acciones', [['E', 'Interactuar: basura, tiendas, cambuche, carros'], ['Q', 'Mantener para clasificar basura ∙ dealer'], ['B / L', 'Pedir limosna'], ['F', 'Boost de adrenalina'], ['G / Clic', 'Golpear'], ['X', 'Lanzar / recoger'], ['Z', 'Defecar']]],
+  ['Acciones', [['E', 'Interactuar: basura, tiendas, cambuche, carros'], ['Q', 'Mantener para clasificar basura ∙ dealer'], ['E / Q', 'Junto a una persona: cosquilleo o robo directo'], ['B / L', 'Pedir limosna'], ['F', 'Boost de adrenalina'], ['G / Clic', 'Golpear'], ['X', 'Lanzar / recoger'], ['Z', 'Defecar']]],
   ['Paneles', [['I / Tab', 'Inventario ∙ 1-5 acceso rápido'], ['H', 'Estado y necesidades'], ['T', 'Talentos'], ['C', 'Fabricar'], ['P', 'Editar personaje'], ['R', 'Radio transistor'], ['K', 'Modelo realista / liviano'], ['F2', 'Modo foto ∙ guardar una postal'], ['F3', 'Panel de rendimiento'], ['Esc', 'Pausa ∙ cerrar panel']]],
   ['Mapa y GPS', [['M', 'Abrir / cerrar el mapa'], ['M, Enter', 'Ruta a lo que más necesitas'], ['N', 'Mostrar / ocultar radar'], ['+ / −', 'Zoom del radar'], ['Clic', 'Marcar destino en el mapa'], ['Clic der. / Supr', 'Quitar destino'], ['Q / E', 'Cambiar de pestaña en la pausa']]],
 ];
@@ -210,11 +210,18 @@ function settingsPanel(game) {
     }
   });
 
-  const curQuality = game.renderer?.quality || 'alta';
+  // Lo elegido, que puede tardar en aplicarse mientras compilan las sombras.
+  const curQuality = game.chosenQuality || game.renderer?.quality || 'alta';
   const quality = (id, label) => button(label, {
     primary: curQuality === id, class: 'pause-choice',
     onClick: () => { game.setGraphicsQuality?.(id); game.menu?.refresh(); }
   });
+
+  // Si lo elegido ya está aplicado y aun así el juego corre en otra calidad, fue la calidad automática.
+  const running = game.renderer?.effectiveQuality;
+  const qualityOrder = ['baja', 'media', 'alta'];
+  const qualityNow = running && game.renderer.quality === curQuality && running !== curQuality
+    ? ` Ahora corre en ${running}: ${qualityOrder.indexOf(running) > qualityOrder.indexOf(curQuality) ? 'subió' : 'bajó'} sola.` : '';
 
   const minimap = game.minimap;
   const zoom = minimap?.zoomBase ?? 70;
@@ -231,7 +238,7 @@ function settingsPanel(game) {
       row('Volumen', volumeInput, volumeLabel), ...mixRows, row('Silencio', muteBtn)),
     section('⚡ Calidad gráfica',
       el('div', { class: 'pause-segmented' }, quality('baja', '⚡ Baja'), quality('media', '⚖️ Media'), quality('alta', '✨ Alta')),
-      el('p', { class: 'pause-hint', text: 'Baja da más FPS. Bajo carga la calidad puede bajar sola sin cambiar tu elección.' }),
+      el('p', { class: 'pause-hint', text: `Baja da más FPS. Bajo carga la calidad puede bajar sola sin cambiar tu elección.${qualityNow}` }),
       row('Rendimiento', button(game.performanceHUD?.visible ? 'Visible (F3)' : 'Oculto (F3)', {
         primary: !!game.performanceHUD?.visible, class: 'pause-choice',
         onClick: () => { game.performanceHUD?.toggle(); game.menu.refresh(); }

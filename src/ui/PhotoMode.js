@@ -108,6 +108,8 @@ export class PhotoMode {
     // La geometría recortada en isométrica debe cerrarse también sin simular.
     district.buildingVisibility?.update(0, this.game.player.position, camera);
     this._frustum.setFromProjectionMatrix(this._projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    // Una foto se mira con calma: en ella, todos los postes completos.
+    district.signals?.updateDetail(camera.position, false);
     const actors = [...(district.npcs ?? []),
       ...(this.game.roadRage?.preloadables ?? []).filter(npc => npc.active),
       ...(this.game.limpieza?.preloadables ?? []).filter(npc => npc.active)];
@@ -116,6 +118,7 @@ export class PhotoMode {
       // elegir una ruta o emitir una frase aun sin transcurrir tiempo de juego.
       this._npcBounds.center.set(npc.position.x, npc.position.y + .9, npc.position.z);
       npc.root.visible = this._frustum.intersectsSphere(this._npcBounds);
+      npc.root.matrixWorldAutoUpdate = true; // uno oculto en baja vuelve a salir donde está
     }
   }
 

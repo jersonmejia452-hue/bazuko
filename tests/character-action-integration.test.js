@@ -225,3 +225,16 @@ test('las acciones cortas del cuerpo real conservan la fase y pueden repetirse s
   }
   character.dispose();
 });
+
+test('lejos lo transparente va en una pasada; de cerca barbas y cejas conservan las dos', async () => {
+  const transparent = character => {
+    const materials = [];
+    character.group.traverse(mesh => { if (mesh.isMesh && mesh.material.transparent) materials.push(mesh.material); });
+    return materials;
+  };
+  const look = { barba: 'media' };
+  const far = await createRealisticCharacter(look, { lod: true }), close = await createRealisticCharacter(look);
+  assert.ok(transparent(far).length > 0 && transparent(far).every(material => material.forceSinglePass));
+  assert.ok(transparent(close).length > 0 && transparent(close).every(material => !material.forceSinglePass), 'no se contagia al modelo completo');
+  far.dispose(); close.dispose();
+});

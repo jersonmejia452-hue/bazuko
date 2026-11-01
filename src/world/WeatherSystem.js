@@ -1,6 +1,7 @@
 // src/world/WeatherSystem.js
 import * as THREE from 'three';
 import { WEATHER_TYPES, RAIN_THRESHOLD, seasonForDay, pickNextWeather, sunDirection } from './Climate.js';
+import { setPuddles } from './bogota/StreetPuddles.js';
 
 // Gotas visibles por perfil gráfico: el resto del búfer no se dibuja.
 const RAIN_BUDGET = { baja: .4, media: .7, alta: 1 };
@@ -120,7 +121,7 @@ export class WeatherSystem {
     this._dummyQuat = new THREE.Quaternion();
     this._dummyQuat.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
 
-    this.rippleGeometry = new THREE.RingGeometry(0.08, 0.18, 16);
+    this.rippleGeometry = new THREE.RingGeometry(0.11, 0.15, 16);
     this.rippleMaterial = new THREE.MeshBasicMaterial({
       color: 0xbeddf5,
       transparent: true,
@@ -276,6 +277,8 @@ export class WeatherSystem {
       this._sentWetness = this.wetness;
       district.setWetness(this.wetness);
     }
+    // Cada cuadro: una ciudad recién construida también debe enterarse de que el suelo sigue mojado.
+    setPuddles(this.wetness);
 
     this._updateRipples(dt, playerPosition, district);
 
@@ -300,7 +303,7 @@ export class WeatherSystem {
     this.rippleMesh.visible = count > 0;
     this.rippleMesh.count = count;
     if (!count) return;
-    this.rippleMaterial.opacity = 0.35 * Math.min(1.0, this.wetness * 1.5);
+    this.rippleMaterial.opacity = 0.2 * Math.min(1.0, this.wetness * 1.5);
     for (let i = 0; i < count; i++) {
       const r = this.rippleData[i];
       r.age += dt;
@@ -310,7 +313,7 @@ export class WeatherSystem {
         r.x = playerPosition.x + (Math.random() - 0.5) * 26;
         r.z = playerPosition.z + (Math.random() - 0.5) * 26;
         r.y = (district?.getGroundHeight?.(r.x, r.z) ?? playerPosition.y) + 0.025;
-        r.maxScale = 1.0 + Math.random() * 0.8;
+        r.maxScale = .55 + Math.random() * .6; // gotas de lluvia, no anillos de un metro
       }
       const currentScale = 0.2 + Math.min(1.0, r.age / r.life) * r.maxScale;
       this._dummyPos.set(r.x, r.y, r.z);

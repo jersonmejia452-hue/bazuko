@@ -54,13 +54,18 @@ function matchRestPose(src, tgtRoot, C) {
  * con rotaciones y, si se pide, la altura de la cadera (animación en el sitio):
  *   mundoDestino(t) = C · mundoOrigen(t) · reposoOrigen⁻¹ · C⁻¹ · reposoDestino
  *   localDestino(t) = mundoPadreDestino(t)⁻¹ · mundoDestino(t)
+ *
+ * Con `flatFeet`, pie y dedos parten del reposo propio del personaje: los dos reposos apoyan la
+ * planta, así que plano sigue siendo plano. Alinear el hueso con el del origen la inclinaba lo
+ * que difiera la altura del tobillo, y un cuerpo de pie quedaba de puntillas.
  */
-export function createRetargeter(srcRoot, tgtRoot, { preserveHipHeight = false, hipSpace = 'local' } = {}) {
+export function createRetargeter(srcRoot, tgtRoot, { preserveHipHeight = false, hipSpace = 'local', flatFeet = false } = {}) {
   const src = bonesOf(srcRoot);
   const tgt = bonesOf(tgtRoot);
   const srcLocalRest = new Map([...src].map(([n, b]) => [n, [b.position.clone(), b.quaternion.clone(), b.scale.clone()]]));
   srcRoot.updateMatrixWorld(true);
   tgtRoot.updateMatrixWorld(true);
+  const ownFeet = flatFeet ? [...tgt].filter(([n]) => /(?:Foot|ToeBase)$/.test(n)).map(([n, b]) => [n, b.getWorldQuaternion(new THREE.Quaternion())]) : [];
 
   const C = facingRotation(src, tgt);
   const Cinv = C.clone().invert();
@@ -68,6 +73,7 @@ export function createRetargeter(srcRoot, tgtRoot, { preserveHipHeight = false, 
 
   const restSrc = new Map([...src].map(([n, b]) => [n, b.getWorldQuaternion(new THREE.Quaternion())]));
   const restTgt = new Map([...tgt].map(([n, b]) => [n, b.getWorldQuaternion(new THREE.Quaternion())]));
+  for (const [n, q] of ownFeet) restTgt.set(n, q);
   const restLocal = new Map([...tgt].map(([n, b]) => [n, b.quaternion.clone()]));
   // El cargador de glTF quita los «:» del nombre: mixamorig:Hips llega como mixamorigHips.
   const hipName = [...src.keys()].find(n => n.replace(/[^a-z0-9]/gi, '').replace(/^mixamorig/i, '').toLowerCase() === 'hips' && tgt.has(n));
