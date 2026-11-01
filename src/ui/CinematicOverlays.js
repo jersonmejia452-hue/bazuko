@@ -2,17 +2,16 @@
 // Controla efectos cinemáticos de inmersión:
 // 1. Gotas y condensación de lluvia en lente de cámara
 // 2. Viñeta helada de frío bogotano (madrugadas y noches andinas)
-// 3. Aberración cromática y distorsión durante episodios de psicosis
 
 export class CinematicOverlays {
   constructor() {
     this.rainEl = null;
     this.coldEl = null;
-    this.psychosisOverlayEl = null;
 
     this.rainIntensity = 0;
     this.coldIntensity = 0;
-    this._coldOpacity = '0.000';
+    this._coldOpacity = '0.00';
+    this._rainOpacity = null;
 
     this._initElements();
   }
@@ -22,7 +21,6 @@ export class CinematicOverlays {
     // Las gotas siguen sin conectar en index.html: seis puntos fijos parecen polvo en la pantalla.
     this.rainEl = document.getElementById('cinematic-rain');
     this.coldEl = document.getElementById('cinematic-cold');
-    this.psychosisOverlayEl = document.getElementById('psychosis-overlay');
   }
 
   update(dt, weather, stats, psychosis) {
@@ -34,8 +32,10 @@ export class CinematicOverlays {
     const targetRain = isRaining ? 0.55 + 0.4 * (weather.rainIntensity ?? 0.75) : 0;
     const rainSpeed = isRaining ? 1.2 : 0.4;
     this.rainIntensity += (targetRain - this.rainIntensity) * Math.min(1, dt * rainSpeed);
-    if (this.rainEl) {
-      this.rainEl.style.opacity = this.rainIntensity.toFixed(3);
+    const rainOpacity = this.rainIntensity.toFixed(2);
+    if (this.rainEl && rainOpacity !== this._rainOpacity) {
+      this._rainOpacity = rainOpacity;
+      this.rainEl.style.opacity = rainOpacity;
       if (typeof this.rainEl.classList?.toggle === 'function') {
         this.rainEl.classList.toggle('active', this.rainIntensity > 0.05);
       }
@@ -46,26 +46,13 @@ export class CinematicOverlays {
     const coldRate = targetCold > this.coldIntensity ? 0.12 : 1.6;
     this.coldIntensity += (targetCold - this.coldIntensity) * Math.min(1, dt * coldRate);
     if (this.coldIntensity < 0.002 && !targetCold) this.coldIntensity = 0;
-    const coldOpacity = this.coldIntensity.toFixed(3);
+    // De a dos centésimas: a ojo es lo mismo, y la página no se reescribe en cada cuadro mientras se mete el frío.
+    const coldOpacity = (Math.round(this.coldIntensity * 50) / 50).toFixed(2);
     if (this.coldEl && coldOpacity !== this._coldOpacity) {
       this._coldOpacity = coldOpacity;
       this.coldEl.style.opacity = coldOpacity;
       if (typeof this.coldEl.classList?.toggle === 'function') {
         this.coldEl.classList.toggle('active', this.coldIntensity > 0);
-      }
-    }
-
-    // 3. Aberración cromática y viñeta palpitante por Psicosis
-    if (this.psychosisOverlayEl && psychosis) {
-      const active = !!psychosis.active;
-      if (this.psychosisOverlayEl.classList) {
-        if (typeof this.psychosisOverlayEl.classList.toggle === 'function') {
-          this.psychosisOverlayEl.classList.toggle('chromatic-aberration', active);
-        } else if (active && typeof this.psychosisOverlayEl.classList.add === 'function') {
-          this.psychosisOverlayEl.classList.add('chromatic-aberration');
-        } else if (!active && typeof this.psychosisOverlayEl.classList.remove === 'function') {
-          this.psychosisOverlayEl.classList.remove('chromatic-aberration');
-        }
       }
     }
   }

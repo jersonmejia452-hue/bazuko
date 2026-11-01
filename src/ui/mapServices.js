@@ -6,9 +6,9 @@ import { cop } from '../utils/money.js';
 export const FILTERS = [['todo', 'Todo'], ['comida', 'Comida'], ['agua', 'Agua'], ['calor', 'Calor'], ['vender', 'Vender']];
 
 export const NEED_COPY = {
-  comida: { label: 'Comida', alert: '🍲 Tienes mucha hambre', cta: 'Ir a la comida más cercana' },
-  agua: { label: 'Agua', alert: '💧 Tienes mucha sed', cta: 'Ir al agua más cercana' },
-  calor: { label: 'Calor', alert: '🥶 Te estás congelando', cta: 'Ir al calor más cercano' },
+  comida: { label: 'Comida', alert: '🍲 Tengo mucha hambre', cta: 'Ir a la comida más cercana' },
+  agua: { label: 'Agua', alert: '💧 Tengo mucha sed', cta: 'Ir al agua más cercana' },
+  calor: { label: 'Calor', alert: '🥶 Me estoy congelando', cta: 'Ir al calor más cercano' },
   vender: { label: 'Vender', alert: '🎒 El costal va casi lleno', cta: 'Ir a vender' },
 };
 
@@ -145,14 +145,41 @@ export function suggestPlace(pois, from, needs = {}) {
 
 /** Las dos líneas del radar para una sugerencia. */
 export function suggestionText(s, hint = '', distance = '') {
-  if (s.carried) return `🎒 Llevas: ${s.carried}\nUsar desde el inventario (I)`;
+  if (s.carried) return `🎒 Llevo: ${s.carried}\nUsar desde el costal (I)`;
   const word = NEED_COPY[s.tag].label;
-  if (s.broke) return `💸 Sin plata para ${word.toLowerCase()}\nDesde ${cop(s.price)} ∙ pide limosna (B)`;
-  if (s.full && !s.poi) return `🎒 Sin espacio para ${word.toLowerCase()}\nTira algo del inventario (I)`;
-  const reason = s.sellFirst ? (s.full ? 'Costal lleno: vende' : 'Sin plata: vende')
+  if (s.broke) return `💸 Sin plata para ${word.toLowerCase()}\nDesde ${cop(s.price)}, pida limosna (B)`;
+  if (s.full && !s.poi) return `🎒 Sin espacio para ${word.toLowerCase()}\nTire algo del costal (I)`;
+  const reason = s.sellFirst ? (s.full ? 'Costal lleno: venda' : 'Sin plata: venda')
     : s.tag === 'vender' ? 'Costal lleno'
     : s.price === 0 ? `${word} gratis` : `${word} ${cop(s.price)}`;
-  return `${s.poi.icon} ${s.poi.name}\n${[reason, distance, hint].filter(Boolean).join(' ∙ ')}`;
+  return `${s.poi.icon} ${s.poi.name}\n${[reason, distance, hint].filter(Boolean).join(', ')}`;
+}
+
+/**
+ * Lo que el cartón escribe bajo el destino: el precio, si lo hay, y qué hacer. La tecla va entre paréntesis al final;
+ * quien pinta decide si se ve. `precio` y `hacer` van aparte porque en la pantalla más angosta no caben los dos.
+ */
+export function ordenDeSugerencia(s) {
+  if (!s) return null;
+  if (s.carried) return { precio: '', hacer: 'Usar desde el costal (I)' };
+  const word = NEED_COPY[s.tag].label;
+  const valor = s.price === 0 ? `${word} gratis` : `${word} ${cop(s.price)}`;
+  if (s.broke) return { precio: valor, hacer: 'Sin plata: pida limosna (B)' };
+  if (s.full && !s.poi) return { precio: '', hacer: 'Tire algo del costal (I)' };
+  if (s.sellFirst) return { precio: valor, hacer: s.full ? 'Costal lleno: venda' : 'Sin plata: venda' };
+  if (s.tag === 'vender') return { precio: '', hacer: 'Costal lleno: venda' };
+  return { precio: valor, hacer: '' };
+}
+
+/** Dónde queda lo más cercano que venda `tag`, aunque hoy no alcance la plata: sirve para saber a dónde ir después. */
+export function masCercanoQueVende(pois, from, tag) {
+  let mejor = null, distancia = Infinity;
+  for (const poi of pois) {
+    if (poi.prices?.[tag] === undefined) continue;
+    const d = Math.hypot(poi.x - from.x, poi.z - from.z);
+    if (d < distancia) { distancia = d; mejor = poi; }
+  }
+  return mejor ? { poi: mejor, dist: distancia } : null;
 }
 
 export function isUsable(poi, tag, needs = {}) {
@@ -188,32 +215,32 @@ export function rankPlaces(pois, { tag = null, walk, needs = {}, from = null } =
 /** Segunda línea de cada fila: qué ofrece el lugar y desde qué precio. */
 export function placeMeta(poi, tag = null, needs = {}) {
   const { money = 0, night = false } = needs;
-  if (poi.service === 'fogata') return 'Calor gratis ∙ El Cartucho';
+  if (poi.service === 'fogata') return 'Calor gratis, El Cartucho';
   if (poi.name === 'Crafteo') return 'Se abre con C, desde cualquier sitio';
-  if (poi.dealer) return `Vende siempre ∙ te compra ${night ? 'hasta las 6:00' : 'desde las 20:00'}`;
-  if (poi.prices?.vender === 0) return 'Compra tu reciclaje';
-  if (poi.decor) return 'Solo referencia ∙ no vende';
+  if (poi.dealer) return `Vende siempre. Compra ${night ? 'hasta las 6:00' : 'desde las 20:00'}`;
+  if (poi.prices?.vender === 0) return 'Compra reciclaje';
+  if (poi.decor) return 'Solo referencia, no vende';
   if (!poi.prices) return null;
   if (tag) {
     const price = poi.prices[tag];
-    const problem = price > money ? ' ∙ sin plata' : isUsable(poi, tag, needs) ? '' : ' ∙ no te cabe';
+    const problem = price > money ? ', sin plata' : isUsable(poi, tag, needs) ? '' : ', no cabe';
     return `${NEED_COPY[tag].label} desde ${cop(price)}${problem}`;
   }
   const offers = OFFERS.filter(offer => poi.prices[offer] !== undefined);
   const names = offers.map((offer, i) => (i ? NEED_COPY[offer].label.toLowerCase() : NEED_COPY[offer].label));
-  return `${names.join(' ∙ ')} ∙ desde ${cop(Math.min(...offers.map(offer => poi.prices[offer])))}`;
+  return `${names.join(', ')}, desde ${cop(Math.min(...offers.map(offer => poi.prices[offer])))}`;
 }
 
 /** Por qué ninguna fila se puede usar. `seller` es el lugar al que manda «Ir a vender»: el texto dice lo que se vende allá. */
 export function noOptionText(tag, rows, { money = 0, carriesRecyclables = false, carriesSubstances = false, night = false } = {}, seller = null) {
   if (!rows.length) return null;
-  if (tag === 'vender') return carriesSubstances && !night ? 'El dealer solo compra de noche ∙ desde las 20:00.' : 'No llevas nada que te compren.';
+  if (tag === 'vender') return carriesSubstances && !night ? 'El jíbaro solo compra de noche, desde las 20:00.' : 'No llevo nada que me compren.';
   const cheapest = Math.min(...rows.map(row => row.poi.prices[tag]));
   if (cheapest <= money) {
-    if (seller?.dealer) return 'Lo que te alcanza no te cabe: vende sustancias o tira algo.';
-    return carriesRecyclables ? 'No te cabe en el costal: vende material o tira algo.' : 'No te cabe en el costal: tira algo.';
+    if (seller?.dealer) return 'Lo que alcanza no cabe: venda sustancias o tire algo.';
+    return carriesRecyclables ? 'No cabe en el costal: venda material o tire algo.' : 'No cabe en el costal: tire algo.';
   }
   const sellsSubstances = seller ? seller.dealer : !carriesRecyclables && carriesSubstances && night;
-  const beg = sellsSubstances ? 'Vende sustancias o pide' : seller || carriesRecyclables ? 'Vende material o pide' : 'Pide';
-  return `No te alcanza: ${NEED_COPY[tag].label.toLowerCase()} desde ${cop(cheapest)}. ${beg} limosna (B).`;
+  const beg = sellsSubstances ? 'Venda sustancias o pida' : seller || carriesRecyclables ? 'Venda material o pida' : 'Pida';
+  return `No alcanza: ${NEED_COPY[tag].label.toLowerCase()} desde ${cop(cheapest)}. ${beg} limosna (B).`;
 }

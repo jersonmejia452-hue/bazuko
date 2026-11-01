@@ -146,11 +146,11 @@ test('routeLengthTo no toca el destino activo', () => {
   assert.deepEqual(state(), before);
 });
 
-test('a pie el orden cambia: desde la orilla del lago el D69 queda antes que Colpatria', () => {
+test('a pie el orden cambia: desde la orilla del lago el mercado queda antes que Colpatria', () => {
   const from = { x: 75, z: 226 };
   const place = (name) => cityLandmarks().find(l => l.name === name);
   const straight = (to) => Math.hypot(to.x - from.x, to.z - from.z);
-  const d69 = place('Supermercado D69'), colpatria = place('Torre Colpatria');
+  const d69 = place('Mercado Doña Inés'), colpatria = place('Torre Colpatria');
   assert.ok(straight(colpatria) < straight(d69));
   assert.ok(gps.routeLengthTo(from, d69) < gps.routeLengthTo(from, colpatria));
 });
@@ -165,7 +165,7 @@ test('routeLengthTo devuelve null si no hay camino y mide en recta dentro de un 
 });
 
 test('routeLengthTo desde la acera de un edificio mide hasta esa acera, no hasta su interior', () => {
-  for (const name of ['Torre Colpatria', 'Supermercado D69']) {
+  for (const name of ['Torre Colpatria', 'Mercado Doña Inés']) {
     const place = cityLandmarks().find(l => l.name === name);
     const door = gps._point(gps._nearestOpen(place.x, place.z));
     const from = { x: door.x + .3, z: door.z };

@@ -261,11 +261,11 @@ function drawSigns(ctx) {
     ctx.fillStyle = '#ad1620'; ctx.fillRect(x, y, w, h);
     ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x, y + h - 5, w, 5);
     ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `800 ${Math.round(h * (sub ? .4 : .58))}px "Barlow Condensed", "Arial Narrow", Arial, sans-serif`;
+    ctx.font = `800 ${Math.round(h * (sub ? .4 : .58))}px "Arial Narrow", Arial, sans-serif`;
     ctx.fillText(title, x + w / 2, y + h * (sub ? .36 : .52), w - 24);
     if (sub) {
       ctx.fillStyle = '#ffd84a';
-      ctx.font = `600 ${Math.round(h * .2)}px "Barlow Condensed", "Arial Narrow", Arial, sans-serif`;
+      ctx.font = `600 ${Math.round(h * .2)}px "Arial Narrow", Arial, sans-serif`;
       ctx.fillText(sub, x + w / 2, y + h * .76, w - 24);
     }
   };
@@ -278,7 +278,7 @@ function drawSigns(ctx) {
     const [x, y, w, h] = SIGN.map;
     ctx.fillStyle = '#f2f1ea'; ctx.fillRect(x, y, w, h);
     ctx.fillStyle = '#ad1620'; ctx.fillRect(x, y, w, 40);
-    ctx.fillStyle = '#fff'; ctx.font = '800 26px "Barlow Condensed", Arial, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff'; ctx.font = '800 26px "Arial Narrow", Arial, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillText('MAPA DE RUTAS', x + 12, y + 21);
     const lines = [['#c22027', [[60, 70], [60, 180], [200, 240], [200, 395]]], ['#1f6fb4', [[60, 70], [150, 120], [340, 120], [340, 250]]], ['#2f9a55', [[110, 395], [110, 280], [200, 240], [360, 240]]], ['#e0a415', [[40, 300], [160, 300], [280, 180], [380, 180]]]];
     ctx.lineJoin = 'round';
@@ -312,7 +312,7 @@ function drawSigns(ctx) {
     const [x, y, w, h] = SIGN.line;
     ctx.fillStyle = '#f0c52a'; ctx.fillRect(x, y, w, h);
     ctx.fillStyle = '#17181a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = '800 32px "Barlow Condensed", Arial, sans-serif';
+    ctx.font = '800 32px "Arial Narrow", Arial, sans-serif';
     ctx.fillText('ESPERE DETRÁS DE LA LÍNEA AMARILLA', x + w / 2, y + h / 2, w - 20);
   }
   // Avisos del barrio, sin marcas.
@@ -322,12 +322,12 @@ function drawSigns(ctx) {
     g.addColorStop(0, '#f6c21d'); g.addColorStop(1, '#e8842a');
     ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
     ctx.fillStyle = '#231a12'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = '900 54px "Barlow Condensed", Arial, sans-serif'; ctx.fillText('EMPANADAS', x + w / 2, y + 58, w - 20);
-    ctx.font = '700 30px "Barlow Condensed", Arial, sans-serif'; ctx.fillText('A LA SALIDA DEL PORTAL', x + w / 2, y + 116, w - 20);
+    ctx.font = '900 54px "Arial Narrow", Arial, sans-serif'; ctx.fillText('EMPANADAS', x + w / 2, y + 58, w - 20);
+    ctx.font = '700 30px "Arial Narrow", Arial, sans-serif'; ctx.fillText('A LA SALIDA DEL PORTAL', x + w / 2, y + 116, w - 20);
     const [a, b, c, d] = SIGN.ad2;
     ctx.fillStyle = '#123a5e'; ctx.fillRect(a, b, c, d);
-    ctx.fillStyle = '#fff'; ctx.font = '900 42px "Barlow Condensed", Arial, sans-serif'; ctx.fillText('RECARGUE SU TARJETA', a + c / 2, b + 62, c - 16);
-    ctx.fillStyle = '#ffd84a'; ctx.font = '700 28px "Barlow Condensed", Arial, sans-serif'; ctx.fillText('EN TAQUILLA O EN CAJERO', a + c / 2, b + 116, c - 16);
+    ctx.fillStyle = '#fff'; ctx.font = '900 42px "Arial Narrow", Arial, sans-serif'; ctx.fillText('RECARGUE SU TARJETA', a + c / 2, b + 62, c - 16);
+    ctx.fillStyle = '#ffd84a'; ctx.font = '700 28px "Arial Narrow", Arial, sans-serif'; ctx.fillText('EN TAQUILLA O EN CAJERO', a + c / 2, b + 116, c - 16);
   }
 }
 
@@ -337,7 +337,7 @@ function drawLegends(ctx, w, h) {
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = '900 96px "Barlow Condensed", "Arial Narrow", Arial, sans-serif';
+  ctx.font = '900 96px "Arial Narrow", Arial, sans-serif';
   ctx.fillText('SOLO BUS', 256, 128, 500);
   {
     const [x, y, wd, ht] = LEGEND.arrow;
@@ -357,7 +357,7 @@ function drawLegends(ctx, w, h) {
     ctx.moveTo(ax, wy); ctx.lineTo(x + wd * .5, wy); ctx.lineTo(x + wd * .42, y + ht * .34);
     ctx.moveTo(x + wd * .5, wy); ctx.lineTo(x + wd * .68, y + ht * .34); ctx.moveTo(x + wd * .68, y + ht * .34); ctx.lineTo(x + wd * .65, y + ht * .2); ctx.stroke();
   }
-  ctx.font = '900 92px "Barlow Condensed", Arial, sans-serif';
+  ctx.font = '900 92px "Arial Narrow", Arial, sans-serif';
   ctx.fillText('PARE', LEGEND.stop[0] + LEGEND.stop[2] / 2, LEGEND.stop[1] + LEGEND.stop[3] / 2, LEGEND.stop[2] - 8);
 }
 

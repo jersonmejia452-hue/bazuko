@@ -92,10 +92,10 @@ test('las acciones del banco dependen del objeto elegido', () => {
   ui.render(); // pan: usable, una unidad
   assert.equal(ui.btnUse.disabled, false); assert.equal(ui.btnUse.hidden, false);
   assert.equal(ui.useLabel.textContent, 'Comer');
-  assert.equal(ui.btnDrop1.disabled, false); assert.equal(ui.btnDropAll.disabled, true);
+  assert.equal(ui.btnDrop1.disabled, false); assert.equal(ui.btnDropAll.disabled, false, 'con una sola unidad también se puede tirar: no sale tachado');
   assert.deepEqual(ui.hotEls.map((b) => b.disabled), [false, false, false, false, false]);
   assert.equal(ui.hotEls[2].getAttribute('aria-pressed'), 'true');
-  assert.match(ui.dEffect.textContent, /\+25 hambre · \+5 ánimo/);
+  assert.match(ui.dEffect.textContent, /\+25 hambre, \+5 ánimo/);
   assert.match(ui.slotEls[0].el.innerHTML, /inv-slot-key[^>]*>3</);
 
   ui.select(1); ui.render(); // cartón: no se usa
@@ -122,7 +122,7 @@ test('marca rareza, familia y carga del costal sin depender solo del color', () 
   assert.match(ui.slotEls[0].el.innerHTML, /inv-slot-rare[^>]*>★</);
   assert.match(ui.slotEls[0].el.getAttribute('aria-label'), /moneda vieja ×1/i);
   assert.match(ui.slotEls[3].el.className, /cat-comida.*usable|usable.*cat-comida/);
-  assert.equal(ui.loadText.textContent, '8.5/10 kg');
+  assert.equal(ui.loadText.textContent, '8,5 de 10 kg');
   assert.equal(ui.loadFlag.textContent, 'casi lleno');
   inv.maxWeight = inv.totalWeight; ui.render();
   assert.equal(ui.loadFlag.textContent, 'lleno');

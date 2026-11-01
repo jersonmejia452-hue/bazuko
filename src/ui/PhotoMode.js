@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { el } from './dom.js';
+import { icon } from './icons.js';
 
 const CAMERA_KEYS = ['mode', 'yaw', 'pitch', 'distance', 'baseFov', 'targetFov'];
 const ORBIT_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']);
+const EN_PAUSA = 'La ciudad está en pausa.';
 
 /** Congela la partida y encuadra una fotografía con la cámara existente. */
 export class PhotoMode {
@@ -22,28 +24,63 @@ export class PhotoMode {
     this.launch = el('button', { id: 'photo-mode-open', type: 'button',
       'aria-label': 'Abrir modo foto (F2)', title: 'Modo foto (F2)', onclick: () => this.enter() }, 'Foto ', el('kbd', {}, 'F2'));
     document.getElementById('game-settings')?.append(this.launch);
-    this.status = el('p', { class: 'photo-mode__status', role: 'status', 'aria-live': 'polite' }, 'La ciudad está en pausa.');
-    this.captureButton = el('button', { type: 'button', class: 'photo-mode__capture', onclick: () => this.capture() }, 'Guardar foto');
-    this.closeButton = el('button', { type: 'button', class: 'photo-mode__close', onclick: () => this.exit() }, 'Volver al juego ', el('kbd', {}, 'Esc'));
+    this.status = el('p', { class: 'photo-mode__status', role: 'status', 'aria-live': 'polite' }, EN_PAUSA);
+    this.captureButton = el('button', { type: 'button', class: 'cinta cinta--verbo photo-mode__capture', onclick: () => this.capture() }, 'Guardar foto');
+    this.closeButton = el('button', { type: 'button', class: 'cinta photo-mode__close', 'aria-label': 'Volver al juego', onclick: () => this.exit() },
+      el('span', {}, 'Volver'), el('span', { class: 'photo-mode__largo' }, ' al juego'), el('kbd', {}, 'Esc'));
+    this.hideButton = el('button', { type: 'button', class: 'cinta photo-mode__hide', 'aria-label': 'Esconder controles (H)', onclick: () => this.setClean(true) },
+      icon('eye', { size: 20 }), el('span', { class: 'photo-mode__largo' }, 'Esconder'), el('kbd', {}, 'H'));
+    this.showButton = el('button', { type: 'button', class: 'cinta photo-mode__show', hidden: true, 'aria-label': 'Mostrar controles (H)', title: 'Mostrar controles (H)', onclick: () => this.setClean(false) },
+      icon('eye', { size: 20 }));
     const orbitButton = (label, text, dx, dy) => el('button', {
-      type: 'button', 'aria-label': label, onclick: () => this.game.cameraRig.orbit(dx, dy)
+      type: 'button', class: 'cinta', 'aria-label': label, onclick: () => this.game.cameraRig.orbit(dx, dy)
     }, text);
     const zoomButton = (label, text, delta) => el('button', {
-      type: 'button', 'aria-label': label, onclick: () => this.game.cameraRig.zoom(delta)
+      type: 'button', class: 'cinta', 'aria-label': label, onclick: () => this.game.cameraRig.zoom(delta)
     }, text);
+    this.panel = el('div', { class: 'carton corte-b photo-mode__panel' },
+      el('div', { class: 'photo-mode__head' },
+        el('h2', { id: 'photo-mode-title' }, 'Una foto de Bogotá'),
+        el('p', { id: 'photo-mode-help' }, 'Arrastrar o flechas: girar. Rueda: acercar.'),
+        this.status),
+      el('div', { class: 'photo-mode__tools', role: 'group', 'aria-label': 'Encuadre' },
+        orbitButton('Girar a la izquierda', '←', -36, 0), orbitButton('Girar a la derecha', '→', 36, 0),
+        orbitButton('Subir cámara', '↑', 0, 24), orbitButton('Bajar cámara', '↓', 0, -24),
+        zoomButton('Acercar cámara', '+', -100), zoomButton('Alejar cámara', '−', 100)),
+      el('div', { class: 'photo-mode__actions' }, this.hideButton, this.captureButton, this.closeButton));
     this.root = el('section', { id: 'photo-mode', hidden: true, role: 'dialog', 'aria-modal': 'true',
-      'aria-labelledby': 'photo-mode-title', 'aria-describedby': 'photo-mode-help' },
-      el('div', { class: 'photo-mode__panel' },
-        el('div', { class: 'photo-mode__head' },
-          el('h2', { id: 'photo-mode-title' }, 'Una postal de Bogotá'), el('span', { class: 'photo-mode__badge' }, 'Modo foto')),
-        el('p', { id: 'photo-mode-help' }, 'Arrastra sobre la ciudad o usa las flechas para girar. Acerca con la rueda.'),
-        el('div', { class: 'photo-mode__tools', role: 'group', 'aria-label': 'Encuadre' },
-          orbitButton('Girar a la izquierda', '←', -36, 0), orbitButton('Girar a la derecha', '→', 36, 0),
-          orbitButton('Subir cámara', '↑', 0, 24), orbitButton('Bajar cámara', '↓', 0, -24),
-          zoomButton('Acercar cámara', '+', -100), zoomButton('Alejar cámara', '−', 100)),
-        this.status,
-        el('div', { class: 'photo-mode__actions' }, this.captureButton, this.closeButton)));
+      'aria-labelledby': 'photo-mode-title', 'aria-describedby': 'photo-mode-help' }, this.panel, this.showButton);
     document.body.append(this.root);
+  }
+
+  /** Los controles se quitan de encima para mirar el encuadre; nunca salen en la foto, con o sin esconderlos. */
+  setClean(clean) {
+    if (!this.active || this.clean === clean) return;
+    this.clean = clean;
+    this.root.classList[clean ? 'add' : 'remove']('is-limpio');
+    this.panel.hidden = clean;
+    this.showButton.hidden = !clean;
+    (clean ? this.showButton : this.hideButton).focus({ preventScroll: true });
+  }
+
+  /** Lo que el juego pinta dentro del mundo para orientar: en la foto solo va la ciudad. */
+  _worldMarks() {
+    const game = this.game;
+    return [
+      game.gpsBeacon?.group, game.dealer?.marker, game.craftingStation?.marker, game.cambuche?.marker,
+      ...(game.pickups ?? []).flatMap((pickup) => [pickup.marker, pickup.aura, pickup.sortBarBg, pickup.sortBarFill]),
+      ...(game.cars ?? []).map((car) => car.marker),
+    ].filter(Boolean);
+  }
+
+  _hideWorldMarks() {
+    this._marks = this._worldMarks().map((mark) => [mark, mark.visible]);
+    for (const [mark] of this._marks) mark.visible = false;
+  }
+
+  _restoreWorldMarks() {
+    for (const [mark, visible] of this._marks ?? []) mark.visible = visible;
+    this._marks = null;
   }
 
   _clearInput() {
@@ -68,7 +105,12 @@ export class PhotoMode {
     game.radio?.setPaused(true);
     document.body.classList.add('is-photo-mode');
     this.root.hidden = false;
-    this.status.textContent = 'La ciudad está en pausa. La foto se guarda sin interfaz.';
+    this._say(EN_PAUSA);
+    this.clean = false;
+    this.panel.hidden = false;
+    this.showButton.hidden = true;
+    this.root.classList.remove('is-limpio');
+    this._hideWorldMarks();
     this.captureButton.focus({ preventScroll: true });
     return true;
   }
@@ -79,6 +121,7 @@ export class PhotoMode {
     this.active = false;
     this.root.hidden = true;
     document.body.classList.remove('is-photo-mode');
+    this._restoreWorldMarks();
     for (const key of CAMERA_KEYS) game.cameraRig[key] = this._camera[key];
     game.cameraRig.camera.fov = this._camera.fov;
     game.cameraRig.camera.userData.cameraMode = this._camera.mode;
@@ -131,13 +174,17 @@ export class PhotoMode {
       return;
     }
     if (!this.active) return;
-    if (event.code === 'Escape') {
+    if (event.code === 'KeyH') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!event.repeat) this.setClean(!this.clean);
+    } else if (event.code === 'Escape') {
       event._panelHandled = true;
       event.preventDefault();
       event.stopImmediatePropagation();
       this.exit();
     } else if (event.code === 'Tab') {
-      const buttons = [...this.root.querySelectorAll('button:not([disabled])')];
+      const buttons = [...this.root.querySelectorAll('button:not([disabled])')].filter((button) => this.clean ? button === this.showButton : button !== this.showButton);
       const current = buttons.indexOf(document.activeElement);
       const next = (current + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length;
       buttons[next]?.focus({ preventScroll: true });
@@ -150,11 +197,17 @@ export class PhotoMode {
     }
   }
 
+  /** Pausa es lo normal y no hace falta verlo en un celular; lo demás sí se muestra. */
+  _say(text) {
+    this.status.textContent = text;
+    this.status.classList[text === EN_PAUSA ? 'remove' : 'add']('is-aviso');
+  }
+
   async capture() {
     if (!this.active || this.busy) return false;
     this.busy = true;
     this.captureButton.disabled = true;
-    this.status.textContent = 'Preparando la foto…';
+    this._say('Preparando la foto…');
     try {
       // toBlob se invoca en el mismo turno que el render; no necesita conservar
       // el buffer WebGL entre cuadros ni aumentar el coste habitual del juego.
@@ -162,15 +215,15 @@ export class PhotoMode {
       const blob = await new Promise((resolve, reject) => this.game.canvas.toBlob(
         result => result ? resolve(result) : reject(new Error('La imagen no está disponible.')), 'image/png'));
       const url = URL.createObjectURL(blob);
-      const link = el('a', { href: url, download: `Vagabundo-Bogota-${new Date().toISOString().replace(/[:.]/g, '-')}.png` });
+      const link = el('a', { href: url, download: `Bazuko-Bogota-${new Date().toISOString().replace(/[:.]/g, '-')}.png` });
       document.body.append(link);
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-      this.status.textContent = 'Foto lista. Revisa las descargas del navegador.';
+      this._say('Foto lista. Está en las descargas del navegador.');
       return true;
     } catch (error) {
-      this.status.textContent = 'No se pudo guardar la foto. Vuelve a intentarlo.';
+      this._say('No se pudo guardar la foto. Vuelva a intentarlo.');
       return false;
     } finally {
       this.busy = false;

@@ -42,7 +42,7 @@ test('la aguapanela quita la sed y cura la gripe', () => {
   assert.equal(diseases.hasAny, false);
   assert.equal(stats.sed, 45 + ITEMS.aguapanela.amount);
   assert.equal(inventory.count('aguapanela'), 0);
-  assert.match(toasts.at(-1), /Curado: Gripe/);
+  assert.match(toasts.at(-1), /me curé: Gripe/);
 });
 
 test('sin gripe, la aguapanela se toma como cualquier bebida y se gasta', () => {
@@ -51,7 +51,7 @@ test('sin gripe, la aguapanela se toma como cualquier bebida y se gasta', () => 
   hud._useItem('aguapanela', inventory);
   assert.equal(stats.sed, 45 + ITEMS.aguapanela.amount);
   assert.equal(inventory.count('aguapanela'), 0);
-  assert.doesNotMatch(toasts.at(-1), /Curado/);
+  assert.doesNotMatch(toasts.at(-1), /me curé/);
 });
 
 test('cada remedio de la tienda cura su enfermedad y se gasta', () => {
@@ -80,7 +80,7 @@ test('un remedio sin la enfermedad no se gasta', () => {
   inventory.add(ITEMS.pomada, 1);
   hud._useItem('pomada', inventory);
   assert.equal(inventory.count('pomada'), 1);
-  assert.match(toasts.at(-1), /No tienes sarna/);
+  assert.match(toasts.at(-1), /No tengo sarna/);
   assert.deepEqual(sounds, ['empty']);
 });
 

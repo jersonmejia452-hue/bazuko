@@ -105,6 +105,7 @@ export class InteractionSystem {
         else if (t.kind === 'cart') nearestType = 'cart';
         else if (t.kind === 'fireBarrel') nearestType = 'fireBarrel';
         else if (t.kind === 'recycler') nearestType = 'sell';
+        else if (t.kind === 'mesa') nearestType = 'mesa';
         else if (typeof t.harvest === 'function') nearestType = 'pickup';
         else if (typeof t.steal === 'function') nearestType = 'car';
         else if (typeof t.sellSubstances === 'function') nearestType = 'dealer';
@@ -164,6 +165,9 @@ export class InteractionSystem {
         case 'cambuche':
           window.dispatchEvent(new CustomEvent('open-cambuche'));
           break;
+        case 'mesa':
+          window.dispatchEvent(new CustomEvent('open-mesa'));
+          break;
         case 'fireBarrel':
           this._warmAtFire(nearest);
           break;
@@ -209,13 +213,13 @@ export class InteractionSystem {
       dog.befriend();
       this.stats.saludMental = Math.min(100, this.stats.saludMental + 15);
       window.dispatchEvent(new CustomEvent('toast', {
-        detail: { text: `🐕 ¡Le diste ${ITEMS[foodItem.id]?.name ?? 'comida'} a El Chato! Ahora te acompaña.`, type: 'rare' }
+        detail: { text: `Le di ${ITEMS[foodItem.id]?.name ?? 'comida'} a El Chato. Ahora me acompaña.`, type: 'rare' }
       }));
     } else {
       if (!dog.pet()) return;
       this.stats.saludMental = Math.min(100, this.stats.saludMental + 5);
       window.dispatchEvent(new CustomEvent('toast', {
-        detail: { text: '🐕 Acariciaste a El Chato (+5 salud mental).', type: 'info' }
+        detail: { text: 'Acaricié a El Chato (+5 de ánimo).', type: 'info' }
       }));
     }
   }
@@ -228,7 +232,7 @@ export class InteractionSystem {
       const waitSec = Math.ceil(this.warmCooldown - elapsed);
       window.dispatchEvent(new CustomEvent('toast', {
         detail: {
-          text: `⏳ Ya te calentaste las manos hace poco. El calor perdura (${waitSec}s).`,
+          text: `Ya me calenté las manos hace poco. El calor dura (${waitSec} s).`,
           type: 'info'
         }
       }));
@@ -243,7 +247,7 @@ export class InteractionSystem {
     this.audio?.play?.('full');
     window.dispatchEvent(new CustomEvent('toast', {
       detail: {
-        text: '🔥 Te calentaste las manos en la fogata (+Calor, +Ánimo, +Energía).',
+        text: 'Me calenté las manos en la fogata: +calor, +ánimo, +energía.',
         type: 'info'
       }
     }));
@@ -446,7 +450,7 @@ export class InteractionSystem {
         detail: {
           success: false,
           reason: 'no_pedestrians',
-          message: '👀 No hay nadie cerca a quien pedirle limosna. Acércate a los transeúntes.'
+          message: 'No hay nadie cerca a quien pedirle limosna.'
         }
       }));
       return;
@@ -470,7 +474,7 @@ export class InteractionSystem {
         detail: {
           success: false,
           reason: 'higiene',
-          message: '🚫 La gente se aleja con disgusto por tu olor (Higiene muy baja)'
+          message: 'La gente se aleja por el olor: tengo que bañarme.'
         }
       }));
       return;
@@ -484,7 +488,7 @@ export class InteractionSystem {
         detail: {
           success: false,
           reason: 'ignored',
-          message: '🚶 Los transeúntes te ignoran y siguen de largo...'
+          message: 'La gente me ignora y sigue de largo.'
         }
       }));
       return;
@@ -502,8 +506,8 @@ export class InteractionSystem {
           success: true,
           item: foodItem.name,
           message: added
-            ? `🍞 ¡Un alma caritativa te regaló ${foodItem.name}!`
-            : `🍞 Te ofrecieron ${foodItem.name}, pero tu inventario está lleno`
+            ? `Me regalaron ${foodItem.name}.`
+            : `Me ofrecieron ${foodItem.name}, pero el costal está lleno.`
         }
       }));
       return;
@@ -526,8 +530,8 @@ export class InteractionSystem {
         money: amount,
         rare: isRare,
         message: isRare
-          ? `💎 ¡Un transeúnte generoso te dio un billete de ${cop(amount)}!`
-          : `🪙 Recibiste ${cop(amount)} de limosna`
+          ? `¡Me dieron un billete de ${cop(amount)}!`
+          : `Me dieron ${cop(amount)} de limosna`
       }
     }));
   }

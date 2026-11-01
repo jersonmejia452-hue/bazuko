@@ -14,24 +14,25 @@ import { UMBRELLA_REST, createCane, createClosedStick, createPhone, createUmbrel
 import { HAND_ON_FLOOR } from '../character/stances.js';
 import { WEAPONS } from '../data/weapons.js';
 import { canReachCombatTarget, resolveCombatWalk } from '../systems/CombatGeometry.js';
+import { acabarFrase, empezarFrase } from '../ui/frases.js';
 
 const any = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 // Gritos y quejas de los peatones en Bogotá
 const POOP_SCREAMS = [
-  '¡¡AY QUÉ ASCO, ME CAYÓ UN MOJÓN!! 🤮',
-  '¡¡GONORREA COCHINO, ME TIRÓ POPÓ!! 🤬',
-  '¡¡POLICÍA, UN LOCO ME ESTÁ TIRANDO MIERDA!! 🚨',
-  '¡¡GAS, QUÉ COCHINADA TAN HIJUEPUTA!! 🤢',
-  '¡¡QUÉ PESTILENCIA, AUXILIO ME EMBARRARON!! 🤮',
-  '¡¡MALDITO ENFERMO, ME LAS VAS A PAGAR!! 🏃‍♂️💨'
+  '¡¡AY QUÉ ASCO, ME CAYÓ POPÓ!!',
+  '¡¡GONORREA COCHINO, ME TIRÓ POPÓ!!',
+  '¡¡POLICÍA, UN LOCO ME ESTÁ TIRANDO MIERDA!!',
+  '¡¡GAS, QUÉ COCHINADA TAN HIJUEPUTA!!',
+  '¡¡QUÉ PESTILENCIA, AUXILIO ME EMBARRARON!!',
+  '¡¡MALDITO ENFERMO, ME LAS VA A PAGAR!!'
 ];
 const THEFT_SCREAMS = [
-  '¡¡LADRÓN, ME ESTÁ ROBANDO!! 🚨',
-  '¡¡GONORREA, SUÉLTEME EL BOLSILLO!! 🤬',
-  '¡¡AUXILIO, ME QUIEREN ROBAR!! 🏃‍♂️💨',
-  '¡¡POLICÍA, COJAN A ESE RATERO!! 🚨',
-  '¡¡QUITE LA MANO DE AHÍ, HIJUEPUTA!! 🤬'
+  '¡¡LADRÓN, ME ESTÁ ROBANDO!!',
+  '¡¡GONORREA, SUÉLTEME EL BOLSILLO!!',
+  '¡¡AUXILIO, ME QUIEREN ROBAR!!',
+  '¡¡POLICÍA, COJAN A ESE RATERO!!',
+  '¡¡QUITE LA MANO DE AHÍ, HIJUEPUTA!!'
 ];
 
 // Distancias (m) al jugador
@@ -925,20 +926,6 @@ export class Npc {
     const stance = this.fleeTimer > 0 && this.moving && posture !== 'paraguas' ? 'huir' : posture;
     this._updateHeld(stance);
 
-    // Proyectar burbuja flotante a pantalla
-    if (this._bubbleEl && ctx.camera && typeof window !== 'undefined') {
-      this._projPos.set(this.position.x, this.position.y + 2.05, this.position.z).project(ctx.camera);
-      if (this._projPos.z < 1) {
-        const sx = (this._projPos.x * 0.5 + 0.5) * window.innerWidth;
-        const sy = (-(this._projPos.y * 0.5) + 0.5) * window.innerHeight;
-        this._bubbleEl.style.left = `${sx}px`;
-        this._bubbleEl.style.top = `${sy}px`;
-        this._bubbleEl.style.display = 'block';
-      } else {
-        this._bubbleEl.style.display = 'none';
-      }
-    }
-
     this.animAcc += dt;
     this.frame++;
     // Navegación activa, pose lejana congelada; si cambió de postura, esa sí la toma, de una, una sola vez.
@@ -1039,7 +1026,7 @@ export class Npc {
         attacker.audio?.playPunchHit?.();
         if (typeof window !== 'undefined' && window.dispatchEvent) {
           window.dispatchEvent(new CustomEvent('toast', {
-            detail: { text: `¡El transeúnte se defendió! (-${counter.damage} de salud)`, type: 'warn' }
+            detail: { text: `¡Se me defendió! −${counter.damage} de salud.`, type: 'warn' }
           }));
         }
       }
@@ -1119,7 +1106,7 @@ export class Npc {
     this.panicTimer = 0;
     this._planFall(bench);
     this._dropHeld();
-    if (this._bubbleEl) { this._bubbleEl.remove(); this._bubbleEl = null; }
+    if (this._bubbleEl) { this._bubbleEl.remove(); this._bubbleEl = null; acabarFrase(this); }
     this._bubbleTimer = 0;
   }
 
@@ -1448,6 +1435,12 @@ export class Npc {
     this._bubbleEl.textContent = text;
     this._bubbleTimer = duration;
     container.appendChild(this._bubbleEl);
+    // Se mide una vez y espera escondida a que le toque su sitio: ver src/ui/frases.js
+    this._fraseW = this._bubbleEl.offsetWidth;
+    this._fraseH = this._bubbleEl.offsetHeight;
+    this._fraseVista = 'no';
+    this._bubbleEl.style.display = 'none';
+    empezarFrase(this);
   }
 
   _updateSpeech(dt, ctx) {
@@ -1456,6 +1449,7 @@ export class Npc {
       if (this._bubbleTimer <= 0 && this._bubbleEl) {
         this._bubbleEl.remove();
         this._bubbleEl = null;
+        acabarFrase(this);
       }
     }
 
@@ -1518,6 +1512,7 @@ export class Npc {
     if (this._bubbleEl) {
       this._bubbleEl.remove();
       this._bubbleEl = null;
+      acabarFrase(this);
     }
     this.umbrella?.removeFromParent();
     this.umbrella = null;

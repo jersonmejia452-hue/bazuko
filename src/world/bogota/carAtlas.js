@@ -449,9 +449,9 @@ export function drawAtlas(ctx) {
   const [px, py, pw, ph] = RECT.police;
   ctx.fillStyle = '#0b5c2e'; ctx.fillRect(px, py, pw, ph);
   ctx.fillStyle = '#ffd100'; ctx.fillRect(px, py, pw, 6); ctx.fillRect(px, py + ph - 6, pw, 6);
-  ctx.fillStyle = '#fff'; ctx.font = '900 46px Overpass, "Arial Black", sans-serif';
+  ctx.fillStyle = '#fff'; ctx.font = '900 46px "Arial Black", Arial, sans-serif';
   ctx.fillText('POLICÍA', px + pw / 2, py + 48);
-  ctx.font = '800 19px Overpass, "Arial Black", sans-serif';
+  ctx.font = '800 19px "Arial Black", Arial, sans-serif';
   ctx.fillText('NACIONAL · DIOS Y PATRIA', px + pw / 2, py + 92);
   ctx.font = '900 26px sans-serif'; ctx.fillText('CAI', px + 60, py + ph / 2);
   ctx.font = '800 22px sans-serif'; ctx.fillText('123', px + pw - 60, py + ph / 2);

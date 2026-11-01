@@ -122,8 +122,7 @@ export class SubstanceEffects {
   }
 
   /**
-   * Justo antes del render: filtro, capas y cámara del cuadro. Sin efecto no toca nada, para no
-   * pisar el filtro que la psicosis escribe en cada cuadro.
+   * Justo antes del render: filtro, capas y cámara del cuadro. Sin efecto no toca nada.
    */
   beforeRender(camera, { quality = 'alta', paused = false } = {}) {
     const view = this._visible();

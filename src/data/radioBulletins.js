@@ -12,10 +12,10 @@ export const BULLETINS = [
     id: 'ideam-alerta-lluvias',
     trigger: 'lluvia',
     fecha: '2026-10-27',
-    fuente: 'IDEAM',
+    fuente: 'Boletín del clima',
     titular: 'Alerta por lluvias en Bogotá',
-    texto: 'El IDEAM mantiene la alerta por lluvias en la ciudad. Se esperan aguaceros en la tarde y la noche.',
-    objetivo: 'Busca techo o vuelve al cambuche para secarte.'
+    texto: 'Sigue la alerta por lluvias en la ciudad. Se esperan aguaceros en la tarde y la noche.',
+    objetivo: 'Busque techo o vuelva al cambuche para secarse.'
   },
   {
     id: 'granizada-oriente',
@@ -24,7 +24,7 @@ export const BULLETINS = [
     fuente: 'Reportes de oyentes',
     titular: 'Posible granizada en los cerros orientales',
     texto: 'Oyentes reportan granizo en el oriente. Las canecas y las bolsas se mojan rápido.',
-    objetivo: 'Termina el techo del cambuche antes de que arrecie.'
+    objetivo: 'Termine el techo del cambuche antes de que arrecie.'
   },
   {
     id: 'escampa-centro',
@@ -39,16 +39,16 @@ export const BULLETINS = [
     id: 'reciclaton-octubre',
     trigger: 'ciudad',
     fecha: '2026-10-28',
-    fuente: 'Secretaría Distrital de Ambiente',
-    titular: 'Reciclatón 28 y 29 de octubre',
-    texto: 'Jornada de Reciclatón con puntos de recolección de residuos posconsumo en varias localidades.',
-    objetivo: 'Junta latas, cartón y chatarra para venderlos en la recicladora.'
+    fuente: 'La alcaldía local',
+    titular: 'Jornada de reciclaje el 28 y el 29 de octubre',
+    texto: 'Habrá puntos de recolección de reciclaje en varias localidades.',
+    objetivo: 'Junte latas, cartón y chatarra para venderlos en la recicladora.'
   },
   {
     id: 'transmilenio-desvios',
     trigger: 'ciudad',
     fecha: '2026-10-28',
-    fuente: 'TransMilenio',
+    fuente: 'Reportes de la troncal',
     titular: 'Cambios de operación en la troncal',
     texto: 'Algunas rutas cambian su recorrido por obras. Los buses siguen parando en Portal del Centro.',
     objetivo: 'Cuidado al cruzar el carril exclusivo cerca de la estación.'

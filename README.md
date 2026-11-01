@@ -8,7 +8,7 @@ Este proyecto es un fork de [juanagogo/bazuko](https://github.com/juanagogo/bazu
 
 ## Características
 
-- Identidad urbana BAZUKO: HUD por zonas, menús de asfalto y amarillo taxi, tipografía condensada, inventario y fabricación coherentes, carga ilustrada y creador adaptable. [Sistema visual](docs/identidad-visual.md).
+- Identidad de cartón y marcador: letra propia, dibujos de la misma mano, HUD por zonas, inventario y fabricación coherentes, carga impresa en una tinta y creador adaptable. [Sistema visual](docs/identidad-visual.md).
 
 - Diez tipos de vehículo de los que más se ven en Colombia, sin marcas ni logos: citadino, sedán familiar, hatchback, sedán bajo, camioneta, pick-up, caja de los 70, sedán de los 90, furgoneta y buseta, más motos parqueadas contra el andén. Ruedas con dirección, stops y direccionales, limpiaparabrisas con lluvia. [Vehículos y comprobación](docs/vehiculos-bogota.md).
 
@@ -97,33 +97,33 @@ Con `npm run dev` activo, abre **/sala.html** (por ejemplo http://localhost:5173
 | Clic izquierdo en la calle | Fijar el ratón para girar la cámara en tercera persona. |
 | Arrastrar con botón izquierdo/derecho o flechas | Girar la cámara sin fijar el ratón. |
 | Rueda del ratón | Ajustar la distancia de la cámara en tercera persona. |
-| `I` / `Tab` o botón Inventario | Abrir el inventario por casillas; el mundo queda en pausa. Comparte con la mesa la paleta azul de la pausa: casillas teñidas por familia, banco con el objeto en su pedestal y la carga del costal. |
-| `C` o botón Fabricar | Abrir la mesa de crafteo. Los botones Inventario y Fabricar están bajo Pausa, con su tecla al lado. |
-| `1`–`5` | Asignar el objeto seleccionado a acceso rápido mientras el inventario está abierto; usarlo cuando está cerrado. |
-| `Enter`, `X`, `R` en el inventario | Usar, tirar una unidad (Mayús: todo), ordenar. Las flechas o WASD mueven la selección. |
+| `I` / `Tab` o botón Costal | Abrir el costal por casillas; el mundo queda en pausa. Es del mismo cartón que la mesa, con el nombre de cada objeto y su detalle al lado. |
+| `C` o botón Fabricar | Abrir La mesa, desde cualquier parte; junto a la mesa de verdad también abre con `E`. Los botones Costal y Fabricar están abajo a la derecha, con su tecla al lado. |
+| `1`–`5` | Asignar el objeto seleccionado a acceso rápido mientras el costal está abierto; usarlo cuando está cerrado. |
+| `Enter`, `X`, `R` en el costal | Usar, tirar una unidad (Mayús: todo), ordenar. Las flechas o WASD mueven la selección. |
 | `E` | Interactuar con el objetivo cercano. |
-| `E` junto a una persona | Cosquilleo: sale una barra que se detiene con `Espacio` y se cancela con `Esc` (en el mando, `LT` y `B`). Si aciertas, robas poco sin que se den cuenta; si fallas, pueden pillarte, y una patrulla que lo vea te persigue. |
-| `Q` junto a una persona | Robo directo: paga más, siempre se nota, la persona puede defenderse si está de pie y una patrulla que lo vea te persigue. |
+| `E` junto a una persona | Cosquilleo: sale una barra que se detiene con `Espacio` y se cancela con `Esc` (en el mando, `LT` y `B`). Si aciertas, robas poco sin que se den cuenta; si fallas, pueden pillarte, y una patrulla que lo vea te persigue. Robar te deja fichado: ver «Fichado y patrullas». |
+| `Q` junto a una persona | Robo directo: paga más, siempre se nota, la persona puede defenderse si está de pie y una patrulla que lo vea te persigue. Robar te deja fichado: ver «Fichado y patrullas». |
 | Mantener y soltar `Q` junto a basura | Seleccionar materiales y recogerlos al soltar. |
-| `Q` o `E` junto al dealer | Abrir o cerrar su tienda: comprar y, de noche, elegir qué venderle. |
+| `Q` o `E` junto al jíbaro | Abrir o cerrar su tienda: comprar y, de noche, elegir qué venderle. |
 | `B` o `L` | Pedir limosna. |
 | Clic izquierdo o `G` en la calle | Atacar con los puños o con el arma equipada; pulsar de nuevo al final del golpe encadena el combo. |
-| Usar un cuchillo, una botella picada o el arma casera del inventario | Equiparla en la mano; usarla otra vez la guarda y vuelves a los puños. El arma equipada se conserva al guardar, y ni la recicladora ni quien te robe mientras duermes se llevan la que tienes en la mano. |
+| Usar un cuchillo, una botella picada o el arma casera del costal | Equiparla en la mano; usarla otra vez la guarda y vuelves a los puños. El arma equipada se conserva al guardar, y ni la recicladora ni quien te robe mientras duermes se llevan la que tienes en la mano. |
 | `F` | Activar o desactivar el boost, que consume energía y salud. |
-| `T` | Abrir talentos. |
+| `T` | Abrir las mañas. |
 | `P` | Editar el personaje. |
 | `M` | Abrir el mapa para marcar un destino; en el mapa, cerrarlo. |
 | `K` | Alternar entre el personaje realista y el modelo liviano. |
 | `Esc` o botón Pausa | Abrir la pausa en la pestaña Estado; cerrar primero el panel activo y liberar el cursor. |
 | `N` | Mostrar u ocultar el radar. |
 | `H` / Estado | Mostrar u ocultar las necesidades detalladas. |
-| `F2` | Modo foto: encuadrar, guardar PNG y volver con Esc. |
+| `F2` | Modo foto: encuadrar, esconder los controles con `H`, guardar PNG y volver con Esc. |
 | `+` / `−` | Acercar o alejar el radar. |
 | `F3` | Mostrar u ocultar el panel de rendimiento. |
 | `R` en la calle | Abrir o cerrar la radio AM/FM; permite sintonizar emisoras y cambiar pilas. En 890 AM se escuchan boletines de lluvia y de la ciudad. |
 | `X` en la calle | Lanzar si llevas munición; de lo contrario, hacer popó. |
 | `Z` en la calle | Hacer popó. |
-| Clic en una casilla del inventario | Ver el objeto en el banco; doble clic o el botón principal lo usan (comer, beber, aplicar, lanzar…). |
+| Clic en una casilla del costal | Ver el objeto en el banco; doble clic o el botón principal lo usan (comer, beber, aplicar, lanzar…). |
 
 ### Mando
 
@@ -136,9 +136,11 @@ Funciona con mandos de Xbox, PlayStation o genéricos conectados por USB o Bluet
 | `RT` o pulsar el stick izquierdo | Correr. |
 | `A` | Interactuar (`E`). |
 | `B` | Cerrar el panel activo (`Esc`). |
-| `X` | Mantener junto a basura o abrir la tienda del dealer (`Q`). |
-| `Y` | Inventario (`I`). |
-| `LB` | Cambiar de cámara (`V`). |
+| `X` | Mantener junto a basura o abrir la tienda del jíbaro (`Q`). |
+| `Y` | El costal (`I`). |
+| `LB` tocado solo | Cambiar de cámara (`V`), al soltarlo. |
+| `LB` sostenido + `Y` / `X` | Fabricar (`C`) / Mañas (`T`). |
+| `LB` sostenido + cruceta ↑ → ↓ ← / `A` | Casillas 1 a 4 / casilla 5. |
 | `RB` | Golpear (`G`). |
 | `LT` | Saltar (`Espacio`). |
 | `View` | Mapa (`M`). |
@@ -152,7 +154,7 @@ Los materiales del cambuche aparecen en bolsas de basura repartidas por nueve zo
 
 1. Recorre los andenes y acércate a los objetos para ver las acciones disponibles.
 2. Recoge materiales y véndelos en la recicladora para conseguir dinero.
-3. Compra comida y agua y consúmelas desde el inventario.
+3. Compra comida y agua y consúmelas desde el costal.
 4. Construye y mejora el cambuche para poder descansar. Su menú muestra una vista previa del modelo terminado, incluso antes de reunir los materiales.
 
 La partida guarda datos localmente en el navegador al crear o editar el personaje, al dormir y con **Guardar partida ahora** en el menú de pausa. También conserva la amistad de El Chato, las preferencias de cámara, radar, calidad y volumen. Los datos dependen del navegador y de la dirección desde la que juegas; no hay sincronización entre dispositivos.
@@ -177,13 +179,17 @@ De noche, de vez en cuando, llega la **limpieza social**: una camioneta 4x4 negr
 
 Si la salud llega a cero, el juego se pausa y muestra una pantalla de recuperación. El regreso al cambuche ocurre al pulsar **Volver al cambuche**.
 
+## Fichado y patrullas
+
+Cada robo que se nota sube un nivel de fichado, hasta 3. Baja uno cada 120 s sin robar y sin persecución. Ninguna patrulla te persigue solo por estar fichado: te persigue si te ve robando. Pero mientras dura, cada nivel le alarga un 25 % la distancia a la que te ve. El HUD no muestra nada en cero, una raya por nivel si estás fichado, ¡PILAS! si una patrulla te sigue y ¡CÓRRALE! si la tienes a menos de 18 m.
+
 ## Radar, mapa, GPS y pausa
 
-La columna inferior izquierda reúne radar, Salud y Energía con un ancho común. **H** o **Estado** despliega hambre, sed, higiene, ánimo y vicio; sus alertas siguen visibles aunque el detalle esté cerrado. Dinero y hora quedan arriba a la derecha. Cada necesidad conserva nombre, valor y barra accesible, también en la pestaña Estado. El radar tiene tres tamaños (Pequeño, Mediano y Grande, en **Ajustes**) y gira con la cámara: arriba representa el frente de la pantalla, mientras **N** indica el norte. Al correr se aleja; **+** y **−** cambian el alcance base guardado. Muestra el destino o, si no hay destino, lo que más necesitas: si te congelas, tienes mucha sed o hambre, o el costal va casi lleno, indica el lugar más cercano que puedes pagar y que te cabe en el costal, con precio, distancia y dirección, y lo señala con un aro amarillo aunque quede lejos. Si no hay ninguno, te manda a vender solo si con eso te alcanza y te cabe: a la recicladora o, de noche y sin plata, al dealer. Sin necesidades, muestra el lugar más cercano. Chazas, fritangas y fogatas aparecen cuando están dentro de su alcance. Ocultarlo con **N** o **✕** deja un botón para recuperarlo.
+La columna inferior izquierda reúne el destino, el radar y las filas de Salud, Hambre, Sed y Energía. **H** despliega higiene, ánimo y vicio; cuando bajan de 30 suben solas a la columna. Dinero y hora quedan arriba a la derecha. Cada necesidad conserva nombre, valor y barra accesible, también en la pestaña Estado. El radar tiene tres tamaños (Pequeño, Mediano y Grande, en **Ajustes**) y gira con la cámara: arriba representa el frente de la pantalla, mientras **N** indica el norte. Al correr se aleja; **+** y **−** cambian el alcance base guardado. Muestra el destino o, si no hay destino, lo que más necesitas: si te congelas, tienes mucha sed o hambre, o el costal va casi lleno, indica el lugar más cercano que puedes pagar y que te cabe en el costal, con precio, distancia y dirección, y lo señala con un aro rojo aunque quede lejos. Si no hay ninguno, te manda a vender solo si con eso te alcanza y te cabe: a la recicladora o, de noche y sin plata, al jíbaro. Sin necesidades, muestra el lugar más cercano. Chazas, fritangas y fogatas aparecen cuando están dentro de su alcance. Ocultarlo con **N** o **✕** deja un botón para recuperarlo.
 
-**M** abre el mapa grande con el norte arriba. Se puede arrastrar, acercar con la rueda o con los botones **+** y **−**, volver al jugador con **◎**, ver toda la ciudad con **⤢** y marcar un destino con un clic, sobre un lugar o en cualquier punto de la calle. Una leyenda identifica andenes, calles, parques, agua, edificios y la ruta. La lista **Ir a…** ordena los lugares por la distancia a pie e indica qué ofrece cada uno y desde qué precio. Los filtros **Comida**, **Agua**, **Calor** y **Vender** dejan solo lo que sirve, ponen primero lo que puedes usar, atenúan el resto en el mapa y ofrecen un botón para marcar el lugar más cercano que puedes usar. Si necesitas algo con urgencia y no tienes destino, el botón es para eso, aunque haya otro filtro elegido, y aparece al abrir el mapa: **M** y luego **Enter** (o **View** y **A** con mando) trazan la ruta. La gasolinera y el D69 son solo referencia, las fogatas son gratis, la mesa de crafteo se abre con **C** desde cualquier sitio y el dealer vende a toda hora, pero solo te compra sustancias de noche. El clic derecho o **Quitar destino** lo borra. El GPS calcula la mejor ruta a pie: prefiere andenes, parques y cruces peatonales, evita caminar por la calzada y rodea edificios y el lago. Va por la calle inferior, no por el viaducto. La ruta amarilla aparece en el radar y en el mapa y se recalcula si el jugador se desvía más de 6 metros. Un haz amarillo marca el destino en la calle y desaparece al llegar. El destino se guarda con la partida.
+**M** abre el mapa grande con el norte arriba. Se puede arrastrar, acercar con la rueda o con los botones **+** y **−**, volver al jugador con **◎** (cerca de un borde de la ciudad, el jugador no queda en el centro: la vista no se sale de ella), ver toda la ciudad con **⤢** y marcar un destino con un clic, sobre un lugar o en cualquier punto de la calle. Una leyenda identifica andenes, calles, parques, agua, edificios y la ruta. La lista **Ir a…** ordena los lugares por la distancia a pie e indica qué ofrece cada uno y desde qué precio. Los filtros **Comida**, **Agua**, **Calor** y **Vender** dejan solo lo que sirve, ponen primero lo que puedes usar, atenúan el resto en el mapa y ofrecen un botón para marcar el lugar más cercano que puedes usar. Si necesitas algo con urgencia y no tienes destino, el botón es para eso, aunque haya otro filtro elegido, y aparece al abrir el mapa: **M** y luego **Enter** (o **View** y **A** con mando) trazan la ruta. La gasolinera y el mercado Doña Inés son solo referencia, las fogatas son gratis, la mesa de crafteo se abre con **C** desde cualquier sitio y el jíbaro vende a toda hora, pero solo te compra sustancias de noche. El clic derecho o **Quitar destino** lo borra. El GPS calcula la mejor ruta a pie: prefiere andenes, parques y cruces peatonales, evita caminar por la calzada y rodea edificios y el lago. Va por la calle inferior, no por el viaducto. La ruta amarilla aparece en el radar y en el mapa y se recalcula si el jugador se desvía más de 6 metros. Un haz amarillo marca el destino en la calle y desaparece al llegar. El destino se guarda con la partida.
 
-La pausa tiene cuatro pestañas de alto fijo, que se recorren con **Q** y **E**: Mapa, Estado (necesidades, dinero, nivel, El Chato y guardado manual), Ajustes (volumen, silencio, calidad gráfica, panel de rendimiento, radar con su tamaño y alcance, haz del destino, modelo y radio) y Controles. Cerrar una tienda o el inventario con Esc no abre a la vez la pausa. Abrir cualquier panel libera el cursor. El volumen afecta también a los motores y claxones actuales, que mantienen su reproducción normal y sus voces independientes.
+La pausa tiene cuatro pestañas de alto fijo, que se recorren con **Q** y **E**: Mapa, Estado (necesidades, dinero, nivel, El Chato y guardado manual), Ajustes (volumen, silencio, calidad gráfica, panel de rendimiento, radar con su tamaño y alcance, haz del destino, modelo y radio) y Controles. Cerrar una tienda o el costal con Esc no abre a la vez la pausa. Abrir cualquier panel libera el cursor. El volumen afecta también a los motores y claxones actuales, que mantienen su reproducción normal y sus voces independientes.
 
 El Chato es el único perro del juego y aparece junto al cambuche, donde merodea y olfatea mientras no tiene dueño. Acércate y pulsa **E**: si llevas pan o una lata de atún, lo alimentas y se vuelve compañero; también puedes acariciarlo para recuperar 5 de ánimo, con 20 segundos entre caricias, y lo celebra con un brinco y la cola. Te sigue al paso, al trote o al galope según lo lejos que estés, rodea paredes y respeta las cajas de los vehículos; si lo dejas muy atrás, por ejemplo al tomar el bus, aparece cerca de ti. Cuando te detienes se sienta y, si sigues quieto, se echa. Avisa de basura cercana que aún no se haya vaciado y ladra a los peatones que sospechan de ti; mientras te acompaña de cerca, distrae y reduce la probabilidad de que te pillen robando. Dormir con él aporta 15 de ánimo adicional y lo muestra dormido a tu lado. En la pestaña Estado de la pausa puedes elegir su pelaje, accesorio y tamaño. La amistad y la apariencia se guardan sin invalidar partidas anteriores.
 
@@ -199,18 +205,18 @@ Escarbar basura puede enfermar, y más si se selecciona con calma; el talento Pi
 
 La gripe se cura con jarabe o aguapanela, la intoxicación con carbón activo y la infección con antibiótico; todos los remedios se venden en La Esquinita. Un remedio solo se gasta si el personaje tiene la enfermedad que trata; la aguapanela, que también es bebida, se toma de todos modos.
 
-## El dealer
+## El jíbaro
 
 Su tienda se abre con `E` o `Q` a su lado. Vende tintico, pegante, basuco y pastilla a 2,5 veces su valor ($ 2.500, $ 7.500, $ 10.000 y $ 20.000). De noche también compra lo que le lleves a 1,8 veces el valor: cada sustancia del costal aparece con lo que paga y solo se vende la que eliges. El talento Contactos sube un 30 % lo que paga, que aun así queda por debajo de lo que él cobra. En cada venta hay un 15 % de probabilidad de requisa: la policía se lleva lo que ibas a vender y no recibes nada. El radar y el mapa cuentan con esa plata al mandarte a venderle, pero no pueden evitar la requisa.
 
 ## Efectos de consumo
 
-El pegante, la hierba y la pastilla pueden aparecer en las bolsas de basura (el basuco solo lo vende el dealer), con poca frecuencia; la pastilla es la más rara porque el dealer la compra cara. Al consumirlas desde el inventario o el acceso rápido, además de sus efectos sobre las necesidades, cada una cambia la imagen y el sonido durante un rato:
+El pegante, la hierba y la pastilla pueden aparecer en las bolsas de basura (el basuco solo lo vende el jíbaro), con poca frecuencia; la pastilla es la más rara porque el jíbaro la compra cara. Al consumirlas desde el inventario o el acceso rápido, además de sus efectos sobre las necesidades, cada una cambia la imagen y el sonido durante un rato:
 
 - **Pegante (35 s):** mareo. La imagen se vuelve borrosa y verdosa, los bordes se oscurecen, la visión se duplica y la cámara se mece. Suena una inhalación dentro de la bolsa, un zumbido grave con un pitido de oídos tapados, y el resto de la ciudad se oye apagada, como bajo el agua.
 - **Pastilla (45 s):** euforia de colores. El tono oscila despacio, los colores se saturan, una capa de arcoíris gira y la imagen deja estela. Suena un trago, un brillo que sube y un acorde que ondula.
 - **Hierba (60 s):** se fuma en porro, como el cigarrillo, con humo verdoso, y pega en cada calada (cada 30 s, durante 10 minutos), así que el efecto dura mientras se fuma. Cálido y lento: tonos dorados, un brillo suave en el centro y una estela leve. Suena un encendedor, una inhalación larga y un fondo grave y cálido.
-- **Basuco (40 s):** se fuma en pipa. El personaje se queda quieto, se agacha con la pipa en la boca y el encendedor debajo de la cazoleta, aspira unos tres segundos y bota una bocanada espesa al pararse; el efecto llega al soltar la pipa. Imagen fría y dura con visión de túnel y un pulso rojizo lento en los bordes. Suena el chispazo, el crujido de la pipa, un pitido de oídos y un pulso grave. Además trae 50 s de paranoia: el personaje voltea la cabeza de golpe a un lado y al otro, aparecen de reojo figuras demoníacas (cuernos, ojos rojos, garras, flotando) que se desvanecen si se las mira de frente o al acercarse, y hay susurros en pantalla, latidos, temblores y frases paranoicas. El dealer lo vende; si el personaje está ocupado no se gasta.
+- **Basuco (40 s):** se fuma en pipa. El personaje se queda quieto, se agacha con la pipa en la boca y el encendedor debajo de la cazoleta, aspira unos tres segundos y bota una bocanada espesa al pararse; el efecto llega al soltar la pipa. Imagen fría y dura con visión de túnel y un pulso rojizo lento en los bordes. Suena el chispazo, el crujido de la pipa, un pitido de oídos y un pulso grave. Además trae 50 s de paranoia: el personaje voltea la cabeza de golpe a un lado y al otro, aparecen de reojo figuras demoníacas (cuernos, ojos rojos, garras, flotando) que se desvanecen si se las mira de frente o al acercarse, y hay susurros en pantalla, latidos, temblores y frases paranoicas. El jíbaro lo vende; si el personaje está ocupado no se gasta.
 
 Cada efecto entra en 3 segundos y se desvanece en los últimos 6. Repetir la misma sustancia renueva su duración; otra distinta reemplaza a la anterior después de desvanecerla en un segundo. Los menús, el inventario y la pestaña oculta congelan el efecto, aunque el sonido de consumir suena con el inventario abierto. Dormir, morir o recuperarse en el cambuche lo cortan con un desvanecido, nunca de golpe. Ninguna oscilación de color o brillo supera medio ciclo por segundo. En calidad baja no hay estela ni desenfoque; el sonido respeta el volumen general, el de efectos y el silencio, y con la preferencia de movimiento reducido del sistema la cámara y la estela se mueven al 20 %. El tintico y el cigarrillo no tienen efecto visual.
 
@@ -305,7 +311,7 @@ El puente mantiene 14 metros de ancho real en todo el recorrido, medidos perpend
 
 ### Avenida, comercios y Torre Colpatria
 
-La Caracas alterna edificios de dos a seis pisos y tiene una pasarela en Z 8, con 6,4 metros libres sobre la calzada. La gasolinera junto a X 142, Z 95 incluye marquesina roja, cuatro surtidores, tienda y tótem. La tienda D69, junto a X 53, Z 162, tiene fachada blanca, franjas rojas y vitrinas. Ambos comercios son decorativos, sin compras ni acceso interior.
+La Caracas alterna edificios de dos a seis pisos y tiene una pasarela en Z 8, con 6,4 metros libres sobre la calzada. La gasolinera junto a X 142, Z 95 incluye marquesina roja, cuatro surtidores, tienda y tótem. El mercado Doña Inés, junto a X 53, Z 162, tiene fachada blanca, franjas verdes y vitrinas. Ambos comercios son decorativos, sin compras ni acceso interior.
 
 La Torre Colpatria estilizada mide 112 metros de alto y tiene una planta de 24 × 26 metros en X 81, Z 168. La acompaña un anexo gris de 22 metros de alto, con columnas y locales. Sus franjas amarillas, azules y rojas se iluminan de noche sin añadir luces dinámicas. El viaducto rodea el conjunto y deja libres los edificios.
 
@@ -321,9 +327,9 @@ El rodeo de Colpatria usa un eje con transiciones de curvatura suaves entre Z 80
 
 ### Ilustraciones de la pantalla de carga
 
-La pantalla muestra tres etapas (ciudad, recursos y preparación gráfica), porcentaje y recuento de tareas terminadas. El porcentaje representa trabajo completado, no bytes descargados ni tiempo restante. Personajes, vehículos y mobiliario avanzan en una cola compartida de hasta seis tareas; las instancias siguen reutilizando los modelos descargados. El cuerpo y las prendas del personaje se solicitan en paralelo. Las actualizaciones de progreso y la subida de texturas a la GPU ceden fotogramas por presupuesto de tiempo, evitando pausas fijas por cada instancia o lote de texturas. La partida y los FPS empiezan después de preparar texturas, shaders y GPU.
+La pantalla no da cifras: BAZUKO se va escribiendo con cada etapa terminada, y el lector de pantalla recibe la etapa y el avance. El avance representa trabajo completado, no bytes descargados ni tiempo restante. Personajes, vehículos y mobiliario avanzan en una cola compartida de hasta seis tareas; las instancias siguen reutilizando los modelos descargados. El cuerpo y las prendas del personaje se solicitan en paralelo. Las actualizaciones de progreso y la subida de texturas a la GPU ceden fotogramas por presupuesto de tiempo, evitando pausas fijas por cada instancia o lote de texturas. La partida y los FPS empiezan después de preparar texturas, shaders y GPU.
 
-La carga muestra fondos y personajes por parejas numeradas en orden aleatorio, con fundido y movimiento parallax independiente. Cambia de pareja cada 7,5 segundos mientras continúa la carga, sin imponer tiempo adicional de espera. El movimiento respeta la preferencia de reducir animaciones. Si una imagen falla, se conserva la pareja anterior o la pantalla de respaldo. Las ilustraciones se solicitan con prioridad baja para favorecer los recursos del juego; al cerrar la carga o abrir el creador se cancela la espera pendiente de la galería.
+La carga imprime una pareja de fondo y personaje, elegida al azar sin repetir la anterior, en semitono de una sola tinta sobre cartón. Se imprime una vez, sin cambio de pareja ni movimiento, y solo se reimprime si cambia el tamaño de la pantalla. Si una imagen falla, queda el cartón con la palabra. Las ilustraciones se solicitan con prioridad baja para favorecer los recursos del juego y nunca retrasan la partida; al cerrar la carga o abrir el creador se cancela la espera pendiente.
 
 Las imágenes WebP están en `public/images/pantalla-carga/`: `fondo_pantalla_carga_N.webp` y `personaje_pantalla_carga_N.webp`, con transparencia en el personaje. Los números disponibles se declaran en `src/ui/loading-artwork.json`; al añadir otra pareja, añadir allí su número.
 

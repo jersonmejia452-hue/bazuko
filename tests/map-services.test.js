@@ -83,7 +83,7 @@ test('needContext resume el inventario y no falla si faltan datos', () => {
   assert.equal(carrying('pegante').carriesSubstances, true);
   assert.equal(carrying('pegante').carriesRecyclables, false);
   assert.equal(carrying('cigarrillo').carriesSubstances, false, 'el dealer no compra cigarrillos');
-  assert.deepEqual(carrying('pan', 'agua').carried, { comida: 'Pan duro', agua: 'Botella agua' });
+  assert.deepEqual(carrying('pan', 'agua').carried, { comida: 'Pan duro', agua: 'Botella de agua' });
   assert.deepEqual(carrying('empanada').carried, { comida: 'Empanada con ají', calor: 'Empanada con ají' });
   assert.deepEqual(needContext({}), {
     need: null, money: 0, kg: 0, maxKg: Infinity, carriesRecyclables: false, recycleValue: 0, recycleKg: 0,
@@ -141,35 +141,35 @@ test('el radar sugiere lo más cercano que se puede pagar', () => {
   assert.equal(freezingBroke.poi.x, 75);
   assert.equal(freezingBroke.dist, 75);
   assert.equal(freezingBroke.price, 0);
-  assert.equal(suggestionText(freezingBroke, '← Izquierda', '75m'), '🔥 Fogata de caneca\nCalor gratis ∙ 75m ∙ ← Izquierda');
+  assert.equal(suggestionText(freezingBroke, '← Izquierda', '75m'), '🔥 Fogata de caneca\nCalor gratis, 75m, ← Izquierda');
 
   const freezing = place({ need: 'calor', money: 1200 });
   assert.equal(freezing.poi, dulces);
-  assert.equal(suggestionText(freezing, '→ Derecha', '6m'), '🍬 Dulces y minutos\nCalor $ 1.200 ∙ 6m ∙ → Derecha');
+  assert.equal(suggestionText(freezing, '→ Derecha', '6m'), '🍬 Dulces y minutos\nCalor $ 1.200, 6m, → Derecha');
   assert.equal(place({ need: 'calor', money: 1000 }).poi, tienda, 'con $ 1.000 alcanza la papa criolla de la Tienda');
 
-  assert.equal(suggestionText(place({ need: 'agua', money: 2000 }), '→ Derecha', '6m'), '🍬 Dulces y minutos\nAgua $ 2.000 ∙ 6m ∙ → Derecha');
-  assert.equal(suggestionText(place({ need: 'comida', money: 1200 }), '→ Derecha', '6m'), '🍬 Dulces y minutos\nComida $ 1.200 ∙ 6m ∙ → Derecha');
+  assert.equal(suggestionText(place({ need: 'agua', money: 2000 }), '→ Derecha', '6m'), '🍬 Dulces y minutos\nAgua $ 2.000, 6m, → Derecha');
+  assert.equal(suggestionText(place({ need: 'comida', money: 1200 }), '→ Derecha', '6m'), '🍬 Dulces y minutos\nComida $ 1.200, 6m, → Derecha');
 });
 
 test('el radar sabe qué decir sin plata, con el costal lleno y si ya llevas con qué', () => {
   const pois = [fogata(75), dulces, mona, tienda, recicladora, dealer];
   const broke = suggestPlace(pois, HERE, { need: 'agua', money: 0 });
   assert.deepEqual(broke, { tag: 'agua', broke: true, price: 1200 });
-  assert.equal(suggestionText(broke), '💸 Sin plata para agua\nDesde $ 1.200 ∙ pide limosna (B)');
+  assert.equal(suggestionText(broke), '💸 Sin plata para agua\nDesde $ 1.200, pida limosna (B)');
 
   const sell = suggestPlace(pois, HERE, { need: 'agua', money: 0, carriesRecyclables: true, recycleValue: 1200, recycleKg: 1 });
   assert.equal(sell.poi, recicladora);
   assert.equal(sell.sellFirst, true);
-  assert.equal(suggestionText(sell, '← Izquierda', '72m'), '♻️ Recicladora El Progreso\nSin plata: vende ∙ 72m ∙ ← Izquierda');
+  assert.equal(suggestionText(sell, '← Izquierda', '72m'), '♻️ Recicladora El Progreso\nSin plata: venda, 72m, ← Izquierda');
 
   const full = suggestPlace(pois, HERE, { need: 'vender', money: 0, carriesRecyclables: true });
   assert.equal(full.poi, recicladora, 'el Dealer no compra reciclaje');
-  assert.equal(suggestionText(full, '← Izquierda', '72m'), '♻️ Recicladora El Progreso\nCostal lleno ∙ 72m ∙ ← Izquierda');
+  assert.equal(suggestionText(full, '← Izquierda', '72m'), '♻️ Recicladora El Progreso\nCostal lleno, 72m, ← Izquierda');
 
-  const carried = suggestPlace(pois, HERE, { need: 'agua', money: 50000, carried: { agua: 'Botella agua' } });
-  assert.deepEqual(carried, { tag: 'agua', carried: 'Botella agua' });
-  assert.equal(suggestionText(carried), '🎒 Llevas: Botella agua\nUsar desde el inventario (I)');
+  const carried = suggestPlace(pois, HERE, { need: 'agua', money: 50000, carried: { agua: 'Botella de agua' } });
+  assert.deepEqual(carried, { tag: 'agua', carried: 'Botella de agua' });
+  assert.equal(suggestionText(carried), '🎒 Llevo: Botella de agua\nUsar desde el costal (I)');
 
   assert.equal(suggestPlace([dealer, gasolinera], HERE, { need: 'vender', carriesRecyclables: true }), null);
   assert.equal(suggestPlace([gasolinera, colpatria], HERE, { need: 'comida', money: 99999 }), null, 'nunca sugiere lo decorativo');
@@ -183,11 +183,11 @@ test('el radar no manda a comprar lo que no cabe en el costal', () => {
   assert.equal(sell.poi, recicladora);
   assert.equal(sell.sellFirst, true);
   assert.equal(sell.full, true);
-  assert.equal(suggestionText(sell, '← Izquierda', '72m'), '♻️ Recicladora El Progreso\nCostal lleno: vende ∙ 72m ∙ ← Izquierda');
+  assert.equal(suggestionText(sell, '← Izquierda', '72m'), '♻️ Recicladora El Progreso\nCostal lleno: venda, 72m, ← Izquierda');
 
   const full = place({ need: 'agua', money: 5000, ...room(.1) });
   assert.deepEqual(full, { tag: 'agua', full: true, price: 1200 });
-  assert.equal(suggestionText(full), '🎒 Sin espacio para agua\nTira algo del inventario (I)');
+  assert.equal(suggestionText(full), '🎒 Sin espacio para agua\nTire algo del costal (I)');
 
   assert.deepEqual(place({ need: 'agua', money: 0, ...room(.1) }), { tag: 'agua', broke: true, price: 1200 }, 'sin plata, lo primero es la plata');
   assert.equal(place({ need: 'calor', money: 0, ...room(0) }).poi.name, 'Fogata de caneca', 'calentarse no ocupa espacio');
@@ -242,7 +242,7 @@ test('sin plata, de noche y con sustancias, manda al Dealer si paga lo suficient
   const sell = suggestPlace(pois, HERE, night);
   assert.equal(sell.poi, dealer);
   assert.equal(sell.sellFirst, true);
-  assert.equal(suggestionText(sell, '', '90m'), '💀 Dealer\nSin plata: vende ∙ 90m');
+  assert.equal(suggestionText(sell, '', '90m'), '💀 Dealer\nSin plata: venda, 90m');
   assert.deepEqual(suggestPlace(pois, HERE, { ...night, night: false }), broke, 'de día no compra');
   assert.deepEqual(suggestPlace(pois, HERE, { ...night, substanceValue: 450 }), broke, 'una hierba no paga la comida');
   assert.deepEqual(suggestPlace(pois, HERE, { ...night, money: 5000, ...room(.1) }), { tag: 'comida', full: true, price: 1000 }, 'apenas libera peso');
@@ -306,21 +306,21 @@ test('rankPlaces sin camino ordena en recta y no pierde la fogata más cercana',
 });
 
 test('placeMeta dice qué ofrece cada lugar y desde qué precio', () => {
-  assert.equal(placeMeta(fogata(1)), 'Calor gratis ∙ El Cartucho');
-  assert.equal(placeMeta(fogata(1), 'calor', { money: 0 }), 'Calor gratis ∙ El Cartucho');
-  assert.equal(placeMeta(mona), 'Comida ∙ agua ∙ calor ∙ desde $ 1.000');
-  assert.equal(placeMeta(callejon), 'Comida ∙ agua ∙ desde $ 1.500');
-  assert.equal(placeMeta(tienda), 'Comida ∙ agua ∙ calor ∙ desde $ 1.000');
+  assert.equal(placeMeta(fogata(1)), 'Calor gratis, El Cartucho');
+  assert.equal(placeMeta(fogata(1), 'calor', { money: 0 }), 'Calor gratis, El Cartucho');
+  assert.equal(placeMeta(mona), 'Comida, agua, calor, desde $ 1.000');
+  assert.equal(placeMeta(callejon), 'Comida, agua, desde $ 1.500');
+  assert.equal(placeMeta(tienda), 'Comida, agua, calor, desde $ 1.000');
   assert.equal(placeMeta(dulces, 'calor', { money: 1200 }), 'Calor desde $ 1.200');
-  assert.equal(placeMeta(dulces, 'calor', { money: 1199 }), 'Calor desde $ 1.200 ∙ sin plata');
-  assert.equal(placeMeta(recicladora), 'Compra tu reciclaje');
-  assert.equal(placeMeta(recicladora, 'vender'), 'Compra tu reciclaje');
-  assert.equal(placeMeta(dealer, null, { night: true }), 'Vende siempre ∙ te compra hasta las 6:00');
-  assert.equal(placeMeta(dealer, null, { night: false }), 'Vende siempre ∙ te compra desde las 20:00');
-  assert.equal(placeMeta(monaKg, 'comida', { money: 5000, ...room(.1) }), 'Comida desde $ 1.000 ∙ no te cabe');
-  assert.equal(placeMeta(monaKg, 'comida', { money: 1000, ...room(.2) }), 'Comida desde $ 1.000 ∙ no te cabe');
-  assert.equal(placeMeta(monaKg, 'comida', { money: 999, ...room(.1) }), 'Comida desde $ 1.000 ∙ sin plata');
-  assert.equal(placeMeta(gasolinera), 'Solo referencia ∙ no vende');
+  assert.equal(placeMeta(dulces, 'calor', { money: 1199 }), 'Calor desde $ 1.200, sin plata');
+  assert.equal(placeMeta(recicladora), 'Compra reciclaje');
+  assert.equal(placeMeta(recicladora, 'vender'), 'Compra reciclaje');
+  assert.equal(placeMeta(dealer, null, { night: true }), 'Vende siempre. Compra hasta las 6:00');
+  assert.equal(placeMeta(dealer, null, { night: false }), 'Vende siempre. Compra desde las 20:00');
+  assert.equal(placeMeta(monaKg, 'comida', { money: 5000, ...room(.1) }), 'Comida desde $ 1.000, no cabe');
+  assert.equal(placeMeta(monaKg, 'comida', { money: 1000, ...room(.2) }), 'Comida desde $ 1.000, no cabe');
+  assert.equal(placeMeta(monaKg, 'comida', { money: 999, ...room(.1) }), 'Comida desde $ 1.000, sin plata');
+  assert.equal(placeMeta(gasolinera), 'Solo referencia, no vende');
   assert.equal(placeMeta({ name: 'Crafteo', icon: '🔨', x: 1, z: 0 }), 'Se abre con C, desde cualquier sitio');
   assert.equal(placeMeta(colpatria), null);
   assert.equal(placeMeta(chato), null);
@@ -334,28 +334,28 @@ test('con el Dealer como destino, radar y texto hablan de plata: él no compra m
   const sell = suggestPlace([stall, dealer], HERE, needs);
   assert.equal(sell.poi, dealer);
   assert.equal(sell.full, false);
-  assert.equal(suggestionText(sell, '', '90m'), '💀 Dealer\nSin plata: vende ∙ 90m');
+  assert.equal(suggestionText(sell, '', '90m'), '💀 Dealer\nSin plata: venda, 90m');
 
   const rows = [{ poi: stall }];
-  assert.equal(noOptionText('comida', rows, needs, dealer), 'Lo que te alcanza no te cabe: vende sustancias o tira algo.');
-  assert.equal(noOptionText('comida', rows, { ...needs, carriesRecyclables: false }, dealer), 'Lo que te alcanza no te cabe: vende sustancias o tira algo.');
-  assert.equal(noOptionText('comida', rows, needs, recicladora), 'No te cabe en el costal: vende material o tira algo.');
-  assert.equal(noOptionText('comida', rows, needs), 'No te cabe en el costal: vende material o tira algo.', 'sin destino no cambia');
+  assert.equal(noOptionText('comida', rows, needs, dealer), 'Lo que alcanza no cabe: venda sustancias o tire algo.');
+  assert.equal(noOptionText('comida', rows, { ...needs, carriesRecyclables: false }, dealer), 'Lo que alcanza no cabe: venda sustancias o tire algo.');
+  assert.equal(noOptionText('comida', rows, needs, recicladora), 'No cabe en el costal: venda material o tire algo.');
+  assert.equal(noOptionText('comida', rows, needs), 'No cabe en el costal: venda material o tire algo.', 'sin destino no cambia');
 });
 
 test('noOptionText explica por qué no hay botón', () => {
   const rows = [{ poi: dulces }, { poi: mona }];
-  assert.equal(noOptionText('agua', rows, {}), 'No te alcanza: agua desde $ 1.200. Pide limosna (B).', 'sin nada que vender no lo aconseja');
-  assert.equal(noOptionText('agua', rows, { carriesRecyclables: true }), 'No te alcanza: agua desde $ 1.200. Vende material o pide limosna (B).');
-  assert.equal(noOptionText('agua', rows, { carriesSubstances: true, night: true }), 'No te alcanza: agua desde $ 1.200. Vende sustancias o pide limosna (B).');
-  assert.equal(noOptionText('agua', rows, { carriesSubstances: true, night: false }), 'No te alcanza: agua desde $ 1.200. Pide limosna (B).');
+  assert.equal(noOptionText('agua', rows, {}), 'No alcanza: agua desde $ 1.200. Pida limosna (B).', 'sin nada que vender no lo aconseja');
+  assert.equal(noOptionText('agua', rows, { carriesRecyclables: true }), 'No alcanza: agua desde $ 1.200. Venda material o pida limosna (B).');
+  assert.equal(noOptionText('agua', rows, { carriesSubstances: true, night: true }), 'No alcanza: agua desde $ 1.200. Venda sustancias o pida limosna (B).');
+  assert.equal(noOptionText('agua', rows, { carriesSubstances: true, night: false }), 'No alcanza: agua desde $ 1.200. Pida limosna (B).');
   const carriesBoth = { carriesRecyclables: true, carriesSubstances: true, night: true };
-  assert.equal(noOptionText('agua', rows, carriesBoth, dealer), 'No te alcanza: agua desde $ 1.200. Vende sustancias o pide limosna (B).', 'el botón lleva al Dealer');
-  assert.equal(noOptionText('agua', rows, carriesBoth, recicladora), 'No te alcanza: agua desde $ 1.200. Vende material o pide limosna (B).', 'el botón lleva a la recicladora');
-  assert.equal(noOptionText('agua', rows, { money: 1200 }), 'No te cabe en el costal: tira algo.');
-  assert.equal(noOptionText('agua', rows, { money: 1200, carriesRecyclables: true }), 'No te cabe en el costal: vende material o tira algo.');
-  assert.equal(noOptionText('vender', [{ poi: recicladora }], {}), 'No llevas nada que te compren.');
-  assert.equal(noOptionText('vender', [{ poi: dealer }], { carriesSubstances: true, night: false }), 'El dealer solo compra de noche ∙ desde las 20:00.');
+  assert.equal(noOptionText('agua', rows, carriesBoth, dealer), 'No alcanza: agua desde $ 1.200. Venda sustancias o pida limosna (B).', 'el botón lleva al Dealer');
+  assert.equal(noOptionText('agua', rows, carriesBoth, recicladora), 'No alcanza: agua desde $ 1.200. Venda material o pida limosna (B).', 'el botón lleva a la recicladora');
+  assert.equal(noOptionText('agua', rows, { money: 1200 }), 'No cabe en el costal: tire algo.');
+  assert.equal(noOptionText('agua', rows, { money: 1200, carriesRecyclables: true }), 'No cabe en el costal: venda material o tire algo.');
+  assert.equal(noOptionText('vender', [{ poi: recicladora }], {}), 'No llevo nada que me compren.');
+  assert.equal(noOptionText('vender', [{ poi: dealer }], { carriesSubstances: true, night: false }), 'El jíbaro solo compra de noche, desde las 20:00.');
   assert.equal(noOptionText('agua', [], {}), null);
 });
 
@@ -370,7 +370,7 @@ test('ningún texto usa «·» y ninguna fila repite los nombres que buscan las 
     placeMeta({ name: 'Crafteo', icon: '🔨', x: 1, z: 0 }),
     suggestionText({ tag: 'agua', broke: true, price: 1200 }),
     suggestionText({ tag: 'agua', full: true, price: 1200 }),
-    suggestionText({ tag: 'agua', carried: 'Botella agua' }),
+    suggestionText({ tag: 'agua', carried: 'Botella de agua' }),
     suggestionText({ tag: 'calor', poi: fogata(1), price: 0 }, '← Izquierda', '75m'),
     suggestionText({ tag: 'agua', poi: recicladora, sellFirst: true, price: 1200 }, '← Izquierda', '72m'),
     suggestionText({ tag: 'agua', poi: recicladora, sellFirst: true, full: true, price: 1200 }, '← Izquierda', '72m'),

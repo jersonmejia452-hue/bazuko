@@ -97,6 +97,39 @@ test('modo foto pausa la partida, encuadra sin mover al jugador y restaura cáma
   assert.equal(document.activeElement, photo.launch);
 });
 
+test('lo que orienta dentro del mundo no sale en la foto y vuelve como estaba', () => {
+  const { game, photo } = fixture();
+  const beacon = { visible: true }, dealer = { visible: true }, mesa = { visible: false }, bolsa = { visible: true }, carro = { visible: false };
+  Object.assign(game, { gpsBeacon: { group: beacon }, dealer: { marker: dealer }, craftingStation: { marker: mesa },
+    pickups: [{ marker: bolsa }], cars: [{ marker: carro }] });
+  assert.equal(photo.enter(), true);
+  for (const marca of [beacon, dealer, mesa, bolsa, carro]) assert.equal(marca.visible, false);
+  photo.exit();
+  assert.deepEqual([beacon, dealer, mesa, bolsa, carro].map(m => m.visible), [true, true, false, true, false]);
+});
+
+test('H esconde los controles para mirar el encuadre, y el foco no se pierde', () => {
+  const { photo } = fixture();
+  photo.handleKey(key('KeyH'));
+  assert.equal(photo.clean, undefined, 'fuera del modo foto, H no es de esta pantalla');
+  photo.enter();
+  photo.handleKey(key('KeyH'));
+  assert.equal(photo.panel.hidden, true);
+  assert.equal(photo.showButton.hidden, false);
+  assert.equal(document.activeElement, photo.showButton);
+  photo.handleKey(key('Tab'));
+  assert.equal(document.activeElement, photo.showButton, 'con todo escondido solo queda el botón de volver a mostrar');
+  photo.handleKey(key('KeyH'));
+  assert.equal(photo.panel.hidden, false);
+  assert.equal(photo.showButton.hidden, true);
+  assert.equal(document.activeElement, photo.hideButton);
+  photo.setClean(true);
+  photo.exit();
+  photo.enter();
+  assert.equal(photo.panel.hidden, false, 'la siguiente foto empieza con los controles a la vista');
+  assert.equal(document.activeElement, photo.captureButton);
+});
+
 test('foto respeta carga, menús, sueño, caída y recuperación fatal', () => {
   const changes = [game => { game._loading = true; }, game => { game.menu.isOpen = true; },
     game => { game.creator.isOpen = true; }, game => { game.inventoryUI.isOpen = true; },
@@ -226,7 +259,7 @@ test('guardar renderiza antes de leer PNG y crea una descarga local sin duplicar
   const link = document.body.children.find(element => element.tag === 'a');
   assert.equal(link.clicked, true); assert.equal(link.isConnected, false);
   assert.equal(link.attributes.href, 'blob:local-photo');
-  assert.match(link.attributes.download, /^Vagabundo-Bogota-.+\.png$/);
+  assert.match(link.attributes.download, /^Bazuko-Bogota-.+\.png$/);
   assert.deepEqual(steps, ['render', 'blob', 'url', 'revoke']);
   assert.equal(photo.busy, false); assert.equal(photo.captureButton.disabled, false);
 });
@@ -238,6 +271,6 @@ test('una captura fallida permite reintentar y no crea enlaces vacíos', async (
   game.canvas.toBlob = callback => callback(null);
   assert.equal(await photo.capture(), false);
   assert.equal(photo.busy, false); assert.equal(photo.captureButton.disabled, false);
-  assert.match(photo.status.textContent, /Vuelve a intentarlo/);
+  assert.match(photo.status.textContent, /Vuelva a intentarlo/);
   assert.equal(document.body.children.some(element => element.tag === 'a'), false);
 });

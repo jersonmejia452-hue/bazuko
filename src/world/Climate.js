@@ -14,20 +14,20 @@ const LUNAR_DAYS = 29.53;
  * fog: multiplicador de bruma (1 normal) · lightning: probabilidad de rayos.
  */
 export const WEATHER_TYPES = Object.freeze({
-  soleado:  { level: 0, icon: '☀️', nightIcon: '🌙', glyph: 'sun', nightGlyph: 'moon', label: 'Soleado', nightLabel: 'Despejado', cloud: .1, rain: 0, wind: .2, fog: .75, lightning: 0,
-    toast: '☀️ Se despeja el cielo: sale el sol sobre Monserrate.' },
-  parcial:  { level: 1, icon: '⛅', nightIcon: '☁️', glyph: 'cloud-sun', nightGlyph: 'cloud-moon', label: 'Parcialmente nublado', cloud: .42, rain: 0, wind: .35, fog: .9, lightning: 0,
-    toast: '⛅ Las nubes se abren a ratos sobre el centro.' },
+  soleado:  { level: 0, icon: '☀️', nightIcon: '🌙', glyph: 'sun', nightGlyph: 'moon', label: 'Soleado', nightLabel: 'Sereno', cloud: .1, rain: 0, wind: .2, fog: .75, lightning: 0,
+    toast: 'Se despeja el cielo: sale el sol sobre Monserrate.' },
+  parcial:  { level: 1, icon: '⛅', nightIcon: '☁️', glyph: 'cloud-sun', nightGlyph: 'cloud-moon', label: 'Medio nublado', cloud: .42, rain: 0, wind: .35, fog: .9, lightning: 0,
+    toast: 'Las nubes se abren a ratos sobre el centro.' },
   nublado:  { level: 2, icon: '☁️', glyph: 'cloud', label: 'Nublado', cloud: .85, rain: 0, wind: .3, fog: 1, lightning: 0,
-    toast: '☁️ El cielo se cierra: típico día gris bogotano.' },
+    toast: 'El cielo se cierra: típico día gris bogotano.' },
   niebla:   { level: 2, icon: '🌫️', glyph: 'fog', label: 'Neblina', cloud: .75, rain: 0, wind: .05, fog: 2.4, lightning: 0,
-    toast: '🌫️ Baja la neblina de los cerros orientales.' },
+    toast: 'Baja la neblina de los cerros orientales.' },
   llovizna: { level: 3, icon: '🌦️', glyph: 'drizzle', label: 'Llovizna', cloud: .92, rain: .3, wind: .3, fog: 1.25, lightning: 0,
-    toast: '🌦️ Comienza a lloviznar en el centro de Bogotá…' },
+    toast: 'Empieza a lloviznar en el centro de Bogotá.' },
   aguacero: { level: 4, icon: '🌧️', glyph: 'rain', label: 'Aguacero', cloud: .97, rain: .72, wind: .55, fog: 1.5, lightning: .15,
-    toast: '🌧️ ¡Se largó el aguacero! Busca dónde escampar.' },
-  tormenta: { level: 5, icon: '⛈️', glyph: 'storm', label: 'Tormenta eléctrica', cloud: 1, rain: 1, wind: .9, fog: 1.7, lightning: 1,
-    toast: '⛈️ Tormenta eléctrica sobre la ciudad. Truenos en los cerros.' }
+    toast: 'Se largó el aguacero. Busco dónde escampar.' },
+  tormenta: { level: 5, icon: '⛈️', glyph: 'storm', label: 'Tormenta', cloud: 1, rain: 1, wind: .9, fog: 1.7, lightning: 1,
+    toast: 'Tormenta eléctrica sobre la ciudad. Truenos en los cerros.' }
 });
 
 /** Icono y nombre visibles: de noche el cielo despejado muestra la luna. `glyph` es el icono del HUD. */

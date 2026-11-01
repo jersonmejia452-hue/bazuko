@@ -42,13 +42,10 @@ test('HUD a 375 px conserva radar, controles táctiles y necesidades accesibles 
   await expect(page.locator('#minimap-canvas')).toBeVisible();
   await expectContainedHorizontally(page, ['#hud-dock', '#topbar', '#game-settings']);
 
-  // Todos los tamaños persistidos comparten una sola columna, incluso en móvil.
+  // Ningún tamaño guardado saca el cartón de la pantalla, tampoco en móvil.
   for (const size of ['s', 'm', 'l']) {
     await page.evaluate(value => window.__game.minimap.setSize(value), size);
     await expect(page.locator('#hud-dock')).toHaveAttribute('data-radar-size', size);
-    const widths = await page.evaluate(() => ['hud-dock', 'hud', 'minimap-container']
-      .map(id => document.getElementById(id).getBoundingClientRect().width));
-    expect(Math.max(...widths) - Math.min(...widths), `columna radar ${size}`).toBeLessThanOrEqual(1);
     await expectContainedHorizontally(page, ['#hud-dock']);
   }
   await page.evaluate(() => window.__game.minimap.setSize('m'));
@@ -62,7 +59,7 @@ test('HUD a 375 px conserva radar, controles táctiles y necesidades accesibles 
   await disclosure.press('Enter');
   await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#needs-details')).toBeVisible();
-  for (const [id, label] of [['hambre', 'Hambre'], ['sed', 'Sed'], ['higiene', 'Higiene'], ['animo', 'Ánimo'], ['vicio', 'Vicio']]) {
+  for (const [id, label] of [['higiene', 'Higiene'], ['animo', 'Ánimo'], ['vicio', 'Vicio']]) {
     const row = page.locator(`#needs-details [data-stat="${id}"]`);
     await expect(row).toBeVisible();
     await expect(row).toContainText(label);
@@ -74,15 +71,15 @@ test('HUD a 375 px conserva radar, controles táctiles y necesidades accesibles 
   await expect(page.locator('#needs-details')).toBeHidden();
   await expect(page.locator('#inv-overlay')).not.toHaveClass(/open/);
 
-  // Las necesidades ocultas siguen avisando: el jugador no debe abrir el panel
+  // Lo que está mal se sube solo: el jugador no debe abrir el panel
   // para enterarse de la sed o de la abstinencia.
   await page.evaluate(() => {
     window.__game.stats.sed = 12;
     window.__game.stats.vicio = 12;
   });
-  await expect(page.locator('#needs-summary')).toContainText(/sed/i);
-  await expect(page.locator('#needs-summary')).toContainText(/vicio/i);
-  await expect(page.locator('#status')).toContainText(/bebe agua/i);
+  await expect(page.locator('#hud-vitals [data-stat="sed"]')).toHaveAttribute('data-level', 'critical');
+  await expect(page.locator('#needs-subidas [data-stat="vicio"]')).toBeVisible();
+  await expect(page.locator('#status')).toContainText(/beber agua/i);
   await expect(page.locator('#needs-details')).toBeHidden();
   await page.evaluate(() => {
     const stats = window.__game.stats;
@@ -91,11 +88,14 @@ test('HUD a 375 px conserva radar, controles táctiles y necesidades accesibles 
     window.__game.clock.hour = 12;
   });
   await expect(page.locator('#status')).toBeHidden();
-  await expect(page.locator('#needs-summary')).not.toContainText(/sed|vicio/i);
+  await expect(page.locator('#needs-subidas [data-stat="vicio"]')).toHaveCount(0);
 
   // En móvil los controles están visibles sin hover. Comprobar también que
   // reciben el clic: un botón puede tener 44 px y seguir tapado por el canvas.
-  const buttons = page.locator('#game-settings button, #needs-toggle, #camera-toggle, #panel-dock .dock-btn, #controls-help-toggle, .radar__tools button');
+  // Las herramientas del radar salen al tocarlo; solo Pausa queda arriba.
+  await page.locator('.radar__abrir').click();
+  await expect(page.locator('#minimap-container')).toHaveClass(/abierto/);
+  const buttons = page.locator('#game-settings button:visible, #needs-toggle, #panel-dock .dock-btn, .radar__abrir, .radar__tools button');
   for (const button of await buttons.all()) {
     await expect(button).toBeVisible();
     const rect = await button.boundingBox();

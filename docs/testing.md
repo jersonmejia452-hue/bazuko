@@ -63,7 +63,7 @@ PLAYWRIGHT_GPU=1 npm run test:e2e:headed
 
 Playwright inicia su propio Vite en `127.0.0.1:5188`, con puerto estricto y sin reutilizar otro servidor, para verificar esta copia del proyecto. Ejecuta Chromium con un solo worker y WebGL por software para limitar el uso de GPU y memoria. Cada prueba limpia el almacenamiento local de su contexto aislado; no borra la partida de tu navegador habitual.
 
-Los escenarios esperan a que termine la pantalla de carga antes de interactuar. Verifican creación del personaje, talentos, recetas de fabricación, edición de apariencia, ayuda plegable «!», inventario y pausa. Se cierra fabricación antes de editar el personaje para respetar la pausa actual. Se comprueba que Escape cierre un panel sin abrir simultáneamente otro.
+Los escenarios esperan a que termine la pantalla de carga antes de interactuar. Verifican creación del personaje, talentos, recetas de fabricación, edición de apariencia, ayuda plegable, inventario y pausa. Se cierra fabricación antes de editar el personaje para respetar la pausa actual. Se comprueba que Escape cierre un panel sin abrir simultáneamente otro.
 
 El escenario de regresiones comprueba además que Espacio eleve al jugador en el bucle real, que el panel permita fabricar con 20 kg ocupados cuando los ingredientes liberan espacio y que marcar Colpatria complete la llegada en una acera accesible.
 
@@ -73,7 +73,8 @@ La dirección, paleta y límites de la actualización están en [direccion-visua
 
 - `character-motion.test.js`: movimiento independiente de FPS, poses sin acumulación, aislamiento entre esqueletos y conservación de pies/raíz.
 - `urban-atmosphere.test.js`: cielo y lluvia con color de salida correcto, cambios de día/noche y entorno PBR exterior.
-- `photo-mode.test.js`: entrada/salida, cámara y audio restaurados, atajos, foco y captura PNG.
+- `photo-mode.test.js`: entrada/salida, cámara y audio restaurados, atajos, foco, captura PNG, nombre del archivo, marcas del mundo fuera de la foto y controles que se esconden.
+- `entrada.test.js` y `tests/e2e/entrada.spec.js`: pantalla de carga en una tinta, palabra que se escribe, fallo y reintento, creador en cinco tamaños con teclado y dedo, y modo foto y panel de rendimiento con el juego real. Ver `docs/identidad-visual.md`.
 - El navegador comprueba F2, simulación y tráfico congelados, HUD oculto, descarga PNG con contenido real y restauración de cámara; también detecta errores JavaScript y de compilación de shaders durante ese flujo.
 - El creador se recorre a 1280×800 y 375×812 con movimiento reducido. Se comprueba que sus acciones permanezcan visibles y que las cuatro pestañas de pausa no produzcan desbordamiento horizontal a 375 px.
 
@@ -104,12 +105,13 @@ Los E2E `actions.spec.js` recorren caminar/correr, congelan un salto y un impact
 
 - Combo con cuchillo, KO con botella y recuperación del NPC sin renovar la recompensa.
 - Entrada al agua que cancela el contacto pendiente, el cigarrillo y la pipa.
+- Menús: T y C cierran su panel, cada ventana abre desde arriba, el costal con 34 tipos a cinco tamaños, el mapa grande sobre el cartón, el dial de la radio a 375, la carreta en su indicador y el recorrido sin ratón: Q y E en la pausa, flechas en el costal y foco visible en la mesa.
 - Modo foto que congela patrulla, agresores, sustancias y radio, y reanuda la simulación al salir.
 - Arresto desde el agua y recuperación sin movimiento, amenazas ni efectos pendientes.
 - Mando simulado para usar el inventario sin descartar objetos y operar el modo foto.
 - Arma casera equipada desde el inventario: barrido, remate con más daño, esqueleto con matrices finitas y «Vender todo» sin tocar el arma de la mano.
 - La misma arma y dormir con el perfil `mixamo-game-preview`, que comparte esas poses con el banco Mixamo: acostado mientras duerme y sin arma visible, de pie al despertar.
-- Sin plata de noche: radar y mapa llevan al Dealer, `E` abre la tienda sin vender nada, solo se vende lo elegido, la fila de venta cabe a 375 y 1280 px, el aviso de requisa queda encima de la tienda, `Q` y `E` cierran sin reabrir y de día no compra.
+- Sin plata de noche: radar y mapa llevan al jíbaro, `E` abre la tienda sin vender nada, solo se vende lo elegido, la fila de venta cabe a 375 y 1280 px, el aviso de requisa queda encima de la tienda, `Q` y `E` cierran sin reabrir y de día no compra.
 - Tienda con mando simulado: vender deja el foco en la fila que queda; sin ventas, o al quedarse sin plata, el foco espera en el aviso o en la fila, A no compra ni vende otra cosa y la cruceta sigue desde ahí.
 - Dormir en plena carrera con el modelo realista: sin teclas no resbala al despertar y se levanta de a poco, también si ya va andando.
 - Dormir sucio en la pose nueva: se acuesta mientras duerme y se levanta al despertar, la sarna llega con su aviso y queda guardada; la pomada no se gasta sin la enfermedad, con el aviso encima del inventario, y después la cura.
@@ -151,5 +153,15 @@ node node_modules/@playwright/test/cli.js test --list
 La ejecución con renderizado por software sirve para verificar flujos; sus FPS no representan el rendimiento de una GPU real.
 
 ## Identidad de la interfaz
+
+`letra.test.js` comprueba que el manifiesto diga lo que trae la letra, que todo carácter de un texto del juego exista en ella o en la tabla de dibujos, las cifras de ancho fijo, el peso y que el programa dé lo que está guardado y repita los mismos bytes. `pictos.test.js` comprueba la tabla de dibujos y el paso de los textos. `materiales.test.js` comprueba los seis colores, el contraste, las marcas, el foco único, los 44 px, el movimiento reducido, que nada parpadee, el orden de las hojas y la lluvia.
+
+`tests/momentos.test.js` y `tests/e2e/momentos.spec.js` comprueban los momentos grandes: primera plana impresa, muertes sin grito, recorte de la limpieza social de punta a punta con el juego real, TE CASCARON, CERRADO, voces sin filtro en el lienzo y el consejo al anochecer siguiente. `npm run imprenta` regenera la letra de imprenta, y la prueba comprueba que dé lo mismo.
+
+`tests/hud-estados.test.js` y `tests/e2e/hud.spec.js` comprueban el HUD: estados de búsqueda, retazo, avisos y, en los cinco anchos con el juego real, que ninguna letra quede sobre el relleno y que los avisos no entren en la zona del personaje.
+
+`tests/celular.test.js` comprueba sin navegador la forma de la hora, la distancia y el porcentaje, el orden de las necesidades, el mismo cierre en todos los menús, los textos de todos los objetos con el dedo y con mando, y los acordes de LB. `tests/e2e/celular.spec.js` recorre el juego con dedos a doce tamaños: que nada pase por debajo de la hoja «Más», el costal con 34 objetos y casi lleno, poco alto, el pulgar en la palanca con otro dedo en los menús, soltar afuera y la interrupción, la isométrica, Brincar tras la barra, el pellizco del mapa, morir, caer preso, dormir, armar, comprar y vender; con ratón, los botones del HUD y Tab dentro de la mesa y las mañas; y con un mando simulado, Fabricar y las casillas.
+
+`tests/tactil.test.js` comprueba los controles táctiles sin navegador: palanca, activación, teclas inyectadas, «Más», textos sin teclas y la hoja. `tests/e2e/tactil.spec.js` los recorre con toques emulados en Chromium: dos dedos a la vez, sostener, tocar con otro dedo, volver de la pausa, y que con ratón y teclado no aparezca nada. Es emulación: no reemplaza probar en un teléfono.
 
 `PLAYWRIGHT_GPU=1 npm run test:e2e:headed -- tests/e2e/identity.spec.js tests/e2e/game.spec.js tests/e2e/upgrade.spec.js` verifica la interfaz BAZUKO con la GPU local: distribución de controles y dinero, inventario con objetos, accesos rápidos, creador, pestañas, mapa/GPS y modo foto. La prueba de identidad incluye escritorio, móvil estrecho y orientación horizontal; los controles deben caber y poder pulsarse sin solaparse. Ver `docs/identidad-visual.md` para paleta y responsabilidades de cada hoja de estilos.

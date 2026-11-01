@@ -13,6 +13,9 @@ import {
 import { SpatialGrid } from '../core/SpatialGrid.js';
 import { canReachCombatTarget, hasClearCombatLine } from './CombatGeometry.js';
 
+/** Cada nivel de «te tienen fichado» alarga en esta fracción el alcance con que una patrulla ve un robo. */
+export const POLICE_SIGHT_PER_WANTED = .25;
+
 const GAP = 1.8;
 const ACCELERATION = 1.8;
 const BRAKING = 2;
@@ -49,6 +52,8 @@ function brakeEngaged(before, after, dt) {
 export class TrafficSystem {
   constructor(scene, routes, { carsPerRoute = 4, policeCount = 0, random = Math.random } = {}) {
     this.vehicles = [];
+    this.wantedLevel = 0; // lo mantiene StealSystem: el nivel de «te tienen fichado»
+    this._pursuitInfo = { distance: 0, dx: 0, dz: 0, closeness: 0, x: 0, z: 0 };
     this.random = random;
     this.routes = routes.alternatives ?? routes;
     this._arrestDispatched = false;
@@ -103,6 +108,11 @@ export class TrafficSystem {
       lastHonkTime: 0, police, state: 'patrol', chaseTime: 0 });
   }
 
+  /** Metros a los que una patrulla alcanza a ver un robo: cada nivel de fichado los alarga. */
+  get sightRange() {
+    return POLICE_SIGHT_RANGE * (1 + POLICE_SIGHT_PER_WANTED * this.wantedLevel);
+  }
+
   _canWitness(vehicle, playerPosition) {
     if (Math.abs((playerPosition.y ?? 0) - vehicle.car.position.y) > CHASE_HEIGHT_TOLERANCE) return false;
     if (!hasClearCombatLine({ from: vehicle.car.position, to: playerPosition,
@@ -110,7 +120,8 @@ export class TrafficSystem {
     const dx = playerPosition.x - vehicle.car.position.x;
     const dz = playerPosition.z - vehicle.car.position.z;
     const distSq = dx * dx + dz * dz;
-    if (distSq > POLICE_SIGHT_RANGE * POLICE_SIGHT_RANGE) return false;
+    const sight = this.sightRange;
+    if (distSq > sight * sight) return false;
     const dist = Math.sqrt(distSq);
     if (dist <= POLICE_CLOSE_RANGE) return true;
     const yaw = vehicle.car.group.rotation.y;
@@ -161,6 +172,29 @@ export class TrafficSystem {
 
   get inPursuit() {
     return this.vehicles.some(vehicle => vehicle.police && vehicle.state === 'chase');
+  }
+
+  /**
+   * La patrulla en persecución más cercana, o null. `dx` y `dz` van de la patrulla hacia el jugador; `closeness` va
+   * de 0 (a la distancia en que desiste) a 1 (a la distancia en que arresta): el arresto ocurre por distancia, no por
+   * tiempo. Se llama cada cuadro desde la interfaz y devuelve siempre el mismo objeto.
+   */
+  get pursuitInfo() {
+    let nearest = null, distance = Infinity;
+    for (const vehicle of this.vehicles) {
+      if (!vehicle.police || vehicle.state !== 'chase') continue;
+      const d = vehicle._chaseDist ?? POLICE_GIVE_UP_RANGE;
+      if (d < distance) { distance = d; nearest = vehicle; }
+    }
+    if (!nearest) return null;
+    const info = this._pursuitInfo;
+    info.distance = distance;
+    info.dx = nearest._chaseDx ?? 0;
+    info.dz = nearest._chaseDz ?? 0;
+    info.closeness = Math.max(0, Math.min(1, (POLICE_GIVE_UP_RANGE - distance) / (POLICE_GIVE_UP_RANGE - POLICE_CATCH_RANGE)));
+    info.x = nearest.car.position.x;
+    info.z = nearest.car.position.z;
+    return info;
   }
 
   _returnToPatrol(vehicle) {

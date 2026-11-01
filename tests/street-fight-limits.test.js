@@ -44,7 +44,7 @@ test('exhausto no se puede pelear y avisa', () => {
   player.punch();
   assert.equal(player.attack, null);
   assert.equal(stats.energia, 4);
-  assert.match(toast?.text ?? '', /exhausto/);
+  assert.match(toast?.text ?? '', /No doy más/);
 });
 
 test('golpear a un peatón sube el nivel de búsqueda y avisa de la pelea', () => {

@@ -1,12 +1,14 @@
 // src/ui/itemArt.js
 // Iconos de objetos (game-icons.net, CC BY 3.0, créditos en docs/iconos.md).
-// Son siluetas en currentColor que el CSS tiñe con `mask-image`; Vite incrusta
+// Son siluetas en currentColor que la hoja recorta con `mask-image`; Vite incrusta
 // los SVG pequeños en la compilación, así que no generan peticiones extra.
 // La mesa de fabricación y el inventario comparten iconos, familias y textos.
-import { ITEMS } from '../data/items.js';
+import { ITEMS, itemIcon } from '../data/items.js';
 import { diseaseName } from '../data/diseases.js';
 import { NEEDS } from '../systems/StatsSystem.js';
 import { cop } from '../utils/money.js';
+import { conComa, conSigno } from '../utils/numeros.js';
+import { iconChar } from './icons.js';
 
 // En la compilación los SVG se vuelven data URI con comillas simples: se codifican
 // para no cortar el url('…') del estilo.
@@ -59,7 +61,7 @@ const ART = {
 
 export const hasItemArt = (id) => id in ART;
 
-/** Familia visual del objeto: define el color de su casilla. */
+/** Familia del objeto: la casilla la lleva como clase, para reconocerla. */
 export function itemCategory(id) {
   const item = ITEMS[id];
   if (!item) return 'material';
@@ -71,11 +73,11 @@ export function itemCategory(id) {
   return 'material';
 }
 
-/** HTML del icono; sin arte propio usa el emoji del catálogo. */
+/** HTML del icono; sin arte propio usa su dibujo de la letra. */
 export function itemArtHTML(id, cls = '') {
   const extra = cls ? ` ${cls}` : '';
   if (ART[id]) return `<span class="item-art${extra}" style="--art: url('${ART[id]}')" aria-hidden="true"></span>`;
-  return `<span class="item-art item-art--emoji${extra}" aria-hidden="true">${ITEMS[id]?.emoji ?? '📦'}</span>`;
+  return `<span class="item-art item-art--dibujo picto${extra}" data-dibujo="${iconChar(itemIcon(id))}" aria-hidden="true"></span>`;
 }
 
 const NEED_LABELS = { hambre: 'hambre', sed: 'sed', energia: 'energía', salud: 'salud', higiene: 'higiene', animo: 'ánimo', vicio: 'vicio' };
@@ -89,10 +91,10 @@ export function itemEffectLine(item, { weight = true, fallback = true } = {}) {
   const parts = [];
   if (item.consumable) parts.push(`+${item.amount} ${NEED_LABELS[item.consumable]}`);
   for (const k of NEEDS) {
-    if (k !== item.consumable && item[k]) parts.push(`${item[k] > 0 ? '+' : ''}${item[k]} ${NEED_LABELS[k]}`);
+    if (k !== item.consumable && item[k]) parts.push(`${conSigno(item[k])} ${NEED_LABELS[k]}`);
   }
   if (item.cure) parts.push(`Cura: ${diseaseName(item.cure)}`);
-  if (!parts.length && fallback) parts.push(item.usable ? 'Se usa desde el inventario' : `Se vende por ${cop(item.value)}`);
-  if (weight) parts.push(`${item.weight} kg`);
-  return parts.join(' · ');
+  if (!parts.length && fallback) parts.push(item.usable ? 'Se usa desde el costal' : `Se vende por ${cop(item.value)}`);
+  if (weight) parts.push(`${conComa(item.weight)} kg`);
+  return parts.join(', ');
 }

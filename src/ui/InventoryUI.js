@@ -1,14 +1,18 @@
 // src/ui/InventoryUI.js
-// Panel de inventario (overlay DOM, tecla I / Tab) + barra de acceso rápido (teclas 1-5).
-// Usa las piezas de la mesa de crafteo (item-ui.css): casillas por familia, banco con
-// pedestal y botón principal. El DOM se construye una vez; solo se actualiza lo que
-// cambia (onChange del InventorySystem) y la selección y el foco sobreviven al redibujado.
+// El costal (tecla I / Tab) y la barra de acceso rápido (teclas 1-5).
+// Una rejilla a marcador con una celda por objeto y el detalle al lado. El DOM se construye una vez; solo se actualiza
+// lo que cambia (onChange del InventorySystem) y la selección y el foco sobreviven al redibujado.
 import { ITEMS, isUsable, isRecyclable, describeEffects, itemRarityLabel } from '../data/items.js';
 import { itemArtHTML, itemCategory, itemEffectLine } from './itemArt.js';
 import { cop } from '../utils/money.js';
+import { sinTeclas, teclaVisible } from '../core/modoEntrada.js';
+import { cierreHTML } from './cierre.js';
 
 const COLS = 5;
 const NEAR_FULL = 0.85;
+/** Los kilos, con coma. */
+const kilos = (n) => String(n).replace('.', ',');
+const escapar = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
 const isRare = (def) => !!(def?.rare || def?.rarity === 'rare' || def?.rarity === 'veryRare');
 // Los tesoros marcan `rare` sin una rareza del catálogo.
@@ -41,7 +45,7 @@ const GENERIC_DESC = new Set(['Material para mejorar el cambuche.', 'Consumible.
 
 /** Cómo se usa: las indicaciones propias del objeto o su descripción, si es propia. */
 function itemNote(def) {
-  return describeEffects(def).find((t) => t.startsWith('Usar')) ?? (GENERIC_DESC.has(def.desc) ? '' : def.desc);
+  return sinTeclas(describeEffects(def).find((t) => t.startsWith('Usar')) ?? (GENERIC_DESC.has(def.desc) ? '' : def.desc));
 }
 
 export class InventoryUI {
@@ -77,37 +81,36 @@ export class InventoryUI {
     const hotKeys = this.inv.hotbar.map((_, i) =>
       `<button type="button" class="inv-hot-key" tabindex="-1" data-hot="${i}" aria-pressed="false">${i + 1}</button>`).join('');
     root.innerHTML = `
-      <div class="inv-window" role="dialog" aria-modal="true" aria-labelledby="inv-title">
-        <header class="inv-head">
-          ${itemArtHTML('costal', 'inv-head-art')}
-          <h2 id="inv-title">Inventario</h2>
+      <div class="inv-window carton corte-b" role="dialog" aria-modal="true" aria-label="Inventario">
+        <header class="inv-head cabecera">
+          <h2 id="inv-title">El costal</h2>
           <div class="inv-load" title="Carga del costal">
             <span class="inv-load-text"></span>
-            <span class="inv-load-bar" aria-hidden="true"><i></i></span>
+            <span class="inv-load-bar" aria-hidden="true"><i class="masa"></i></span>
             <span class="inv-load-flag"></span>
           </div>
-          <button class="inv-close" type="button" tabindex="-1" aria-label="Cerrar inventario">✕</button>
+          ${cierreHTML('I', 'Cerrar inventario', 'inv-close', 'tabindex="-1"')}
         </header>
         <div class="inv-body">
           <div class="inv-side">
             <div class="inv-grid" role="group" aria-label="Casillas del costal"></div>
             <div class="inv-grid-foot">
               <span class="inv-count"></span>
-              <button type="button" class="inv-ghost" tabindex="-1" data-act="sort">Ordenar · R</button>
+              <button type="button" class="inv-ghost cinta" tabindex="-1" data-act="sort">Ordenar <kbd aria-hidden="true">R</kbd></button>
             </div>
           </div>
-          <section class="item-bench inv-bench" aria-live="polite">
-            <div class="item-pedestal inv-pedestal"><span class="inv-ped-art"></span><span class="item-badge inv-ped-qty"></span></div>
+          <section class="inv-bench" aria-live="polite">
+            <div class="inv-pedestal"><span class="inv-ped-art"></span><span class="inv-ped-qty cifra"></span></div>
             <h3 class="inv-name"></h3>
             <p class="inv-rarity"></p>
             <p class="inv-effect"></p>
             <p class="inv-note"></p>
             <p class="inv-meta"></p>
             <p class="inv-reason" role="status"></p>
-            <button type="button" class="item-primary inv-use" tabindex="-1" data-act="use"><span class="inv-use-art"></span><span class="inv-use-label">Usar</span></button>
+            <button type="button" class="cinta cinta--verbo inv-use" tabindex="-1" data-act="use"><span class="inv-use-art"></span><span class="inv-use-label">Usar</span><kbd aria-hidden="true">Enter</kbd></button>
             <div class="inv-secondary">
-              <button type="button" class="inv-ghost" tabindex="-1" data-act="drop1">Tirar 1 · X</button>
-              <button type="button" class="inv-ghost" tabindex="-1" data-act="dropAll">Tirar todo · ⇧X</button>
+              <button type="button" class="inv-ghost cinta" tabindex="-1" data-act="drop1">Tirar 1 <kbd aria-hidden="true">X</kbd></button>
+              <button type="button" class="inv-ghost cinta" tabindex="-1" data-act="dropAll">Tirar todo</button>
             </div>
             <div class="inv-hot" role="group" aria-label="Acceso rápido">
               <span class="inv-hot-label">Acceso rápido</span>
@@ -115,9 +118,9 @@ export class InventoryUI {
             </div>
           </section>
         </div>
-        <div class="inv-hint">I / Tab / Esc cerrar · Flechas o WASD mover · Enter usar · X tirar (Mayús: todo) · R ordenar · 1-5 acceso rápido</div>
+        <div class="inv-hint">I, Tab o Esc cierran. Flechas o WASD mueven. Shift + X tira todo. 1 a 5: acceso rápido.</div>
       </div>
-      <div class="inv-tip"></div>`;
+      <div class="inv-tip carton corte-d"></div>`;
     document.body.appendChild(root);
     this.root = root; // el acceso visible en el juego vive en PanelDock
 
@@ -183,7 +186,7 @@ export class InventoryUI {
     for (let i = 0; i < this.inv.hotbar.length; i++) {
       const el = document.createElement('div');
       el.className = 'item-slot qb-slot is-empty';
-      el.innerHTML = `<span class="qk">${i + 1}</span><span class="qb-art"></span><span class="sq"></span>`;
+      el.innerHTML = `<span class="qk" data-k="${i + 1}">${teclaVisible(String(i + 1))}</span><span class="qb-art"></span><span class="sq"></span>`;
       qb.appendChild(el);
       this.quickEls.push({ el, art: el.children[1], qty: el.children[2] });
     }
@@ -262,6 +265,8 @@ export class InventoryUI {
     const k = e.code;
 
     if (!this.isOpen) {
+      // Con la mesa, las mañas o el jíbaro abiertos, Tab recorre ese panel: el costal no puede abrirse encima.
+      if (k === 'Tab' && (this.game.hud?._talentOpen || this.game.hud?._craftOpen || this.game.hud?._dealerOpen)) return;
       if (k === 'KeyI' || k === 'Tab') { e.preventDefault(); if (!e.repeat) this.open(); return; }
       // Teclas 1-5: usar el consumible asignado
       if (k.startsWith('Digit') && !e.repeat) {
@@ -308,7 +313,7 @@ export class InventoryUI {
     if (!n) return;
     this.game.audio?.play?.('empty');
     this._feedback('just-dropped');
-    this._toast(`🗑️ Tiraste ${def.name}${n > 1 ? ' x' + n : ''}`, 'warn');
+    this._toast(`Boté ${def.name}${n > 1 ? ' ×' + n : ''}`, 'warn');
   }
 
   useSelected() {
@@ -321,7 +326,7 @@ export class InventoryUI {
     if (!id) return;
     if (this.inv.count(id) <= 0) {
       this.game.audio?.play?.('full');
-      this._toast(`No te queda ${ITEMS[id]?.name ?? 'eso'}`, 'warn');
+      this._toast(`No me queda ${ITEMS[id]?.name ?? 'eso'}`, 'warn');
       return;
     }
     this._useItem(id, -1);
@@ -397,6 +402,7 @@ export class InventoryUI {
           el.className = ['item-slot', 'inv-slot', `cat-${itemCategory(s.id)}`, isUsable(def) && 'usable', rare && 'rare']
             .filter(Boolean).join(' ');
           el.innerHTML = itemArtHTML(s.id, 'inv-slot-art')
+            + `<span class="inv-slot-nom">${escapar(def.name)}</span>`
             + (s.qty > 1 ? `<span class="inv-slot-qty">×${s.qty}</span>` : '')
             + (hk >= 0 ? `<span class="inv-slot-key" title="Tecla ${hk + 1}">${hk + 1}</span>` : '')
             + (rare ? `<span class="inv-slot-rare" title="${rarityText(s.id)}">★</span>` : '');
@@ -422,8 +428,8 @@ export class InventoryUI {
     const cap = `${inv.usedSlots}/${inv.slotCount}|${inv.totalWeight.toFixed(1)}/${inv.maxWeight}|${state}`;
     if (cap !== this._cache.cap) {
       this._cache.cap = cap;
-      this.countEl.textContent = `${inv.usedSlots}/${inv.slotCount} casillas`;
-      this.loadText.textContent = `${inv.totalWeight.toFixed(1)}/${inv.maxWeight} kg`;
+      this.countEl.textContent = `${inv.usedSlots} de ${inv.slotCount} casillas`;
+      this.loadText.textContent = `${kilos(inv.totalWeight.toFixed(1))} de ${kilos(inv.maxWeight)} kg`;
       this.loadFill.style.width = `${Math.min(100, ratio * 100).toFixed(1)}%`;
       this.loadFlag.textContent = state === 'full' ? 'lleno' : state === 'near' ? 'casi lleno' : '';
       this.loadEl.className = `inv-load ${state}`.trim();
@@ -441,7 +447,7 @@ export class InventoryUI {
     const def = s && ITEMS[s.id];
     const usable = !!def && isUsable(def);
 
-    this.bench.className = ['item-bench', 'inv-bench', def ? `cat-${itemCategory(s.id)}` : 'is-empty', usable && 'usable']
+    this.bench.className = ['inv-bench', def ? `cat-${itemCategory(s.id)}` : 'is-empty', usable && 'usable']
       .filter(Boolean).join(' ');
     if (!sameItem || !def) {
       this.dArt.innerHTML = def ? itemArtHTML(s.id) : '';
@@ -453,17 +459,17 @@ export class InventoryUI {
     this.dName.textContent = def ? def.name : 'Casilla vacía';
     this.dRarity.textContent = def ? rarityText(s.id) : '';
     this.dEffect.textContent = def ? itemEffectLine(def, { weight: false, fallback: false }) : '';
-    this.dNote.textContent = def ? itemNote(def) : 'Elige un objeto del costal.';
+    this.dNote.textContent = def ? itemNote(def) : 'Elija un objeto del costal.';
     this.dMeta.textContent = def
-      ? `${def.weight} kg · ${cop(def.value)}${s.qty > 1 ? ` · total ${cop(def.value * s.qty)}` : ''}`
+      ? `${kilos(def.weight)} kg, ${cop(def.value)}${s.qty > 1 ? `, en total ${cop(def.value * s.qty)}` : ''}`
       : '';
-    this.dReason.textContent = !def ? '' : usable ? `Enter o doble clic: ${useVerb(def).toLowerCase()}` : idleReason(def);
+    this.dReason.textContent = !def ? '' : usable ? '' : idleReason(def);
 
     this.btnUse.hidden = !!def && !usable;
     this.btnUse.disabled = !usable;
     this.useLabel.textContent = useVerb(def);
     this.btnDrop1.disabled = !def;
-    this.btnDropAll.disabled = !def || s.qty < 2;
+    this.btnDropAll.disabled = !def;
     for (let i = 0; i < this.hotEls.length; i++) {
       const b = this.hotEls[i];
       const bound = inv.hotbar[i];
@@ -502,7 +508,7 @@ export class InventoryUI {
       c[i] = key;
       q.qty.textContent = id ? n : '';
       q.el.classList.toggle('is-empty', !id || n === 0);
-      q.el.title = id ? `${ITEMS[id].name} · tecla ${i + 1}` : `Tecla ${i + 1}: libre`;
+      q.el.title = id ? `${ITEMS[id].name}, tecla ${i + 1}` : `Tecla ${i + 1}: libre`;
     }
     this.quickEl.classList.toggle('visible', any);
   }
@@ -526,13 +532,9 @@ export class InventoryUI {
     tip.style.top = (above >= 4 ? above : r.bottom + 6) + 'px';
   }
 
-  // Toast propio (mismo estilo que el HUD)
+  // Los avisos tienen un solo creador, en el HUD.
   _toast(text, type = 'info') {
-    const el = document.createElement('div');
-    el.className = `loot-toast ${type}`;
-    el.textContent = text;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 2500);
+    window.dispatchEvent(new CustomEvent('toast', { detail: { text, type } }));
   }
 
   dispose() {

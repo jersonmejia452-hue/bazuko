@@ -116,7 +116,7 @@ function arrowShape(ctx, [x, y, w, h], turn = 0) {
 
 function paintedText(ctx, [x, y, w, h], text, size) {
   ctx.fillStyle = '#fff';
-  ctx.font = `900 ${size}px "Barlow Condensed", "Arial Narrow", Arial, sans-serif`;
+  ctx.font = `900 ${size}px "Arial Narrow", Arial, sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(text, x + w / 2, y + h / 2 + 2, w - 8);
 }
@@ -418,7 +418,7 @@ function writeSign(ctx, [x, y, w, h], lines, fg, bg, r) {
   ctx.fillStyle = bg; ctx.fillRect(x, y, w, h);
   ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   lines.forEach((line, i) => {
-    ctx.font = `700 ${i ? 11 : 15}px "Barlow Condensed", "Arial Narrow", Arial, sans-serif`;
+    ctx.font = `700 ${i ? 11 : 15}px "Arial Narrow", Arial, sans-serif`;
     ctx.fillText(line, x + w / 2, y + h * (i + .75) / (lines.length + .5), w - 6);
   });
   grain(ctx, [x, y, w, h], r, 60, ['rgba(255,255,255,.1)', 'rgba(0,0,0,.14)'], 2.5);

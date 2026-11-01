@@ -37,7 +37,7 @@ test('avisa antes de agotar la sed y mantiene visible el daño hasta recuperarse
   const update = () => hud.update(stats, { hour: 6, day: 1 }, null, null, null, null, null, 0.1);
   update();
   assert.equal(hud.statusEl.hidden, false);
-  assert.match(hud.statusEl.textContent, /bebe agua/);
+  assert.match(hud.statusEl.textContent, /beber agua/);
   stats.sed = 0;
   stats.salud = 20;
   update();
@@ -48,17 +48,17 @@ test('avisa antes de agotar la sed y mantiene visible el daño hasta recuperarse
   assert.equal(hud.statusEl.hidden, true);
 });
 
-test('el estado compacto avisa de necesidades ocultas y retira la alerta al recuperarse', () => {
+test('el estado compacto avisa de lo que no se ve en ninguna fila y retira la alerta al recuperarse', () => {
   const hud = fixture();
   hud.needsSummary = { textContent: '' };
   hud.needsToggle = { dataset: {}, attributes: {}, setAttribute(name, value) { this.attributes[name] = value; } };
-  const stats = { sed: 12, vicio: 28, hambre: 70, higiene: 60, animo: 75 };
+  const stats = { higiene: 12, vicio: 28, sed: 5, hambre: 70, animo: 75 };
   const update = () => hud.update(stats, { hour: 22, day: 1 }, null, null, null, null, null, .1);
   update();
-  assert.equal(hud.needsSummary.textContent, 'Sed, Vicio');
+  assert.equal(hud.needsSummary.textContent, 'Higiene, Vicio', 'la sed tiene fila fija: no se repite');
   assert.equal(hud.needsToggle.dataset.level, 'critical');
-  assert.match(hud.needsToggle.attributes['aria-label'], /niveles bajos de Sed, Vicio/);
-  stats.sed = 40;
+  assert.match(hud.needsToggle.attributes['aria-label'], /niveles bajos de Higiene, Vicio/);
+  stats.higiene = 40;
   update();
   assert.equal(hud.needsSummary.textContent, 'Vicio');
   assert.equal(hud.needsToggle.dataset.level, 'low');
@@ -106,21 +106,16 @@ test('el contexto distingue nadar, vadear y suelo seco sin anunciar cambios cada
   assert.equal(hud.movementEl.hidden, true);
 });
 
-test('600 fotogramas no reconstruyen el inventario ni enfermedades sin cambios', () => {
+test('600 fotogramas no reescriben enfermedades ni filas sin cambios', () => {
   const hud = fixture();
-  const inventory = { items: [{ id: 'pan', name: 'Pan', qty: 1 }], totalWeight: 0.2, maxWeight: 20 };
-  for (let i = 0; i < 600; i++) hud.update({}, { hour: 6, day: 1 }, {}, inventory, { hasAny: false }, null, null, 1 / 60);
-  assert.equal(hud.invEl.writes, 1);
+  let escrituras = 0;
+  const cifra = { get textContent() { return this.v; }, set textContent(x) { this.v = x; escrituras++; } };
+  const fill = { style: { set width(x) { escrituras++; } }, parentElement: { getAttribute: () => '50', setAttribute() {}, parentElement: { dataset: { level: 'ok' } } } };
+  hud.bars = { salud: fill };
+  hud.barValues = { salud: cifra };
+  for (let i = 0; i < 600; i++) hud.update({ salud: 50 + (i % 2) * .2 }, { hour: 6, day: 1 }, {}, null, { hasAny: false }, null, null, 1 / 60);
   assert.equal(hud.diseaseEl.writes, 1);
-  inventory.items[0].qty = 2;
-  inventory.totalWeight = 0.4;
-  hud.update({}, { hour: 6, day: 1 }, {}, inventory, { hasAny: false }, null, null, 0.1);
-  assert.equal(hud.invEl.writes, 2);
-  assert.match(hud.invEl.html, /x2/);
-  assert.match(hud.invEl.html, /0.4\/20/);
-  inventory.maxWeight = 30;
-  hud._renderInventory(inventory);
-  assert.match(hud.invEl.html, /0.4\/30/);
+  assert.equal(escrituras, 2, 'una vez la cifra y una vez el relleno');
 });
 
 test('las enfermedades refrescan el tiempo visible y se eliminan al curarlas', () => {
@@ -133,7 +128,7 @@ test('las enfermedades refrescan el tiempo visible y se eliminan al curarlas', (
   disease.list[0].timeLeft = 4.9;
   hud._renderDiseases(disease);
   assert.equal(hud.diseaseEl.writes, 2);
-  assert.match(hud.diseaseEl.html, /5s/);
+  assert.match(hud.diseaseEl.html, /5 s/);
   hud._renderDiseases({ hasAny: false });
   assert.equal(hud.diseaseEl.html, '');
 });
@@ -182,8 +177,8 @@ test('la mesa conserva la receta elegida y explica por qué no se puede fabricar
   hud.renderCrafting(crafting, inventory, null);
   hud.renderCrafting(crafting, inventory, null);
   assert.equal(hud._craftSelected, 'arma', 'la selección sobrevive a los redibujados');
-  assert.match(hud.craftPanel.html, /Te faltan 4 materiales/);
-  assert.match(hud.craftPanel.html, /class="item-primary craft-go" data-act="craft" disabled/);
+  assert.match(hud.craftPanel.html, /Me faltan 4 materiales/);
+  assert.match(hud.craftPanel.html, /class="cinta cinta--verbo craft-go" data-act="craft" disabled/);
 
   inventory.add(ITEMS.chatarra, 2); inventory.add(ITEMS.cable, 1); inventory.add(ITEMS.madera, 1);
   inventory.maxWeight = inventory.totalWeight;
@@ -192,7 +187,7 @@ test('la mesa conserva la receta elegida y explica por qué no se puede fabricar
 
   inventory.maxWeight = 2; // Tras consumir materiales quedarían 2,4 kg.
   hud.renderCrafting(crafting, inventory, null);
-  assert.match(hud.craftPanel.html, /No te cabe en el costal/);
+  assert.match(hud.craftPanel.html, /No me cabe en el costal/);
   assert.match(hud.craftPanel.html, /data-id="arma"[^>]*no cabe en el costal/);
 });
 

@@ -3,6 +3,8 @@
 // Los sticks y gatillos se leen como valores analógicos; los botones se
 // traducen a las mismas teclas del teclado para reutilizar todos los atajos.
 
+import { modoEntrada, ponerModo } from './modoEntrada.js';
+
 const DEAD_ZONE = 0.2;
 const TRIGGER_THRESHOLD = 0.3;
 
@@ -24,6 +26,16 @@ export const BUTTON_KEYS = {
   15: 'KeyF',       // Cruceta derecha: boost
 };
 const RUN_BUTTONS = [7, 10]; // RT o L3: correr
+const ACORDE = 4; // LB: tocado solo cambia la cámara, al soltarlo; sostenido da lo que no cabe en el mando
+/** Con LB sostenido: las casillas en la cruceta y en A, Fabricar en Y y Mañas en X. */
+export const CON_LB = { 12: 'Digit1', 15: 'Digit2', 13: 'Digit3', 14: 'Digit4', 0: 'Digit5', 3: 'KeyC', 2: 'KeyT' };
+
+/** La pestaña Controles de la pausa, para quien juega con mando. */
+export const CONTROLES_CON_MANDO = [
+  ['Moverse', [['Stick izquierdo', 'Caminar'], ['RT', 'Correr'], ['LT', 'Brincar'], ['Stick derecho', 'Mirar'], ['LB', 'Cambiar la cámara, al soltarlo']]],
+  ['Hacer', [['A', 'Lo que dice la cinta'], ['X', 'Robo directo. Sostenido: seleccionar basura'], ['RB', 'Pegar'], ['Arriba', 'Radio'], ['Abajo', 'Lanzar'], ['Izquierda', 'Pedir'], ['Derecha', 'Envión']]],
+  ['Paneles', [['Y', 'El costal'], ['LB+Y', 'Fabricar'], ['LB+X', 'Mañas'], ['LB+cruceta', 'Casillas 1 a 4: arriba, derecha, abajo, izquierda'], ['LB+A', 'Casilla 5'], ['View', 'El mapa'], ['R3', 'El radar'], ['Menú', 'Pausa'], ['B', 'Cerrar o volver']]],
+];
 const DIRECTIONS = { 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
 const FOCUSABLE = 'button, a[href], input, select, textarea, [tabindex], [role="button"], .talent-node.available';
 const NAV_THRESHOLD = .55;
@@ -31,6 +43,15 @@ const NAV_DELAY = 350;
 const NAV_INTERVAL = 140;
 
 const KEY_NAMES = { Escape: 'Escape', Space: ' ', Enter: 'Enter', Tab: 'Tab' };
+
+/** Una tecla como la del teclado, marcada para que soltar la física no suelte esta. También la usan los controles táctiles. */
+export function emitirTecla(type, code, reset = false) {
+  const key = KEY_NAMES[code] ?? code.replace(/^Key/, '').toLowerCase();
+  const event = new KeyboardEvent(type, { code, key, bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'gamepadInput', { value: true });
+  Object.defineProperty(event, 'gamepadReset', { value: reset });
+  (globalThis.document?.body ?? globalThis.window)?.dispatchEvent(event);
+}
 
 function deadZone(x, y) {
   const length = Math.hypot(x, y);
@@ -123,14 +144,14 @@ export class GamepadInput {
 
     window.addEventListener('gamepadconnected', (e) => {
       if (this._index === null) this._index = e.gamepad.index;
-      window.dispatchEvent(new CustomEvent('toast', { detail: { text: '🎮 Control conectado', type: 'info' } }));
+      window.dispatchEvent(new CustomEvent('toast', { detail: { text: 'Control conectado', type: 'info' } }));
     });
     window.addEventListener('gamepaddisconnected', (e) => {
       if (e.gamepad.index !== this._index) return;
       this._release();
       this._index = null;
       this._needsNeutral = true;
-      window.dispatchEvent(new CustomEvent('toast', { detail: { text: '🎮 Control desconectado', type: 'warn' } }));
+      window.dispatchEvent(new CustomEvent('toast', { detail: { text: 'Control desconectado', type: 'warn' } }));
     });
     const suspend = () => { this._release(); this._needsNeutral = true; };
     window.addEventListener('blur', () => { this._focused = false; suspend(); });
@@ -153,6 +174,7 @@ export class GamepadInput {
     if ((this._context && this._changed(context)) || this._needsNeutral) this._transition(context, pad);
     this._context = context;
     const [lx = 0, ly = 0, rx = 0, ry = 0] = pad.axes;
+    if (modoEntrada() !== 'mando' && (pad.buttons.some(pressed) || Math.hypot(lx, ly) > DEAD_ZONE || Math.hypot(rx, ry) > DEAD_ZONE)) ponerModo('mando');
     if (Math.hypot(lx, ly) <= DEAD_ZONE) this._moveBlocked = false;
     if (Math.hypot(rx, ry) <= DEAD_ZONE) this._lookBlocked = false;
     for (const index of this._blockedButtons) if (!pressed(pad.buttons[index])) this._blockedButtons.delete(index);
@@ -167,7 +189,9 @@ export class GamepadInput {
       this._checkTransition(pad);
       return;
     }
+    if (this._acorde(pad, down)) return;
     for (const [index, code] of Object.entries(BUTTON_KEYS)) {
+      if (Number(index) === ACORDE) continue;
       const isDown = down(Number(index));
       const id = `${index}:${code}`;
       if (isDown && !this._held.has(id)) {
@@ -179,6 +203,39 @@ export class GamepadInput {
         this._key('keyup', code);
       }
     }
+  }
+
+  /** LB y lo que se oprime mientras está abajo. Devuelve true si eso cambió de contexto, por ejemplo al abrir Fabricar. */
+  _acorde(pad, down) {
+    const lb = down(ACORDE);
+    if (lb && !this._lb) this._lb = { solo: true };
+    if (this._lb) {
+      for (const [index, code] of Object.entries(CON_LB)) {
+        if (!down(Number(index))) continue;
+        this._lb.solo = false;
+        // Hasta soltarlo, ese botón no hace lo suyo: un acorde no da también radio ni costal.
+        this._blockedButtons.add(Number(index));
+        this._soltarSiSostenido(Number(index));
+        this._key('keydown', code);
+        this._key('keyup', code);
+        if (this._checkTransition(pad)) return true;
+      }
+    }
+    if (!lb && this._lb) {
+      const { solo } = this._lb;
+      this._lb = null;
+      if (solo) {
+        this._key('keydown', BUTTON_KEYS[ACORDE]);
+        this._key('keyup', BUTTON_KEYS[ACORDE]);
+        if (this._checkTransition(pad)) return true;
+      }
+    }
+    return false;
+  }
+
+  _soltarSiSostenido(index) {
+    const id = `${index}:${BUTTON_KEYS[index]}`;
+    if (this._held.delete(id)) this._key('keyup', BUTTON_KEYS[index]);
   }
 
   _changed(context) { return this._context?.kind !== context.kind || this._context?.root !== context.root; }
@@ -229,17 +286,12 @@ export class GamepadInput {
   _release() {
     for (const id of this._held) this._key('keyup', id.split(':')[1], true);
     this._held.clear();
+    this._lb = null;
     this.move = { x: 0, y: 0 };
     this.look = { x: 0, y: 0 };
     this.running = false;
     this._navDirection = null;
   }
 
-  _key(type, code, reset = false) {
-    const key = KEY_NAMES[code] ?? code.replace(/^Key/, '').toLowerCase();
-    const event = new KeyboardEvent(type, { code, key, bubbles: true, cancelable: true });
-    Object.defineProperty(event, 'gamepadInput', { value: true });
-    Object.defineProperty(event, 'gamepadReset', { value: reset });
-    (globalThis.document?.body ?? globalThis.window)?.dispatchEvent(event);
-  }
+  _key(type, code, reset = false) { emitirTecla(type, code, reset); }
 }

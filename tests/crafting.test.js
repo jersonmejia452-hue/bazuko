@@ -106,7 +106,7 @@ test('los objetos de la mesa tienen iconos limpios y acreditados', async () => {
       assert.match(itemArtHTML(id), /item-art" style="--art: url\('[^'"]+\/item-art\/[^'"]+\.svg'\)"/);
     }
   }
-  assert.match(itemArtHTML('pegante'), /item-art--emoji[^>]*>🧪</);
+  assert.match(itemArtHTML('pegante'), /item-art--dibujo[^>]*data-dibujo="[\uE100-\uE2FF]"/);
   const dir = new URL('../src/ui/item-art/', import.meta.url);
   for (const file of readdirSync(dir)) {
     const svg = readFileSync(new URL(file, dir), 'utf8');
@@ -119,7 +119,7 @@ test('los objetos de la mesa tienen iconos limpios y acreditados', async () => {
   }
 });
 
-test('todo objeto del catálogo tiene icono propio, salvo los que documentan su emoji', async () => {
+test('todo objeto del catálogo tiene icono propio, salvo los que documentan su dibujo', async () => {
   const { readFileSync, existsSync } = await import('node:fs');
   const { hasItemArt, itemArtHTML } = await import('../src/ui/itemArt.js');
   const credits = readFileSync(new URL('../docs/iconos.md', import.meta.url), 'utf8');
@@ -127,8 +127,8 @@ test('todo objeto del catálogo tiene icono propio, salvo los que documentan su 
   const section = credits.split('## Objetos sin icono')[1]?.split(/\n\n(?!- )/)[0] ?? '';
   const documented = section.split('\n').filter((line) => line.startsWith('- '))
     .flatMap((line) => [...line.split(':')[0].matchAll(/`([^`]+)`/g)].map((m) => m[1]));
-  assert.deepEqual(withoutArt.toSorted(), documented.toSorted(), 'solo los objetos listados en docs/iconos.md conservan su emoji');
-  for (const id of withoutArt) assert.ok(credits.includes(`\`${id}\``), `${id}: explicar en docs/iconos.md por qué usa emoji`);
+  assert.deepEqual(withoutArt.toSorted(), documented.toSorted(), 'solo los objetos listados en docs/iconos.md usan un dibujo de la letra');
+  for (const id of withoutArt) assert.ok(credits.includes(`\`${id}\``), `${id}: explicar en docs/iconos.md por qué usa un dibujo`);
   for (const id of Object.keys(ITEMS).filter(hasItemArt)) {
     const file = itemArtHTML(id).match(/item-art\/([^'"]+\.svg)/)?.[1];
     assert.ok(file && existsSync(new URL(`../src/ui/item-art/${file}`, import.meta.url)), `${id}: falta ${file}`);

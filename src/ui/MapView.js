@@ -1,17 +1,32 @@
 // src/ui/MapView.js
 // Mapa grande de la pestaña «Mapa»: norte arriba, arrastre, rueda para zoom y clic para marcar destino.
+// La ciudad es el mismo plano a marcador del radar: se hornea a la escala de la vista y arrastrar solo pega esa imagen.
+// El lienzo es transparente: el cartón, seco o mojado, lo pone la hoja. Fuera de la ciudad queda cartón.
 import { el, button } from './dom.js';
-import { streetLabels, MAP_COLORS } from '../world/bogota/CityMapRaster.js';
-import { formatDistance } from './Minimap.js';
+import { LETRA } from './letra.js';
+import { pasarTexto } from './pictos.js';
+import { streetLabels } from '../world/bogota/CityMapRaster.js';
+import { formatDistance, nombreALaVista } from './Minimap.js';
+import { CARTON, CARTON_MOJADO, MARCADOR, flechaJugador, prepararPlano, rutaRoja, trazarPlano, xRoja } from './planoRadar.js';
 import { FILTERS, NEED_COPY, hasTag, noOptionText, placeMeta, rankPlaces, sellFirstPlaces } from './mapServices.js';
 
 const PRESS_KEYS = new Set(['Enter', 'NumpadEnter', 'Space']); // las teclas que pulsan un botón
 const PAN_STEP = 24;
 const HIT_RADIUS = 14;
 const SERVICE_MIN_ZOOM = 1.6; // por debajo, «Ver toda la ciudad» se saturaría de puestos
+const NAME_MIN_ZOOM = 1.1;    // por debajo, solo los dibujos
 const FRAME_MARGIN = 60;
 const SAME_PLACE_METERS = 4; // el destino puede moverse a la acera más cercana al lugar
-const LEGEND =[['Andén', 'sidewalk'], ['Calle', 'road'], ['Parque', 'grass'], ['Agua', 'water'], ['Edificio', 'building']];
+const LEGEND = [['Andén', 'anden'], ['Calle', 'calle'], ['Parque', 'parque'], ['Agua', 'agua'], ['Edificio', 'edificio'], ['Ruta', 'ruta']];
+
+const HORNO_LADO = 2048;   // píxeles del lado del plano horneado; la vista cabe de sobra y arrastrar no vuelve a hornear
+const HORNO_ESPERA = 110;  // al acercar, se estira el plano horneado y se vuelve a hornear al quedarse quieto
+const BORDE_VACIO = 24;
+const CALLE_CADA = 130;    // metros entre dos nombres de la misma vía
+const MAR = 6;             // aire de un dibujo o un nombre dentro de su imagen
+
+/** Solo donde hay calle: un nombre de vía encima de una manzana no dice nada. */
+const NO_ES_MANZANA = new Set(['road', 'busway', 'sidewalk', 'floor', 'plaza', 'dirt']);
 
 export class MapView {
   constructor(game) {
@@ -22,10 +37,16 @@ export class MapView {
     this.hover = null;
     this.filter = 'todo';   // dura toda la sesión; nunca cambia solo
     this._drag = null;
+    this._dedos = new Map(); // puntero → dónde va, en el lienzo
+    this._pinza = null;      // con dos dedos: separación, acercamiento y punto del mundo con que empezó
     this._labels = streetLabels();
     this._walkCache = new Map();
     this._focusCta = null;
     this._panned = false;   // Enter marca el centro solo si el jugador movió la vista
+    this._plano = undefined; // las líneas de la ciudad: se calculan una vez, al abrir el mapa por primera vez
+    this._horno = null;
+    this._imagenes = new Map();
+    this._rotulos = null;
 
     this.canvas = el('canvas', {
       class: 'map-view__canvas', tabindex: '0',
@@ -33,23 +54,22 @@ export class MapView {
     });
     this.ctx = this.canvas.getContext?.('2d');
     this.sidebar = el('aside', { class: 'map-view__side' });
-    this.coords = el('span', { class: 'map-view__coords' });
-    const tool = (text, label, onclick) => el('button', { type: 'button', class: 'map-view__tool', title: label, 'aria-label': label, onclick, text });
+    const tool = (text, label, onclick) => el('button', { type: 'button', class: 'map-view__tool cinta', title: label, 'aria-label': label, onclick, text });
     this.root = el('div', { class: 'map-view' },
-      el('div', { class: 'map-view__stage' }, this.canvas,
-        el('div', { class: 'map-view__tools' },
-          tool('+', 'Acercar', () => this._zoomAt(this.cssWidth / 2, this.cssHeight / 2, 1.3)),
-          tool('−', 'Alejar', () => this._zoomAt(this.cssWidth / 2, this.cssHeight / 2, 1 / 1.3)),
-          tool('◎', 'Centrar en mí', () => this.centerOnPlayer()),
-          tool('⤢', 'Ver toda la ciudad', () => this.fitCity())),
-        el('ul', { class: 'map-view__legend', 'aria-label': 'Leyenda' },
-          LEGEND.map(([name, key]) => el('li', { style: `--c:${MAP_COLORS[key]}`, text: name })),
-          el('li', { class: 'is-route', text: 'Ruta' })),
-        el('div', { class: 'map-view__hint' },
-          el('span', {}, el('kbd', { text: 'Clic' }), ' marcar'),
-          el('span', {}, el('kbd', { text: 'Clic der.' }), ' quitar'),
-          el('span', {}, el('kbd', { text: 'Rueda' }), ' zoom'),
-          this.coords)),
+      el('div', { class: 'map-view__stage' },
+        el('div', { class: 'map-view__papel' }, this.canvas,
+          el('div', { class: 'map-view__tools' },
+            tool('+', 'Acercar', () => this._zoomAt(this.cssWidth / 2, this.cssHeight / 2, 1.3)),
+            tool('−', 'Alejar', () => this._zoomAt(this.cssWidth / 2, this.cssHeight / 2, 1 / 1.3)),
+            tool(pasarTexto('◎'), 'Centrar en mí', () => this.centerOnPlayer()),
+            tool(pasarTexto('⤢'), 'Ver toda la ciudad', () => this.fitCity()))),
+        el('div', { class: 'map-view__pie' },
+          el('ul', { class: 'map-view__legend', 'aria-label': 'Leyenda' },
+            LEGEND.map(([name, key]) => el('li', { class: `ley ley--${key}` }, el('i', { 'aria-hidden': 'true' }), name))),
+          el('div', { class: 'map-view__hint' },
+            el('span', {}, el('kbd', { text: 'Clic' }), ' marcar'),
+            el('span', {}, el('kbd', { text: 'Clic der.' }), ' quitar'),
+            el('span', {}, el('kbd', { text: 'Rueda' }), ' acercar')))),
       this.sidebar);
     this._bind();
   }
@@ -60,6 +80,8 @@ export class MapView {
     if (recenter && p) { this.centerX = p.x; this.centerZ = p.z; }
     this._panned = false;
     this._drag = null; // un arrastre cortado al cambiar de pestaña no sigue al volver
+    this._pinza = null;
+    this._dedos.clear();
     this._walkCache.clear();
     this._renderSidebar();
     requestAnimationFrame?.(() => { this._resize(); this.draw(); (this._focusCta ?? this.canvas).focus?.({ preventScroll: true }); });
@@ -83,7 +105,7 @@ export class MapView {
   }
 
   fitCity() {
-    const r = this.game.mapRaster;
+    const r = this.game.mapPlan;
     if (!r || !this.cssWidth) return;
     this.centerX = r.originX + r.worldWidth / 2;
     this.centerZ = r.originZ + r.worldHeight / 2;
@@ -93,7 +115,7 @@ export class MapView {
   }
 
   _clampZoom(z) {
-    const r = this.game.mapRaster;
+    const r = this.game.mapPlan;
     const min = r && this.cssWidth ? Math.min(this.cssWidth / r.worldWidth, this.cssHeight / r.worldHeight) * .9 : .5;
     return Math.max(min, Math.min(9, z));
   }
@@ -164,12 +186,24 @@ export class MapView {
     c.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       const [sx, sy] = this._local(e);
-      this._drag = { sx, sy, cx: this.centerX, cz: this.centerZ, moved: false };
+      this._dedos.set(e.pointerId, { sx, sy });
       c.setPointerCapture?.(e.pointerId);
+      if (this._dedos.size >= 2) {
+        this._drag = null;
+        this._armarPinza();
+        return;
+      }
+      this._drag = { sx, sy, cx: this.centerX, cz: this.centerZ, moved: false };
     });
     c.addEventListener('pointermove', (e) => {
-      if (e.buttons === 0) this._drag = null; // el botón se soltó donde el lienzo no lo vio
+      if (e.buttons === 0) { this._drag = null; this._pinza = null; this._dedos.clear(); } // el botón se soltó donde el lienzo no lo vio
       const [sx, sy] = this._local(e);
+      const dedo = this._dedos.get(e.pointerId);
+      if (dedo) { dedo.sx = sx; dedo.sy = sy; }
+      if (this._pinza) {
+        if (dedo) this._moverPinza();
+        return;
+      }
       const d = this._drag;
       if (d) {
         if (Math.hypot(sx - d.sx, sy - d.sy) > 4) d.moved = true;
@@ -179,13 +213,16 @@ export class MapView {
           this._panned = true;
         }
       }
-      const hover = this._hit(sx, sy);
-      const w = this._toWorld(sx, sy);
-      this.coords.textContent = `X ${Math.round(w.x)} ∙ Z ${Math.round(w.z)}`;
-      if (d?.moved || hover !== this.hover) { this.hover = hover; this.draw(); }
-      c.style.cursor = d?.moved ? 'grabbing' : hover ? 'pointer' : 'crosshair';
+      const hover = d?.moved ? this.hover : this._hit(sx, sy);
+      if (d?.moved || hover !== this.hover) { this.hover = hover; this._pedirDibujo(); }
+      const cursor = d?.moved ? 'grabbing' : hover ? 'pointer' : 'crosshair';
+      if (c.style.cursor !== cursor) c.style.cursor = cursor;
     });
     c.addEventListener('pointerup', (e) => {
+      // Dos dedos que se abren no son un toque: ni al levantar el primero ni al levantar el último se marca nada.
+      const enPinza = !!this._pinza;
+      this._quitarDedo(e.pointerId);
+      if (enPinza) return;
       const d = this._drag;
       this._drag = null;
       // Con el menú cerrado a mitad del clic, soltar no debe marcar nada en un mapa que ya no se ve.
@@ -194,7 +231,11 @@ export class MapView {
       const poi = this._hit(sx, sy);
       this._mark(poi ?? { ...this._toWorld(sx, sy), name: 'Punto marcado', icon: '📍' });
     });
-    c.addEventListener('pointercancel', () => { this._drag = null; });
+    c.addEventListener('pointercancel', (e) => {
+      const enPinza = !!this._pinza;
+      this._quitarDedo(e.pointerId);
+      if (!enPinza) this._drag = null;
+    });
     c.addEventListener('contextmenu', (e) => { e.preventDefault(); this._clear(); });
     c.addEventListener('wheel', (e) => {
       e.preventDefault();
@@ -208,8 +249,34 @@ export class MapView {
       if (this._onKey(e)) c.focus?.({ preventScroll: true });
     });
     if (typeof ResizeObserver !== 'undefined') {
-      new ResizeObserver(() => { this._resize(); this.draw(); }).observe(c);
+      new ResizeObserver(() => { this._resize(); this._horno = null; this.draw(); }).observe(c);
     }
+  }
+
+  /** Con dos dedos: lo que queda entre ellos no se mueve de debajo, y la separación manda el acercamiento. */
+  _armarPinza() {
+    const [a, b] = this._dedos.values();
+    const mx = (a.sx + b.sx) / 2, my = (a.sy + b.sy) / 2;
+    this._pinza = { dist: Math.max(1, Math.hypot(a.sx - b.sx, a.sy - b.sy)), zoom: this.zoom, ...this._toWorld(mx, my) };
+  }
+
+  _moverPinza() {
+    const [a, b] = this._dedos.values(), p = this._pinza;
+    this.zoom = this._clampZoom(p.zoom * Math.max(1, Math.hypot(a.sx - b.sx, a.sy - b.sy)) / p.dist);
+    this.centerX = p.x - ((a.sx + b.sx) / 2 - this.cssWidth / 2) / this.zoom;
+    this.centerZ = p.z - ((a.sy + b.sy) / 2 - this.cssHeight / 2) / this.zoom;
+    this._panned = true;
+    this._pedirDibujo();
+  }
+
+  /** El dedo que queda sigue arrastrando desde donde está, sin saltar y sin contar como toque. */
+  _quitarDedo(id) {
+    this._dedos.delete(id);
+    if (!this._pinza) return;
+    if (this._dedos.size >= 2) { this._armarPinza(); return; }
+    this._pinza = null;
+    const resto = this._dedos.values().next().value;
+    this._drag = resto ? { sx: resto.sx, sy: resto.sy, cx: this.centerX, cz: this.centerZ, moved: true } : null;
   }
 
   /** Teclado del mapa. Devuelve true si la tecla era suya. */
@@ -271,22 +338,22 @@ export class MapView {
     const current = wp
       ? el('div', { class: 'map-view__dest' },
         el('span', { class: 'map-view__dest-label', text: 'Destino' }),
-        el('strong', { text: `${wp.icon} ${wp.name}` }),
+        el('strong', { text: pasarTexto(`${wp.icon} ${nombreALaVista(wp.name)}`) }),
         el('span', { class: 'map-view__dest-meta', text: gps.route.length && p
           ? `${formatDistance(gps.remainingDistance(p))} a pie` : 'Sin ruta a pie' }),
         button('Quitar destino', { onClick: () => this._clear() }))
       : el('div', { class: 'map-view__dest is-empty' },
         el('span', { class: 'map-view__dest-label', text: 'Sin destino' }),
-        need ? el('strong', { text: NEED_COPY[need].alert })
-          : el('span', { class: 'map-view__dest-meta', text: 'Haz clic en el mapa o elige un lugar.' }),
-        carried ? el('span', { class: 'map-view__dest-meta', text: `Llevas: ${carried} ∙ cierra el mapa y úsalo con I` }) : null);
+        need ? el('strong', { text: pasarTexto(NEED_COPY[need].alert) })
+          : el('span', { class: 'map-view__dest-meta', text: 'Haga clic en el mapa o elija un lugar.' }),
+        carried ? el('span', { class: 'map-view__dest-meta', text: `Llevo: ${carried}. Se usa desde el costal con I.` }) : null);
 
     const filters = el('div', { class: 'map-view__filters', role: 'group', 'aria-label': 'Filtrar lugares' },
       FILTERS.map(([id, label]) => el('button', {
-        type: 'button', 'data-focus': `filtro-${id}`, 'aria-pressed': String(id === this.filter), text: label,
+        type: 'button', 'data-focus': `filtro-${id}`, 'aria-pressed': String(id === this.filter),
         class: `map-view__filter${id === this.filter ? ' is-active' : ''}${id === need ? ' is-need' : ''}`,
-        onclick: () => { this.filter = id; this._renderSidebar({ keepScroll: false }); this.draw(); },
-      })));
+        onclick: () => { this.filter = id; this._rotulos = null; this._renderSidebar({ keepScroll: false }); this.draw(); },
+      }, el('span', { class: id === this.filter ? 'elegido' : null, text: label }))));
 
     const rank = (tag) => rankPlaces(pois, { tag, walk: (poi) => this._walk(poi), needs, from: p });
     const rows = rank(filter);
@@ -294,7 +361,7 @@ export class MapView {
     const urgent = !wp && need && !carried ? need : null;
     const tag = urgent ?? filter;
     const goButton = (label, poi) => el('button', {
-      type: 'button', class: 'btn btn--primary btn--small map-view__nearest', 'data-focus': 'cta', text: label,
+      type: 'button', class: 'btn btn--small map-view__nearest cinta', 'data-focus': 'cta', text: label,
       onclick: () => this._go(poi),
     });
     let cta = null, noOption = null;
@@ -322,20 +389,21 @@ export class MapView {
       return el('li', {},
         el('button', { type: 'button', 'data-focus': `lugar-${i}`,
           class: `map-view__place${active ? ' is-active' : ''}${broke ? ' is-broke' : ''}`,
+          'aria-current': active ? 'true' : null,
           onclick: () => this._go(poi) },
-        el('span', { class: 'map-view__place-icon', style: `--c:${poi.color || '#ffd166'}`, text: poi.icon }),
-        el('span', { class: 'map-view__place-name', text: poi.name }),
+        el('span', { class: 'map-view__place-icon', 'aria-hidden': 'true', text: pasarTexto(poi.icon) }),
+        el('span', { class: `map-view__place-name${active ? ' elegido' : ''}`, text: nombreALaVista(poi.name) }),
         el('span', { class: 'map-view__place-dist', text: dist }),
         // Si no cabe, baja «desde $ 1.000» completo y no parte el precio en dos líneas.
-        meta ? el('span', { class: 'map-view__place-meta', text: meta.replace('desde $ ', 'desde $ ') }) : null));
+        meta ? el('span', { class: 'map-view__place-meta', text: meta.replace('desde $ ', 'desde\u00a0$\u00a0') }) : null));
     }));
 
     this.sidebar.replaceChildren(...[
-      current, filters, cta, noOption,
-      el('h4', { class: 'map-view__list-title', text: filter ? 'Ir a… (primero lo que puedes usar)' : 'Ir a… (más cerca a pie primero)' }),
+      filters, current, cta, noOption,
+      el('h4', { class: 'map-view__list-title', text: filter ? 'Ir a… (primero lo que sirve)' : 'Ir a… (más cerca a pie primero)' }),
       list].filter(Boolean));
     list.scrollTop = scroll;
-    if (!keepScroll) this.sidebar.scrollTop = 0; // con la identidad urbana se desplaza el panel entero, no la lista
+    if (!keepScroll) this.sidebar.scrollTop = 0; // el que se desplaza es el panel entero, no la lista
     if (hadFocus) {
       const key = focused.dataset?.focus;
       const next = key ? this.sidebar.querySelector?.(`[data-focus="${key}"]`) : null;
@@ -343,152 +411,237 @@ export class MapView {
     }
   }
 
+  // ---------- el plano horneado ----------
+
+  /** El cartón sobre el que va todo, para el halo de la letra: la cara la pone la hoja y aquí solo se recorta el fondo. */
+  _cara() {
+    return globalThis.document?.body?.classList?.contains('mojado') ? CARTON_MOJADO : CARTON;
+  }
+
+  /**
+   * Hornea la ciudad a la escala de la vista, en una sola imagen, con los nombres de las vías. Si la ciudad entera cabe
+   * en HORNO_LADO no se vuelve a hornear al arrastrar; si no, se hornea lo que rodea a la vista y se repite al salirse.
+   */
+  _hornear() {
+    const plan = this.game.mapPlan;
+    this._plano ??= prepararPlano(plan?.tiles?.());
+    if (!plan || !this._plano || !globalThis.document?.createElement) return;
+    const zoom = this.zoom, k = zoom * this.dpr;
+    const lado = Math.max(HORNO_LADO, Math.ceil(Math.max(this.canvas.width, this.canvas.height) * 1.6));
+    const tramo = (centro, desde, largo) => {
+      const m = Math.min(lado / k, largo);
+      return [Math.max(desde, Math.min(centro - m / 2, desde + largo - m)), m];
+    };
+    const [x0, w] = tramo(this.centerX, plan.originX, plan.worldWidth);
+    const [z0, h] = tramo(this.centerZ, plan.originZ, plan.worldHeight);
+    const canvas = this._horno?.canvas ?? document.createElement('canvas');
+    canvas.width = Math.ceil(w * k);
+    canvas.height = Math.ceil(h * k);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(k, 0, 0, k, -x0 * k, -z0 * k);
+    trazarPlano(ctx, this._plano, zoom);
+    if (zoom > NAME_MIN_ZOOM) this._nombresDeVias(ctx, { x0, z0, w, h, k });
+    this._horno = { canvas, x0, z0, w, h, zoom, cara: this._cara(), entera: w >= plan.worldWidth && h >= plan.worldHeight };
+    this._rotulos = null;
+  }
+
+  /** Los nombres de las vías van en el plano horneado, repartidos a lo largo de cada una y solo sobre calle. */
+  _nombresDeVias(ctx, { x0, z0, w, h, k }) {
+    const tiles = this.game.mapPlan.tiles();
+    const tipo = (x, z) => tiles.tipo(Math.round(x / tiles.T), Math.round(z / tiles.T));
+    const px = this.dpr;
+    ctx.font = `400 ${15 * px}px ${LETRA}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 4 * px;
+    ctx.strokeStyle = this._cara();
+    ctx.fillStyle = MARCADOR;
+    const poner = (name, x, z, giro) => {
+      if (x < x0 || z < z0 || x > x0 + w || z > z0 + h || !NO_ES_MANZANA.has(tipo(x, z))) return;
+      ctx.setTransform(1, 0, 0, 1, (x - x0) * k, (z - z0) * k);
+      if (giro) ctx.rotate(-Math.PI / 2);
+      ctx.strokeText(name, 0, 0);
+      ctx.fillText(name, 0, 0);
+    };
+    const plan = this.game.mapPlan;
+    for (const label of this._labels) {
+      if (label.vertical) {
+        for (let z = plan.originZ + CALLE_CADA / 2; z < plan.originZ + plan.worldHeight; z += CALLE_CADA) poner(label.name, label.x, z, true);
+      } else {
+        const desde = Math.max(plan.originX, label.minX ?? -Infinity);
+        for (let x = desde + CALLE_CADA / 2; x < plan.originX + plan.worldWidth; x += CALLE_CADA) poner(label.name, x, label.z, false);
+      }
+    }
+  }
+
+  /** Una imagen pequeña, hecha una vez: un dibujo o un nombre. Pegarla cuesta mucho menos que escribirla. */
+  _imagen(clave, medir, pintar) {
+    let img = this._imagenes.get(clave);
+    if (img) return img;
+    const dpr = this.dpr;
+    const medida = globalThis.document.createElement('canvas');
+    const ctx = medida.getContext('2d');
+    const [w, h] = medir(ctx);
+    medida.width = Math.ceil((w + 2 * MAR) * dpr);
+    medida.height = Math.ceil((h + 2 * MAR) * dpr);
+    const c = medida.getContext('2d');
+    c.scale(dpr, dpr);
+    c.translate(MAR, MAR);
+    pintar(c, w, h);
+    img = { canvas: medida, w: w + 2 * MAR, h: h + 2 * MAR };
+    this._imagenes.set(clave, img);
+    return img;
+  }
+
+  _dibujo(glyph, size) {
+    const cara = this._cara();
+    return this._imagen(`d|${glyph}|${size}|${cara}|${this.dpr}`, () => [size, size], (c) => {
+      c.font = `400 ${size}px ${LETRA}`;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.lineJoin = 'round';
+      c.lineWidth = 5;
+      c.strokeStyle = cara;
+      c.strokeText(glyph, size / 2, size / 2);
+      c.fillStyle = MARCADOR;
+      c.fillText(glyph, size / 2, size / 2);
+    });
+  }
+
+  _nombre(text) {
+    const cara = this._cara(), font = `800 16px ${LETRA}`;
+    return this._imagen(`n|${text}|${cara}|${this.dpr}`, (c) => { c.font = font; return [c.measureText(text).width, 18]; }, (c, w, h) => {
+      c.font = font;
+      c.textBaseline = 'middle';
+      c.lineJoin = 'round';
+      c.lineWidth = 5;
+      c.strokeStyle = cara;
+      c.strokeText(text, 0, h / 2);
+      c.fillStyle = MARCADOR;
+      c.fillText(text, 0, h / 2);
+    });
+  }
+
+  /** Qué nombres se escriben a esta escala: los lugares fijos primero; si dos se pisan, se escribe uno. */
+  _reparto() {
+    const pois = this._visiblePois();
+    const filter = this.filter !== 'todo' ? this.filter : null;
+    const zoom = this.zoom;
+    const quiere = pois.filter(poi => (filter ? hasTag(poi, filter) : !poi.service))
+      .sort((a, b) => Number(!!a.service) - Number(!!b.service));
+    const puestos = [];
+    const rotulos = [];
+    if (zoom <= NAME_MIN_ZOOM) return rotulos;
+    for (const poi of quiere) {
+      const img = this._nombre(nombreALaVista(poi.name));
+      const x = poi.x * zoom - img.w / 2, y = poi.z * zoom + 10, r = [x, y, x + img.w, y + img.h];
+      if (puestos.some(o => r[0] < o[2] && r[2] > o[0] && r[1] < o[3] && r[3] > o[1])) continue;
+      puestos.push(r);
+      rotulos.push({ poi, img });
+    }
+    return rotulos;
+  }
+
+  _pedirDibujo() {
+    if (this._dibujoPedido) return;
+    this._dibujoPedido = true;
+    requestAnimationFrame(() => { this._dibujoPedido = false; this.draw(); });
+  }
+
+  /** Por más que se arrastre, el centro de la vista no se sale de la ciudad. */
+  _alCentroDeLaCiudad() {
+    const plan = this.game.mapPlan;
+    if (!plan) return;
+    // Si la ciudad no cabe, la vista no enseña más que un borde de cartón vacío; si cabe, queda en el medio.
+    const dentro = (centro, desde, largo, vista) => {
+      const mitad = vista / 2 / this.zoom - BORDE_VACIO / this.zoom;
+      return mitad * 2 >= largo ? desde + largo / 2 : Math.max(desde + mitad, Math.min(desde + largo - mitad, centro));
+    };
+    this.centerX = dentro(this.centerX, plan.originX, plan.worldWidth, this.cssWidth);
+    this.centerZ = dentro(this.centerZ, plan.originZ, plan.worldHeight, this.cssHeight);
+  }
+
+  /** ¿Sirve lo horneado? A otra escala se estira un momento, y al quedarse quieto se hornea de nuevo. */
+  _hornoAlDia() {
+    const horno = this._horno;
+    if (!horno || horno.cara !== this._cara()) { this._hornear(); return; }
+    if (horno.zoom !== this.zoom) {
+      clearTimeout(this._hornoPendiente);
+      this._hornoPendiente = setTimeout(() => { this._hornear(); this.draw(); }, HORNO_ESPERA);
+      return;
+    }
+    if (horno.entera) return;
+    const a = this._toWorld(0, 0), b = this._toWorld(this.cssWidth, this.cssHeight);
+    const plan = this.game.mapPlan;
+    const sale = (lo, hi, desde, largo, cityLo, cityHi) => (lo < desde && desde > cityLo) || (hi > desde + largo && desde + largo < cityHi);
+    if (sale(a.x, b.x, horno.x0, horno.w, plan.originX, plan.originX + plan.worldWidth)
+      || sale(a.z, b.z, horno.z0, horno.h, plan.originZ, plan.originZ + plan.worldHeight)) this._hornear();
+  }
+
   draw() {
-    const ctx = this.ctx, r = this.game.mapRaster;
+    const ctx = this.ctx;
     if (!ctx || !this.cssWidth) return;
     const dpr = this.dpr, w = this.cssWidth, h = this.cssHeight;
+    this._alCentroDeLaCiudad();
+    this._hornoAlDia();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#0b0d11';
-    ctx.fillRect(0, 0, w, h);
+    ctx.clearRect(0, 0, w, h);
 
-    ctx.save();
-    ctx.translate(w / 2, h / 2);
-    ctx.scale(this.zoom, this.zoom);
-    ctx.translate(-this.centerX, -this.centerZ);
-    ctx.imageSmoothingEnabled = this.zoom < 3;
-    if (r) ctx.drawImage(r.canvas, r.originX, r.originZ, r.worldWidth, r.worldHeight);
+    const horno = this._horno;
+    if (horno) {
+      const [sx, sy] = this._toScreen(horno.x0, horno.z0);
+      // A la escala horneada se pega en píxeles enteros, para que la línea no se empañe.
+      const exacta = horno.zoom === this.zoom;
+      ctx.imageSmoothingEnabled = !exacta;
+      ctx.drawImage(horno.canvas, exacta ? Math.round(sx * dpr) / dpr : sx, exacta ? Math.round(sy * dpr) / dpr : sy,
+        exacta ? horno.canvas.width / dpr : horno.w * this.zoom, exacta ? horno.canvas.height / dpr : horno.h * this.zoom);
+      ctx.imageSmoothingEnabled = true;
+    }
+
     const gps = this.game.gps, p = this.game.player?.position;
     const route = gps?.waypoint && p ? gps.remainingRoute(p) : [];
     if (route.length > 1) {
-      ctx.lineJoin = 'round';
-      ctx.lineCap = 'round';
-      for (const [color, width] of [['rgba(0,0,0,.7)', 7], ['#f6c400', 4]]) {
-        ctx.beginPath();
-        ctx.moveTo(route[0].x, route[0].z);
-        for (const pt of route) ctx.lineTo(pt.x, pt.z);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = width / this.zoom;
-        ctx.stroke();
-      }
-    }
-    ctx.restore();
-
-    // Nombres de vías en el centro de la vista, solo si hay espacio para leerlos
-    if (this.zoom > 1.1) {
-      ctx.font = '800 11px Overpass, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(214, 228, 255, .75)';
-      for (const label of this._labels) {
-        ctx.save();
-        if (label.vertical) {
-          const [sx] = this._toScreen(label.x, 0);
-          if (sx < 20 || sx > w - 20) { ctx.restore(); continue; }
-          const [, top] = this._toScreen(0, r?.originZ ?? 0), [, bottom] = this._toScreen(0, (r?.originZ ?? 0) + (r?.worldHeight ?? 0));
-          ctx.translate(sx, Math.min(Math.max(h * .3, top + 50), bottom - 50));
-          ctx.rotate(-Math.PI / 2);
-        } else {
-          const [, sy] = this._toScreen(0, label.z);
-          if (sy < 20 || sy > h - 20) { ctx.restore(); continue; }
-          // Sobre la parte visible del plano, no en el vacío fuera de la ciudad.
-          const [left] = this._toScreen(Math.max(r?.originX ?? 0, label.minX ?? -Infinity), 0), [right] = this._toScreen((r?.originX ?? 0) + (r?.worldWidth ?? 0), 0);
-          ctx.translate(Math.min(Math.max(w * .3, left + 50), right - 50), sy);
-        }
-        ctx.fillText(label.name.toUpperCase(), 0, 0);
-        ctx.restore();
-      }
-    }
-
-    // Lugares
-    const filter = this.filter !== 'todo' ? this.filter : null;
-    for (const poi of this._visiblePois()) {
-      const [sx, sy] = this._toScreen(poi.x, poi.z);
-      if (sx < -20 || sy < -20 || sx > w + 20 || sy > h + 20) continue;
-      const match = !filter || hasTag(poi, filter), big = poi === this.hover;
-      const base = poi.service && !(filter && match) ? 7 : 10;
-      ctx.globalAlpha = match ? 1 : .35;
-      ctx.beginPath();
-      ctx.arc(sx, sy, base + (big ? 2 : 0), 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(14,15,18,.85)';
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = poi.color || '#ffd166';
-      ctx.stroke();
-      ctx.font = `${base + (big ? 3 : 1)}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(poi.icon, sx, sy + 1);
-      ctx.globalAlpha = 1;
-      if (big || this.zoom > 3.5) this._tag(poi.name, sx, sy - 18);
-    }
-
-    // Destino
-    if (gps?.waypoint) {
-      const [sx, sy] = this._toScreen(gps.waypoint.x, gps.waypoint.z);
-      ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.arc(sx, sy - 14, 9, Math.PI * .8, Math.PI * .2);
-      ctx.closePath();
-      ctx.fillStyle = '#f6c400';
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#0e0f12';
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(sx, sy - 14, 3.2, 0, Math.PI * 2);
-      ctx.fillStyle = '#0e0f12';
-      ctx.fill();
-    }
-
-    // Jugador: flecha en la dirección de la cámara
-    if (p) {
-      const [sx, sy] = this._toScreen(p.x, p.z);
       ctx.save();
-      ctx.translate(sx, sy);
-      ctx.rotate(-(this.game._cameraYaw?.() ?? 0));
-      ctx.beginPath();
-      ctx.arc(0, 0, 13, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(11,79,163,.35)';
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(0, -10);
-      ctx.lineTo(7, 7);
-      ctx.lineTo(0, 3);
-      ctx.lineTo(-7, 7);
-      ctx.closePath();
-      ctx.fillStyle = '#fff';
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#0b4fa3';
-      ctx.stroke();
+      ctx.translate(w / 2, h / 2);
+      ctx.scale(this.zoom, this.zoom);
+      ctx.translate(-this.centerX, -this.centerZ);
+      rutaRoja(ctx, route, this.zoom);
       ctx.restore();
     }
 
-    // Norte fijo, junto a los botones de zoom
-    ctx.beginPath();
-    ctx.arc(w - 64, 26, 15, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(14,15,18,.85)';
-    ctx.fill();
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = 'rgba(255,255,255,.25)';
-    ctx.stroke();
-    ctx.font = '900 12px Overpass, sans-serif';
-    ctx.fillStyle = '#f6c400';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('▲', w - 64, 20);
-    ctx.fillText('N', w - 64, 32);
-  }
+    // Lugares: dibujos y nombres, ya hechos.
+    const filter = this.filter !== 'todo' ? this.filter : null;
+    for (const poi of this._visiblePois()) {
+      const [sx, sy] = this._toScreen(poi.x, poi.z);
+      if (sx < -24 || sy < -24 || sx > w + 24 || sy > h + 24) continue;
+      const match = !filter || hasTag(poi, filter), big = poi === this.hover;
+      const size = (poi.service && !(filter && match) ? 18 : 24) + (big ? 6 : 0);
+      const img = this._dibujo(pasarTexto(poi.icon), size);
+      ctx.globalAlpha = match ? 1 : .35;
+      ctx.drawImage(img.canvas, sx - img.w / 2, sy - img.h / 2, img.w, img.h);
+      ctx.globalAlpha = 1;
+    }
+    this._rotulos ??= this._reparto();
+    for (const { poi, img } of this._rotulos) {
+      const [sx, sy] = this._toScreen(poi.x, poi.z);
+      if (sx < -img.w || sy < -img.h || sx > w + img.w || sy > h + img.h) continue;
+      ctx.drawImage(img.canvas, sx - img.w / 2, sy + 10, img.w, img.h);
+    }
+    if (this.hover && !this._rotulos.some(r => r.poi === this.hover)) {
+      const img = this._nombre(nombreALaVista(this.hover.name));
+      const [sx, sy] = this._toScreen(this.hover.x, this.hover.z);
+      ctx.drawImage(img.canvas, sx - img.w / 2, sy + 14, img.w, img.h);
+    }
 
-  _tag(text, x, y) {
-    const ctx = this.ctx;
-    ctx.font = '800 11px Overpass, sans-serif';
-    const tw = ctx.measureText(text).width + 12;
-    ctx.fillStyle = 'rgba(11,79,163,.95)';
-    ctx.fillRect(x - tw / 2, y - 9, tw, 18);
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, x, y + 1);
+    // Destino y jugador, siempre encima.
+    if (gps?.waypoint) {
+      const [sx, sy] = this._toScreen(gps.waypoint.x, gps.waypoint.z);
+      xRoja(ctx, sx, sy, 9);
+    }
+    if (p) {
+      const [sx, sy] = this._toScreen(p.x, p.z);
+      flechaJugador(ctx, sx, sy, 11, -(this.game._cameraYaw?.() ?? 0));
+    }
   }
 }

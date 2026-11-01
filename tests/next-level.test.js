@@ -105,7 +105,7 @@ test('index.html trae la capa de frío que busca CinematicOverlays', () => {
   assert.match(html, /id="cinematic-cold"/);
   assert.doesNotMatch(html, /id="cold-lens"/);
   assert.ok(html.indexOf('id="cinematic-vignette"') < html.indexOf('id="cinematic-cold"'), 'la viñeta encima apagaría las esquinas frías');
-  const css = readFileSync(new URL('../src/ui/styles.css', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/ui/css/momentos.css', import.meta.url), 'utf8');
   assert.doesNotMatch(css.match(/\.cold-lens\.active\s*\{([^}]*)\}/)[1], /visibility/, 'un visibility propio le ganaría al modo foto');
 });
 

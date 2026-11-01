@@ -217,7 +217,7 @@ export function brick(seed = 3) {
 
 const WALLS = ['#c9a46a', '#b8695a', '#7f9aa8', '#d8c9a3', '#8fa37a', '#c27f4a', '#a7a29a', '#b58fa8', '#d2b48c', '#6d8c9e'];
 const SMALL_SIGNS = ['SE ARRIENDA', 'SE VENDE', 'MINUTOS', 'RECARGAS', 'CERRAJERÍA', 'MODISTERÍA', 'SE HACEN UÑAS', 'FOTOCOPIAS'];
-const TAGS = ['KLAN', 'LUZ', 'ZONA 7', 'RBQ', 'LA 33', 'PARCE', 'ÑERO', 'CALLE'];
+const TAGS = ['LUZ', 'ZONA 7', 'RBQ', 'LA 33', 'PARCE', 'ÑERO', 'CALLE'];
 
 /**
  * Fachada de casa o edificio de barrio, dibujada a la medida.
@@ -420,7 +420,7 @@ export function facade({ seed, width = 6, floors = 3, pxPerM = 28, shopFront = t
       }
 
       x.fillStyle = palette.signBackground; x.fillRect(dx, y0 + fh * .035, ddw, fh * .115);
-      x.fillStyle = palette.signText; x.font = `700 ${Math.max(6, Math.round(fh * .085))}px Overpass, sans-serif`;
+      x.fillStyle = palette.signText; x.font = `700 ${Math.max(6, Math.round(fh * .085))}px Arial, sans-serif`;
       x.textAlign = 'center'; x.textBaseline = 'middle';
       x.fillText(pick(r, SMALL_SIGNS), dx + ddw / 2, y0 + fh * .095, ddw * .9);
       // Las letras solo pertenecen al albedo; el soporte del aviso es casi plano.
@@ -429,7 +429,7 @@ export function facade({ seed, width = 6, floors = 3, pxPerM = 28, shopFront = t
 
       if (r() < (ruin ? .8 : .35)) {
         x.save();
-        x.font = `900 ${Math.round(fh * 0.24)}px Overpass, sans-serif`;
+        x.font = `900 ${Math.round(fh * 0.24)}px Arial, sans-serif`;
         x.fillStyle = pick(r, ['#b87c72', '#91a08a', '#c8b575', '#879da5', '#ddd6bd', '#bd8b61']);
         x.strokeStyle = '#4b4a42';
         x.lineWidth = 2;
@@ -450,7 +450,7 @@ export function facade({ seed, width = 6, floors = 3, pxPerM = 28, shopFront = t
       x.fillStyle = pick(r, ['#e9e2c9', '#d4bd76', '#c9b69b']);
       x.fillRect(sx, sy, sw, sh);
       x.fillStyle = '#784d3d';
-      x.font = `900 ${Math.round(sh * 0.62)}px Overpass, sans-serif`;
+      x.font = `900 ${Math.round(sh * 0.62)}px Arial, sans-serif`;
       x.textAlign = 'center';
       x.textBaseline = 'middle';
       x.fillText(txt, sx + sw / 2, sy + sh / 2 + 1, sw * 0.92);
@@ -545,7 +545,7 @@ export function cardboard(seed = 21) {
     x.fillRect(px - pr, py - pr, pr * 2, pr * 2);
   }
   x.fillStyle = 'rgba(20,20,20,0.75)';
-  x.font = '900 26px Overpass, sans-serif';
+  x.font = '900 26px Arial, sans-serif';
   x.fillText('FRÁGIL ↑', 20, 210);
   return { map: toTexture(c) };
 }
@@ -580,11 +580,11 @@ export function lightbox({ title, sub = '', bg = '#0b4fa3', fg = '#ffffff', acce
   x.fillStyle = fg;
   x.textAlign = 'center';
   x.textBaseline = 'middle';
-  x.font = `900 ${Math.round(h * (sub ? 0.36 : 0.5))}px Overpass, sans-serif`;
+  x.font = `900 ${Math.round(h * (sub ? 0.36 : 0.5))}px Arial, sans-serif`;
   x.fillText(title, w / 2, sub ? h * 0.42 : h * 0.54, w * 0.9);
   if (sub) {
     x.fillStyle = accent;
-    x.font = `800 ${Math.round(h * 0.15)}px Overpass, sans-serif`;
+    x.font = `800 ${Math.round(h * 0.15)}px Arial, sans-serif`;
     x.fillText(sub, w / 2, h * 0.76, w * 0.88);
   }
   const t = toTexture(c);
@@ -599,7 +599,7 @@ export function neon({ text, color = '#ff3b6b', w = 512, h = 160, font = 900 }) 
   x.fillRect(0, 0, w, h);
   x.textAlign = 'center';
   x.textBaseline = 'middle';
-  x.font = `${font} ${Math.round(h * 0.55)}px Overpass, sans-serif`;
+  x.font = `${font} ${Math.round(h * 0.55)}px Arial, sans-serif`;
   x.shadowColor = color;
   x.shadowBlur = 18;
   x.strokeStyle = color;

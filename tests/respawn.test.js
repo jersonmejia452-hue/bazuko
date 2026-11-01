@@ -50,7 +50,7 @@ test('un atropello grave pausa la muerte y limpia el golpe solo al recuperar en 
   game._onVehicleImpact({ speed: 12, direction: new THREE.Vector3(1, 0, 0) });
   assert.equal(game.stats.salud, 0);
   assert.equal(game._handleDeath(), true);
-  assert.equal(game.menu.options.title, 'Te atropellaron');
+  assert.equal(game.menu.options.title, 'Me atropellaron');
   assert.ok(game.player.position.equals(position));
   assert.equal(game.deathCount, 1);
   game._handleDeath(); assert.equal(game.deathCount, 1);

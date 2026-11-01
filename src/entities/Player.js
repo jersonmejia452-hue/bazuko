@@ -38,6 +38,12 @@ const emit = (type, detail) => {
   if (typeof window !== 'undefined' && window.dispatchEvent) window.dispatchEvent(new CustomEvent(type, { detail }));
 };
 
+/** Por debajo de esta salud un golpe tumba; después hay un respiro, o una golpiza sería una sola caída sin fin. */
+export const GOLPE_TUMBA = { salud: 35, respiroS: 8, velocidad: 3 };
+
+/** ¿Este golpe deja tirado? */
+export const golpeTumba = (salud, respiro = 0) => salud > 0 && salud <= GOLPE_TUMBA.salud && !(respiro > 0);
+
 export class Player {
   constructor(scene, input, stats=null, audio=null, { animaciones = 'default' } = {}) {
     this.audio = audio;
@@ -71,6 +77,8 @@ export class Player {
     this._before = new THREE.Vector3();
     this._impactVelocity = new THREE.Vector3();
     this._impactTime = 0;
+    this._respiroTumbo = 0;
+    this.tiradoPor = null;
 
     // Contenedor raíz (posición + rumbo); el personaje va escalado adentro
     this.root = new THREE.Group();
@@ -244,8 +252,8 @@ export class Player {
       smoke.left -= dt;
       if (smoke.left <= 0) {
         this.stopSmoking();
-        const { emoji, name } = smokable(smoke.kind);
-        emit('toast', { text: `${emoji} Se acabó el ${name}.`, type: 'info' });
+        const { name } = smokable(smoke.kind);
+        emit('toast', { text: `Se acabó el ${name}.`, type: 'info' });
         return;
       }
       // el reloj de la próxima calada corre también durante la actual: una cada 30 s exactos
@@ -464,19 +472,31 @@ export class Player {
 
   receiveVehicleImpact(direction, speed, { collisions = this._lastCollisions } = {}) {
     this.melee.cancel();
+    this.tiradoPor = 'carro';
     if (this.ragdoll.start(direction, speed, collisions)) return;
     this._impactVelocity.copy(direction).setY(0).normalize().multiplyScalar(Math.min(9, speed * .7));
     this._impactTime = 1;
     this.root.rotation.z = .85;
   }
 
-  /** Golpe de un agresor: empujón y tambaleo breves, sin ragdoll. */
-  receiveHit(direction, strength = 2) {
+  /**
+   * Golpe de un agresor: empujón y tambaleo breves. Con la salud ya baja, el golpe deja tirado de verdad,
+   * y se queda en el piso hasta poder levantarse (ver golpeTumba).
+   */
+  receiveHit(direction, strength = 2, { salud } = {}) {
     if (this.ragdoll?.active) return;
     this.melee.cancel();
     this._impactVelocity.copy(direction).setY(0);
     if (this._impactVelocity.lengthSq() < 1e-4) this._impactVelocity.set(0, 0, 1);
     this._impactVelocity.normalize().multiplyScalar(strength);
+    if (golpeTumba(salud, this._respiroTumbo)) {
+      this.tiradoPor = 'golpe';
+      this._respiroTumbo = GOLPE_TUMBA.respiroS;
+      if (this.ragdoll?.start(this._impactVelocity.clone(), GOLPE_TUMBA.velocidad, this._lastCollisions)) return;
+      this._impactTime = 1;
+      this.root.rotation.z = .85;
+      return;
+    }
     this._impactTime = Math.max(this._impactTime, .3);
   }
 
@@ -506,6 +526,7 @@ export class Player {
   update(dt, camera, collisions, groundHeight = null, npcs = [], waterInfo = null) {
     this.time += dt;
     this._lastCollisions = collisions;
+    if (this._respiroTumbo > 0) this._respiroTumbo -= dt;
     if (this.ragdoll?.active) {
       this.melee.cancel();
       this.stopSmoking(); // el cigarrillo se cae al salir volando
@@ -556,7 +577,7 @@ export class Player {
     if (this.melee.active) speed *= .55;
     // Movimiento
     const dir = this._direction.set(x, 0, z);
-    if (camera?.userData?.cameraMode === 'third-person') {
+    if (camera?.userData?.cameraMode === 'third-person' || this.input?.palancaManda) {
       const forward = camera.getWorldDirection(this._forward);
       forward.y = 0;
       forward.normalize();

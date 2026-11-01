@@ -898,22 +898,22 @@ function drawDecals(ctx) {
   const box = (r, fn) => { const x = r.u0 * ATLAS.width, y = (1 - r.v1) * ATLAS.height, w = (r.u1 - r.u0) * ATLAS.width, h = (r.v1 - r.v0) * ATLAS.height; ctx.save(); ctx.translate(x, y); fn(w, h); ctx.restore(); };
   ctx.clearRect(0, 0, ATLAS.width, ATLAS.height);
   box(DECAL.name, (w, h) => {
-    ctx.font = 'italic 600 104px "Barlow Condensed", "Arial Narrow", Arial, sans-serif';
+    ctx.font = 'italic 600 104px "Arial Narrow", Arial, sans-serif';
     ctx.fillStyle = '#f4f4ee'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('TransMilenio', w / 2, h / 2 + 4, w - 20);
   });
   box(DECAL.number, (w, h) => {
-    ctx.font = '700 54px "Barlow Condensed", Arial, sans-serif'; ctx.fillStyle = '#f0efe6'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '700 54px "Arial Narrow", Arial, sans-serif'; ctx.fillStyle = '#f0efe6'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('4 8 2 1', w / 2, h / 2 + 2);
   });
   box(DECAL.numberDark, (w, h) => {
-    ctx.font = '700 54px "Barlow Condensed", Arial, sans-serif'; ctx.fillStyle = '#17181a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '700 54px "Arial Narrow", Arial, sans-serif'; ctx.fillStyle = '#17181a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('4 8 2 1', w / 2, h / 2 + 2);
   });
   box(DECAL.plate, (w, h) => {
     ctx.fillStyle = '#f3f3ee'; ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = '#191a1c'; ctx.lineWidth = 7; ctx.strokeRect(7, 7, w - 14, h - 14);
-    ctx.fillStyle = '#191a1c'; ctx.font = '800 72px "Barlow Condensed", Arial, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#191a1c'; ctx.font = '800 72px "Arial Narrow", Arial, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('SBT 482', w / 2, h / 2 - 8);
     ctx.font = '600 22px Arial, sans-serif'; ctx.fillText('BOGOTA D.C.', w / 2, h - 24);
   });

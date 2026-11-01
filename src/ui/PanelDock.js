@@ -1,12 +1,11 @@
 // src/ui/PanelDock.js
-// Accesos visibles al inventario y a la mesa de crafteo, bajo Pausa y sonido.
-// Cada botón hace lo mismo que su tecla y respeta la misma pausa. Usa los iconos
-// lucide del resto del HUD; los objetos conservan su arte de game-icons.
+// El costal y la mesa, junto a la barra rápida. Cada botón hace lo mismo que su tecla y respeta la misma pausa.
 import { icon } from './icons.js';
+import { teclaVisible } from '../core/modoEntrada.js';
 
 const ENTRIES = [
-  { id: 'inventory-open', glyph: 'backpack', label: 'Inventario', key: 'I', title: 'Abrir inventario (I o Tab)' },
-  { id: 'craft-open', glyph: 'hammer', label: 'Fabricar', key: 'C', title: 'Abrir mesa de crafteo (C)' }
+  { id: 'inventory-open', glyph: 'backpack', label: 'Costal', key: 'I', title: 'Abrir el costal (I o Tab)' },
+  { id: 'craft-open', glyph: 'hammer', label: 'Fabricar', key: 'C', title: 'Abrir la mesa (C)' }
 ];
 
 /** Igual que la tecla C: cierra la mesa si está abierta y solo la abre si nada pausa el juego. */
@@ -23,10 +22,10 @@ export function createPanelDock(game) {
   nav.id = 'panel-dock';
   nav.setAttribute('aria-label', 'Paneles');
   nav.innerHTML = ENTRIES.map((e) => `
-    <button type="button" id="${e.id}" class="dock-btn" title="${e.title}" aria-label="${e.title}">
-      <span class="dock-art"></span><span class="dock-label">${e.label}</span><kbd class="dock-key">${e.key}</kbd>
+    <button type="button" id="${e.id}" class="dock-btn cinta" title="${e.title}" aria-label="${e.title}">
+      <span class="dock-art"></span><span class="dock-label">${e.label}</span><kbd class="dock-key" data-k="${e.key}">${teclaVisible(e.key)}</kbd>
     </button>`).join('');
-  ENTRIES.forEach((e) => nav.querySelector(`#${e.id} .dock-art`).append(icon(e.glyph, { size: 18 })));
+  ENTRIES.forEach((e) => nav.querySelector(`#${e.id} .dock-art`).append(icon(e.glyph, { size: 22 })));
   const onClick = (ev) => {
     const btn = ev.target.closest('.dock-btn');
     if (!btn) return;

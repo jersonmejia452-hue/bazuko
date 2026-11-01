@@ -99,9 +99,10 @@ export class CameraRig {
     canvas.addEventListener('contextmenu', (e) => { if (active()) e.preventDefault(); });
 
     canvas.addEventListener('pointerdown', (e) => {
+      // Al dedo lo atiende TouchControls: aquí pediría bloquear el puntero, que un toque no puede soltar.
+      if (e.pointerType === 'touch' || e.pointerType === 'pen') return;
       if (!active()) return;
       if (e.button !== 0 && e.button !== 2) return;
-      e.preventDefault();
 
       // En clic izquierdo solicita Pointer Lock para control fluido estilo juego 3D
       if (e.button === 0 && this.allowPointerLock?.() !== false &&
@@ -111,6 +112,12 @@ export class CameraRig {
 
       this._drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
       try { canvas.setPointerCapture?.(e.pointerId); } catch { /* sin captura */ }
+    });
+
+    // Sin seleccionar ni arrastrar nada al apretar el botón. Va aquí y no en el pointerdown: cancelar aquel cancela
+    // también este mousedown, y entonces Input nunca se entera del clic y el ratón no pega.
+    canvas.addEventListener('mousedown', (e) => {
+      if (active() && (e.button === 0 || e.button === 2)) e.preventDefault();
     });
 
     const onPointerMove = (e) => {

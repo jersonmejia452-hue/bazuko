@@ -19,8 +19,6 @@ beforeEach(() => {
         appendChild(node) { this.children.push(node); return node; }
       };
     },
-    // Los iconos lucide se dibujan como SVG
-    createElementNS(ns, tag) { return this.createElement(tag); }
   };
 });
 
@@ -40,7 +38,7 @@ test('openPauseMenu abre el menú con controles de audio, estado y opciones ráp
 
   openPauseMenu(game);
   assert.ok(openedConfig);
-  assert.equal(openedConfig.title, 'Partida en Pausa');
+  assert.equal(openedConfig.title, 'Un momentico');
 
   const rendered = openedConfig.render();
   assert.ok(rendered.body);
@@ -127,4 +125,26 @@ test('Espacio pulsa los botones de cualquier menú, aunque Input lo cancele para
   nodes.menu.listeners.keydown(key('Space', { closest: () => null }));
   nodes.menu.listeners.keydown(key('KeyM', inButton));
   assert.equal(stopped, 1, 'lo demás sigue hasta la pausa y el juego');
+});
+
+test('pasar de la pausa a otra ventana no deja el teclado de la pausa escuchando', () => {
+  let oyentes = 0;
+  const original = { add: window.addEventListener, remove: window.removeEventListener };
+  window.addEventListener = (tipo) => { if (tipo === 'keydown') oyentes++; };
+  window.removeEventListener = (tipo) => { if (tipo === 'keydown') oyentes--; };
+  let leave = null;
+  const game = {
+    _deathPending: false, creator: { isOpen: false },
+    audio: { volume: .7, isMuted: () => false, setVolume() {}, toggleMute() {} },
+    stats: { dinero: 0, level: 1, salud: 80, sed: 70, hambre: 60 }, clock: { day: 1, hour: 12 }, look: { nombre: 'Tester' },
+    menu: { open(cfg) { leave = cfg.onLeave; } },
+  };
+  for (let vuelta = 0; vuelta < 5; vuelta++) {
+    openPauseMenu(game);
+    assert.equal(oyentes, 1);
+    assert.equal(typeof leave, 'function', 'la pausa dice qué soltar al salir por cualquier lado');
+    leave();
+    assert.equal(oyentes, 0);
+  }
+  Object.assign(window, { addEventListener: original.add, removeEventListener: original.remove });
 });

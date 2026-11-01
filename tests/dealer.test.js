@@ -179,10 +179,10 @@ test('la tienda muestra lo que cobra y, de noche, una fila con lo que paga por c
   hud.renderDealer();
   assert.equal(panel.html.match(/class="dealer-sell-btn"/g).length, 2);
   assert.ok(panel.html.includes(cop(dealerOffer(ITEMS.basuco) * 2)));
-  assert.ok(panel.html.includes('te paga 1,8×'));
+  assert.ok(panel.html.includes('paga 1,8×'));
   // Con Contactos la cuenta de cada fila sube: la frase no puede seguir diciendo lo de antes.
   interaction.substancePriceMult = () => 1.3;
   hud.renderDealer();
-  assert.ok(panel.html.includes('te paga 2,34×'));
+  assert.ok(panel.html.includes('paga 2,34×'));
   assert.ok(panel.html.includes(cop(dealerOffer(ITEMS.basuco, 1.3) * 2)));
 });

@@ -1,6 +1,7 @@
 
 // src/data/items.js
 // Valores en pesos colombianos (COP): `value` es lo que pagan por el objeto.
+import { conSigno } from '../utils/numeros.js';
 import { DEALER_MARKUP, SUBSTANCE_PRICE_MULT } from '../utils/constants.js';
 import { diseaseName } from './diseases.js';
 
@@ -8,10 +9,10 @@ export const ITEMS = {
   // ===== BASURA =====
   // `sharp`: corta al escarbar, así que la bolsa que lo trae puede dar tétanos.
   lata:     { id: 'lata',     name: 'Lata vacía',    weight: 0.2,  value: 250, rarity: 'common', sharp: true },
-  botella:  { id: 'botella',  name: 'Botella PET',   weight: 0.3,  value: 150 },
+  botella:  { id: 'botella',  name: 'Botella',   weight: 0.3,  value: 150 },
   carton:   { id: 'carton',   name: 'Cartón',        weight: 0.5,  value: 200, rarity: 'common' },
   chatarra: { id: 'chatarra', name: 'Chatarra',      weight: 1.0,  value: 900, sharp: true },
-  cable:    { id: 'cable',    name: 'Cable cobre',   weight: 0.4,  value: 2400 },
+  cable:    { id: 'cable',    name: 'Cable de cobre',   weight: 0.4,  value: 2400 },
 
   // ===== TESOROS =====
   reloj:  { id: 'reloj',  name: 'Reloj oxidado', weight: 0.1,  value: 8000, rare: true },
@@ -24,7 +25,7 @@ export const ITEMS = {
 
   // ===== OBJETOS ROBADOS (AUTOS) =====
   retrovisor: { id: 'retrovisor', name: 'Retrovisor',   weight: 0.8, value: 15000 },
-  radio:      { id: 'radio',      name: 'Radio auto',   weight: 1.5, value: 35000 },
+  radio:      { id: 'radio',      name: 'Radio de carro',   weight: 1.5, value: 35000 },
 
   // ===== CONSUMIBLES =====
   pan: {
@@ -48,7 +49,7 @@ export const ITEMS = {
     consumable: 'hambre', amount: 45, animo: 8
   },
   agua: {
-    id: 'agua', name: 'Botella agua', weight: 0.5, value: 1500,
+    id: 'agua', name: 'Botella de agua', weight: 0.5, value: 1500,
     consumable: 'sed', amount: 35
   },
   aguapanela: {
@@ -56,7 +57,7 @@ export const ITEMS = {
     consumable: 'sed', amount: 40, energia: 25, animo: 15, calor: 180, cure: 'gripe', desc: 'Aguapanela con limón: revive y cura la gripe.'
   },
   refresco: {
-    id: 'refresco', name: 'Refresco', weight: 0.4, value: 2500,
+    id: 'refresco', name: 'Gaseosa', weight: 0.4, value: 2500,
     consumable: 'sed', amount: 50, energia: 10, animo: 10
   },
   cafe: {
@@ -140,15 +141,15 @@ export const ITEMS = {
   rifa:  { id: 'rifa', name: 'Cartón de rifa', weight: 0.02, value: 1500 },
   arma: {
     id: 'arma', name: 'Arma casera', weight: 1.2, value: 6000, usable: true, weapon: 'arma',
-    desc: 'Tabla con chatarra amarrada con cable: lenta, pero pega duro y alcanza más. Usar: equipar o guardar.'
+    desc: 'Tabla con chatarra amarrada con cable: lenta, pero pega duro y alcanza más. Usar: sacar o guardar.'
   },
   cuchillo: {
     id: 'cuchillo', name: 'Cuchillo', weight: 0.4, value: 2800, usable: true, weapon: 'cuchillo',
-    desc: 'Arma cuerpo a cuerpo rápida. Usar: equipar o guardar.'
+    desc: 'Corta y rápida. Usar: sacar o guardar.'
   },
   botella_picada: {
     id: 'botella_picada', name: 'Botella picada', weight: 0.3, value: 100, usable: true, weapon: 'botella_picada',
-    desc: 'Vidrio roto con buen alcance. Usar: equipar o guardar.'
+    desc: 'Vidrio roto con buen alcance. Usar: sacar o guardar.'
   },
 
   // ===== MATERIALES DEL CAMBUCHE =====
@@ -160,11 +161,11 @@ export const ITEMS = {
   // ===== ARMAS / HERRAMIENTAS =====
   popo: {
     id: 'popo',
-    name: 'Mojón de popó',
+    name: 'Popó',
     weight: 0.3,
     value: 50,
     usable: true,
-    desc: 'Proyectil biológico artesanal. Presiona [X] para lanzárselo a los peatones.'
+    desc: 'Sirve para tirárselo a la gente. Oprima [X] para lanzárselo a los peatones.'
   }
 };
 
@@ -190,13 +191,13 @@ export const isUsable = item => !!(item?.consumable || item?.cure || item?.usabl
 export function describeEffects(item) {
   const lines = [];
   if (item.id === 'radioTransistor') lines.push('Usar: abrir el sintonizador. También con R.');
-  if (item.id === 'pilas') lines.push('Usar: recargar 50% de batería de la radio.');
+  if (item.id === 'pilas') lines.push('Usar: 50 % más de pilas en el radio.');
   if (item.id === 'popo') lines.push('Usar o X en la calle: lanzar a un peatón.');
-  if (item.weapon) lines.push('Usar: equipar o guardar. Atacar con clic o G; golpes seguidos hacen combo.');
+  if (item.weapon) lines.push('Usar: sacar o guardar. Se pega con clic o G, y golpes seguidos pegan más.');
   if (item.consumable) lines.push(`${item.consumable}: +${item.amount}`);
   if (item.calor) lines.push(`Calor: +${Math.round(item.calor / 60)} min contra el frío`);
   for (const key of ['hambre', 'sed', 'energia', 'salud', 'higiene', 'animo', 'vicio']) {
-    if (item[key]) lines.push(`${key}: ${item[key] > 0 ? '+' : ''}${item[key]}`);
+    if (item[key]) lines.push(`${key}: ${conSigno(item[key])}`);
   }
   if (item.cure) lines.push(`Cura: ${diseaseName(item.cure)}`);
   const rarity = itemRarityLabel(item.id);
@@ -211,16 +212,12 @@ export const isRecyclable = (item) =>
 /** Lo que la recicladora o un ladrón se llevan del costal: todo lo reciclable menos el arma que el jugador tiene en la mano. */
 export const isForSale = (item, equippedWeapon = null) => isRecyclable(item) && !(item.weapon && item.weapon === equippedWeapon);
 
-// Icono (lucide) para mostrar cada objeto en los menús
+// El dibujo de cada objeto cuyo nombre no coincide con el de su dibujo (ver src/ui/icons.js)
 const ICONS = {
-  lata: 'recycle', botella: 'recycle', carton: 'package', chatarra: 'wrench', cable: 'flame',
-  reloj: 'watch', moneda: 'coins', anillo: 'sparkles', retrovisor: 'eye', radio: 'phone', radioTransistor: 'radio', pilas: 'flame',
-  pan: 'bread', empanada: 'food', morcilla: 'food', papaCriolla: 'food', aguapanela: 'coffee', lataComida: 'food', agua: 'water', refresco: 'water', cafe: 'coffee',
-  vendaje: 'bandage', jabon: 'bath', cepillo: 'bath', cigarrillo: 'flame', basuco: 'flame',
-  lona: 'tent', madera: 'layers', colchon: 'bed', vela: 'flame', popo: 'alert-triangle',
-  curita: 'bandage', hierba: 'flame', rifa: 'dice', arma: 'wrench', cuchillo: 'wrench', botella_picada: 'recycle'
+  radioTransistor: 'radio', papaCriolla: 'papa', aguapanela: 'pocillo', agua: 'botellaAgua', cafe: 'pocillo', tintico: 'pocillo',
+  basuco: 'papeleta', botella_picada: 'botellaPicada', antibiotico: 'pastilla', antiparasitario: 'pastilla'
 };
-export const itemIcon = (id) => ICONS[id] ?? (ITEMS[id]?.cure ? 'pill' : 'box');
+export const itemIcon = (id) => ICONS[id] ?? id;
 
 // ===== LOOT TABLES =====
 
@@ -281,12 +278,12 @@ export const SHOP_ITEMS = [
   { item: 'antiparasitario', price: 13000 },
   { item: 'vacuna',     price: 20000 },
   { item: 'antibiotico', price: 25000 },
-  { item: 'vela',       price: 1000, desc: 'Ilumina el cambuche: duermes más tranquilo.' },
+  { item: 'vela',       price: 1000, desc: 'Ilumina el cambuche: duermo más tranquilo.' },
   { item: 'lona',       price: 9000, desc: 'Para el techo del cambuche.' },
   { item: 'madera',     price: 6000, qty: 3, label: 'Tablas ×3', desc: 'Para las paredes del cambuche.' },
   { item: 'pilas',           price: 2000,  desc: 'Pilas AA: recargan la radio transistor.' },
   { item: 'radioTransistor', price: 18000, desc: 'Radio transistor: sintoniza emisoras y calma la mente.' },
-  { upgrade: 'costal',  price: 12000, label: 'Costal grande', icon: 'backpack', desc: 'Cargas 20 kg más.' }
+  { upgrade: 'costal',  price: 12000, label: 'Costal grande', icon: 'backpack', desc: 'Cargo 20 kg más.' }
 ];
 
 export const COSTAL_BONUS = 20;

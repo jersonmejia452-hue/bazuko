@@ -8,7 +8,7 @@ test('cada necesidad del sistema tiene nombre, icono y un color distinto', () =>
   assert.equal(new Set(NEED_META.map(n => n.color)).size, NEED_META.length);
 });
 
-test('cada necesidad usa un icono lucide distinto, sin emojis', async () => {
+test('cada necesidad usa un dibujo distinto, sin emojis', async () => {
   const { hasIcon } = await import('../src/ui/icons.js');
   for (const n of NEED_META) {
     assert.ok(hasIcon(n.glyph), `${n.id}: icono ${n.glyph} desconocido`);
@@ -17,7 +17,7 @@ test('cada necesidad usa un icono lucide distinto, sin emojis', async () => {
   assert.equal(new Set(NEED_META.map(n => n.glyph)).size, NEED_META.length);
 });
 
-test('las necesidades se resaltan bajo 30 y parpadean bajo 15', () => {
+test('las necesidades se resaltan bajo 30 y son placa bajo 15', () => {
   assert.equal(needLevel(80), 'ok');
   assert.equal(needLevel(30), 'ok');
   assert.equal(needLevel(29), 'low');

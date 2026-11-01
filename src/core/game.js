@@ -3,17 +3,19 @@ import * as THREE from 'three';
 import { Renderer } from './Renderer.js';
 import { SceneManager } from './Scene.js';
 import { CameraRig } from './Camera.js';
+import { TouchControls } from './TouchControls.js';
 import { Clock } from './Clock.js';
 import { Input } from './Input.js';
 
 import { World } from '../world/World.js';
 import { Dog, DOG_DEFAULT_LOOK, legacyPetLook } from '../entities/Dog.js';
 import { CompanionNavigation } from '../systems/CompanionNavigation.js';
-import { Minimap } from '../ui/Minimap.js';
+import { Minimap, nombreALaVista } from '../ui/Minimap.js';
+import { mojarCarton } from '../ui/mojado.js';
 import { servicePlaces, needContext, SHOP_PRICES, SHOP_OFFERS } from '../ui/mapServices.js';
 import { originEffect } from '../data/origins.js';
 import { WaypointBeacon } from '../entities/WaypointBeacon.js';
-import { buildCityMapRaster, cityLandmarks } from '../world/bogota/CityMapRaster.js';
+import { cityMapPlan, cityLandmarks, streetLabels } from '../world/bogota/CityMapRaster.js';
 import { WeatherSystem } from '../world/WeatherSystem.js';
 import { openPauseMenu } from '../ui/PauseMenu.js';
 import { Player } from '../entities/Player.js';
@@ -28,6 +30,15 @@ import { DrugDealer } from '../entities/DrugDealer.js';
 import { CraftingStation } from '../entities/CraftingStation.js';
 import { Cart } from '../entities/Cart.js';
 import { CinematicOverlays } from '../ui/CinematicOverlays.js';
+import { Momentos, botonDeMuerte, cuerpoDeMuerte, cuerpoDeRecorte } from '../ui/Momentos.js';
+import { PrimeraPlana } from '../ui/PrimeraPlana.js';
+import { tomarFoto } from '../ui/fotoDeArresto.js';
+import { actualizarFrases } from '../ui/frases.js';
+import { TILE_SIZE } from '../utils/constants.js';
+import {
+  calleCercana, consejoDeMuerte, perdidoAlMorir, perdidoEnArresto, pieDeFoto, recorteDeLimpieza,
+  sueltaDeArresto, titularDeArresto, tituloDeMuerte, CONSECUENCIAS_RECORTE,
+} from '../ui/momentosTextos.js';
 
 import { StatsSystem, NEEDS } from '../systems/StatsSystem.js';
 import { TimeSystem } from '../systems/TimeSystem.js';
@@ -64,7 +75,7 @@ import { GRAPHICS_PROFILES } from './GraphicsQuality.js';
 import { FrameProfiler } from './FrameProfiler.js';
 import { loadTaskGroups, withLoadTimeout } from './Startup.js';
 import { paintLoadingFrame } from '../ui/LoadingScreen.js';
-import { el, button } from '../ui/dom.js';
+import { el } from '../ui/dom.js';
 import { Menu } from '../ui/Menu.js';
 import { createCreator } from '../ui/Creator.js';
 import { openRecycler, openShop, openCambuche } from '../ui/placeMenus.js';
@@ -155,6 +166,7 @@ export class Game {
 
     // HUD, menús y creador de personaje
     this.hud = new HUD();
+    this.tactil = new TouchControls(this);
     this.performanceHUD = new PerformanceHUD();
     this.profiler = new FrameProfiler();
     this.localLights = new LocalLights(this.sceneMgr.scene);
@@ -175,12 +187,13 @@ export class Game {
       !this.hud._talentOpen && !this.hud._craftOpen && !this.hud._dealerOpen);
     this.cameraRig.allowPointerLock = () => !this.photoMode?.active;
     this.hud.setCameraMode(this.cameraRig.mode);
-    window.addEventListener('open-pause-menu', () => openPauseMenu(this));
+    window.addEventListener('open-pause-menu', (e) => openPauseMenu(this, e.detail?.tab));
     window.addEventListener('audio-toggle', () => this.audio.toggleMute());
     window.addEventListener('camera-toggle', () => this._toggleCamera());
     window.addEventListener('open-recycler', () => openRecycler(this));
     window.addEventListener('open-shop', (e) => openShop(this, e.detail?.target));
     window.addEventListener('open-cambuche', () => openCambuche(this));
+    window.addEventListener('open-mesa', () => { if (!this.hud?._craftOpen) this.hud?.toggleCraftPanel(); });
     window.addEventListener('police-arrest', () => this._policeArrest());
     window.addEventListener('open-radio-modal', () => openRadioModal(this));
     window.addEventListener('keydown', (e) => {
@@ -214,6 +227,7 @@ export class Game {
     this.dog = null;
     this.cart = null;
     this.overlays = new CinematicOverlays();
+    this.momentos = new Momentos();
 
     // Estado
     this.look = null;       // apariencia + nombre + origen (creador)
@@ -342,6 +356,7 @@ export class Game {
     this._lastTime = performance.now();
     this._lastRenderTime = undefined;
     this._loading = false;
+    if (this.save?.fueApartada?.()) window.dispatchEvent(new CustomEvent('toast', { detail: { text: 'La partida estaba dañada: quedó aparte y se empieza de nuevo.', type: 'warn' } }));
     this._running = true;
     loading.finish();
     this.audio.startAmbient();
@@ -378,8 +393,8 @@ export class Game {
     const district = this.world.active;
     if (!district?.createGpsNavigation) return;
     this.gps = district.createGpsNavigation();
-    this.mapRaster = buildCityMapRaster(district);
-    this.minimap?.setRaster(this.mapRaster);
+    this.mapPlan = cityMapPlan(district);
+    this.minimap?.setRaster(this.mapPlan);
     this.gpsBeacon = new WaypointBeacon(this.sceneMgr.scene);
     try { this.showGpsBeacon = localStorage.getItem('bazuko.gps_beacon') !== 'false'; } catch { this.showGpsBeacon = true; }
   }
@@ -390,9 +405,9 @@ export class Game {
     const ok = this.gps.setWaypoint(waypoint, this.player.position);
     this._syncGpsBeacon();
     if (!silent) {
-      const { icon, name } = this.gps.waypoint ?? waypoint;
+      const { name } = this.gps.waypoint ?? waypoint;
       window.dispatchEvent(new CustomEvent('toast', { detail: {
-        text: ok ? `${icon ?? '📍'} Ruta marcada: ${name ?? 'destino'}` : '📍 Destino marcado, pero no hay ruta a pie', type: 'info'
+        text: ok ? `Ruta marcada: ${nombreALaVista(name ?? 'destino')}` : 'Destino marcado, pero no hay ruta a pie', type: 'info'
       } }));
     }
     return ok;
@@ -425,7 +440,7 @@ export class Game {
     const next = this.player.modelKind === 'realista' ? 'procedural' : 'realista';
     try { localStorage.setItem('bazuko.modelo', next); } catch { /* sin almacenamiento */ }
     window.dispatchEvent(new CustomEvent('toast', {
-      detail: { text: next === 'realista' ? '🧍 Personaje realista' : '🧸 Personaje liviano (para equipos lentos)', type: 'info' }
+      detail: { text: next === 'realista' ? 'Personaje realista' : 'Personaje liviano (para equipos lentos)', type: 'info' }
     }));
     await this.player.setModel(next);
   }
@@ -613,8 +628,7 @@ export class Game {
     );
     this.interaction.register(this.dealer);
 
-    // ===== Mesa de crafteo =====
-    // No es objetivo de E: se abre con C.
+    // ===== La mesa =====
     this.craftingStation = new CraftingStation(
       this.sceneMgr.scene,
       new THREE.Vector3(
@@ -622,6 +636,7 @@ export class Game {
         district.reserved?.craft?.z ?? 8
       )
     );
+    this.interaction.register(this.craftingStation);
 
     // ===== Carreta de balineras de reciclaje =====
     this.cart = new Cart(this.sceneMgr.scene, new THREE.Vector3(25, 0, 31));
@@ -669,8 +684,19 @@ export class Game {
     );
   }
 
+  /** Una partida que no se deja leer no detiene la carga: se aparta sin borrarla y se juega sin ella. */
   _loadIfSave() {
-    const data = this.save.load();
+    try {
+      this._aplicarPartida(this.save.load());
+    } catch (error) {
+      console.warn('[Partida] Dañada: queda aparte y se empieza sin ella.', error);
+      this.save.apartar();
+      // Lo que alcanzó a aplicarse no sirve: se vuelve a cargar, ya sin ella.
+      globalThis.location?.reload?.();
+    }
+  }
+
+  _aplicarPartida(data) {
     if (data) {
       this.stats.deserialize(data.stats);
       this.clock.deserialize(data.clock);
@@ -738,17 +764,17 @@ export class Game {
     if (this.steal?.minigameActive) this.steal._endMinigame(false, 'cancel');
     this.substanceEffects?.end();
     this.psychosis?.clearInduced?.();
-    window.dispatchEvent(new CustomEvent('sleep-start'));
+    const night = this.clock.isNight;
+    const hours = night
+      ? (this.clock.hour >= 6 ? 24 - this.clock.hour + 6 : 6 - this.clock.hour)
+      : 3;
+    window.dispatchEvent(new CustomEvent('sleep-start', { detail: { despierta: this.clock.hour + hours } }));
     this.dog?.restAt(this.player.position);
     this.player.stopSmoking?.();
     this.player.stopBasuco?.();
     this.player.settleForSleep?.();
     this.player.playAction('dormir', 1.6);
 
-    const night = this.clock.isNight;
-    const hours = night
-      ? (this.clock.hour >= 6 ? 24 - this.clock.hour + 6 : 6 - this.clock.hour)
-      : 3;
     const factor = Math.min(1, hours / 8); // una siesta rinde menos
     this.clock.hour += hours;
     while (this.clock.hour >= 24) { this.clock.hour -= 24; this.clock.day += 1; }
@@ -791,12 +817,12 @@ export class Game {
       window.dispatchEvent(new CustomEvent('sleep-end', { detail: { hours: Math.round(hours) } }));
       if (robbed !== null) {
         window.dispatchEvent(new CustomEvent('toast', {
-          detail: { text: `🚨 Te robaron mientras dormías (${cop(robbed)} y material). Unas paredes ayudarían.`, type: 'death' }
+          detail: { text: `Me robaron mientras dormía (${cop(robbed)} y material). Unas paredes ayudarían.`, type: 'death' }
         }));
       }
       if (sarna) {
         window.dispatchEvent(new CustomEvent('toast', {
-          detail: { text: '🐜 Dormiste sucio y te pegó la sarna. Báñate antes de acostarte; la pomada la quita.', type: 'warn' }
+          detail: { text: 'Dormí sucio y me pegó la sarna. La pomada la quita.', type: 'warn' }
         }));
       }
     }, 1200);
@@ -818,7 +844,7 @@ export class Game {
     this.player.receiveVehicleImpact(direction, speed, { collisions: this.collisions });
     if (this.stats.salud === 0) this._deathCause = 'atropello';
     window.dispatchEvent(new CustomEvent('toast', {
-      detail: { text: `Un carro te atropelló: −${damage} de salud.`, type: 'death' }
+      detail: { text: `Me atropelló un carro: −${damage} de salud.`, type: 'death' }
     }));
   }
 
@@ -837,35 +863,27 @@ export class Game {
     this.audio.updateSteps(false, false);
     this.audio.setPaused?.(true);
     if (this.interaction.boostActive) this.interaction._endBoost();
-    const causes = [];
-    if (this._deathCause) causes.push(this._deathCause);
-    for (const [stat, name] of [['sed', 'deshidratación'], ['hambre', 'hambre'],
-      ['energia', 'agotamiento'], ['higiene', 'higiene agotada'], ['animo', 'ánimo agotado']]) {
-      if (this.stats[stat] <= 0) causes.push(name);
+    const causa = this._deathCause;
+    const salir = () => this._respawn();
+    if (causa === 'limpieza') {
+      const texto = recorteDeLimpieza(this.look, this._calleCercana());
+      this.menu.open({
+        title: tituloDeMuerte(causa, this.stats), ic: 'heart', dismissible: false, momento: 'recorte',
+        render: () => ({
+          body: cuerpoDeRecorte(texto),
+          foot: [el('p', { class: 'momento__consecuencias', text: CONSECUENCIAS_RECORTE }), botonDeMuerte(salir)],
+        }),
+      });
+    } else {
+      const perdido = perdidoAlMorir(this.inventory?.items, ITEMS);
+      this.menu.open({
+        title: tituloDeMuerte(causa, this.stats), ic: 'heart', dismissible: false, momento: 'muerte',
+        render: () => ({
+          body: cuerpoDeMuerte({ perdido, consejo: consejoDeMuerte(causa, this.stats) }),
+          foot: [botonDeMuerte(salir)],
+        }),
+      });
     }
-    if (this.stats.inWithdrawal) causes.push('abstinencia');
-    if (this.diseases.hasAny) causes.push('enfermedad');
-    this.menu.open({
-      title: this._deathCause === 'atropello' ? 'Te atropellaron'
-        : this._deathCause === 'golpiza' ? 'Te dieron una golpiza'
-          : this._deathCause === 'limpieza' ? 'Te mató la limpieza social' : 'Te quedaste sin salud',
-      sub: 'La partida está en pausa.',
-      ic: 'heart',
-      dismissible: false,
-      render: () => ({
-        body: el('div', {},
-          el('p', { text: causes.length ? `Estado al caer: ${causes.join(', ')}.` : 'Tu salud llegó a cero.' }),
-          el('p', { text: 'Volverás al cambuche con salud y necesidades recuperadas al menos al 60 %. Perderás la mitad de los tipos de objetos del inventario.' }),
-          el('p', { text: this._deathCause === 'atropello'
-            ? 'Mira ambos sentidos y cruza con distancia: los carros necesitan espacio para frenar.'
-            : this._deathCause === 'golpiza'
-              ? 'Si un conductor se baja con una varilla, corre con Shift: es más lento que tú corriendo. Apártate cuando levante la varilla.'
-              : this._deathCause === 'limpieza'
-                ? 'Si de noche frena una camioneta negra, corre con Shift sin parar: los dos que persiguen son un poco más lentos que tú y se cansan a los 22 segundos. Junto al cambuche no llegan.'
-              : 'Come, bebe agua y descansa para mantener tus necesidades. Puedes consumir comida y agua haciendo clic en ellas en el inventario.' })),
-        foot: [button('Volver al cambuche', { primary: true, onClick: () => this._respawn() })]
-      })
-    });
     window.dispatchEvent(new CustomEvent('death'));
     return true;
   }
@@ -879,18 +897,39 @@ export class Game {
     this.audio.updateSteps(false, false);
     this.audio.setPaused?.(true);
     if (this.interaction.boostActive) this.interaction._endBoost();
+    const titular = titularDeArresto(this.look, this._calleCercana());
+    const perdido = perdidoEnArresto(this.stats.dinero, this.inventory?.items, ITEMS);
+    let plana = null;
     this.menu.open({
-      title: 'Te atrapó la Policía',
-      sub: 'Una patrulla te alcanzó.',
-      ic: 'alert',
-      dismissible: false,
-      render: () => ({
-        body: el('div', {},
-          el('p', { text: 'Te persiguieron tras el robo y te alcanzaron. Confiscaron todo tu inventario y el dinero que llevabas.' }),
-          el('p', { text: 'Te sueltan en otro punto de la ciudad. La próxima vez, pierde a la patrulla.' })),
-        foot: [button('Continuar', { primary: true, onClick: () => this._finishArrest() })]
-      })
+      title: 'Te atrapó la Policía', ic: 'alert', dismissible: false, momento: 'plana',
+      onClose: () => plana?.soltar(),
+      render: () => {
+        plana ??= new PrimeraPlana({
+          titular, perdido, pie: pieDeFoto(this.look), suelta: sueltaDeArresto(this.look),
+        });
+        return {
+          body: plana.nodo,
+          foot: [plana.cuenta, el('button', { type: 'button', class: 'cinta cinta--verbo', onclick: () => this._finishArrest() }, 'Continuar')],
+        };
+      },
     });
+    plana?.puesta();
+    // El último cuadro, una sola vez: se copia justo después de dibujarlo.
+    this._trasRender = () => {
+      const foto = tomarFoto({ renderer: this.renderer, scene: this.sceneMgr.scene, jugador: this.player, collisions: this.collisions });
+      plana?.capturar(foto?.calle ?? this.canvas, foto?.camara ?? this.cameraRig?.camera, this.player, foto?.figura);
+    };
+    this._nextPausedRender = 0;
+  }
+
+  /** La vía más cercana donde está el jugador, como se dice en la calle. */
+  _calleCercana() {
+    const district = this.world?.active;
+    const { x, z } = this.player?.position ?? { x: 0, z: 0 };
+    const esCalzada = district?.tileTypeAt
+      ? (px, pz) => district.tileTypeAt(Math.round(px / TILE_SIZE), Math.round(pz / TILE_SIZE)) === 'road'
+      : null;
+    return calleCercana(x, z, streetLabels(TILE_SIZE), esCalzada);
   }
 
   _randomWalkablePosition() {
@@ -918,6 +957,7 @@ export class Game {
     this.traffic?.endPursuit?.();
     this.roadRage?.reset();
     this.limpieza?.reset();
+    this.momentos?.reset();
     this.substanceEffects?.end();
     this.psychosis?.clearInduced?.();
     if (this.steal) {
@@ -973,6 +1013,7 @@ export class Game {
     this._resetAfterRelocation();
     if (this.dog?.isFriend) { this.dog.wake(); this.dog.resetNear(this.player.position); }
     this._vehicleImpactCooldown = 1.5;
+    if (this._deathCause === 'limpieza') this.momentos?.guardarConsejoDeCamioneta();
     this._deathCause = null;
     this.cameraRig._snap = true;
     this.cameraRig.follow(this.player.position, 0, this.collisions);
@@ -1024,13 +1065,16 @@ export class Game {
       this.renderer.resolution.resetWindow();
       // Dormir sí se ve: el cuerpo se acuesta aunque la simulación esté quieta.
       if (this.isSleeping && !globalThis.document?.hidden) this.player.updateSleepPose?.(dt);
-      if (!globalThis.document?.hidden && (this.isSleeping || now >= (this._nextPausedRender ?? 0))) {
+      // Detrás de una página entera no hay nada que ver.
+      const tapado = this.menu?.opaco && !this._trasRender;
+      if (!globalThis.document?.hidden && !tapado && (this.isSleeping || now >= (this._nextPausedRender ?? 0))) {
         this._nextPausedRender = now + 1000 / 15;
         this._renderFrame(now, false);
       }
       this.input.endFrame();
       return;
     }
+    this.momentos?.update(dt, this.player, this.stats, this.clock);
     // Deja ver el lanzamiento y la caída antes de abrir la recuperación fatal.
     if (this.stats.salud <= 0 && this.player.isRagdollActive) {
       if (this.steal?.minigameActive) this.steal._endMinigame(false, 'cancel');
@@ -1153,6 +1197,7 @@ export class Game {
     // Los peatones se tapan la nariz si el jugador huele mal.
     if (this.world.active) this.world.active.playerHygiene = this.stats.higiene;
     this.world.update(dt, this.player.position, this.cameraRig.camera, this.traffic?.vehicles ?? []);
+    actualizarFrases(this.cameraRig.camera, this.player.position, now);
     this.profiler?.mark('mundoNPC');
     this.traffic?.update(dt, { player: this.player.position, pedestrians: this.world.active?.trafficPedestrians ?? this.world.active?.npcs ?? [], onPlayerHit: this._onVehicleImpact });
     this.roadRage?.update(dt);
@@ -1168,6 +1213,7 @@ export class Game {
 
     this.weather?.update(dt, this.player.position, this.world.active, this.clock);
     streetWetness.value = this.weather?.wetness ?? 0;
+    mojarCarton(streetWetness.value);
     this.audio.setRainLevel?.(this.weather?.isRaining ? this.weather.rainIntensity : 0);
 
     // 9. Entidades
@@ -1198,8 +1244,8 @@ export class Game {
 
     if (this.gps?.update(this.player.position, now) === 'arrived') {
       this._syncGpsBeacon();
-      const { icon, name } = this.gps.lastArrival;
-      window.dispatchEvent(new CustomEvent('toast', { detail: { text: `${icon} Llegaste a ${name}`, type: 'info' } }));
+      const { name } = this.gps.lastArrival;
+      window.dispatchEvent(new CustomEvent('toast', { detail: { text: `Llegué a ${nombreALaVista(name)}`, type: 'info' } }));
     }
     this.gpsBeacon?.update(dt, this.player.position);
     this.minimap?.update(this.player.position, this._cameraYaw(), this._getPOIs(now), now,
@@ -1267,6 +1313,7 @@ export class Game {
     if (insideBody) this.player.root.visible = false;
     this.renderer.render(this.sceneMgr.scene, this.cameraRig.camera, this.player.root, [this.sceneMgr.sun], showSilhouette && !insideBody);
     if (insideBody) this.player.root.visible = true;
+    if (this._trasRender) { const copiar = this._trasRender; this._trasRender = null; copiar(); }
     this.substanceEffects?.afterRender(this.cameraRig.camera);
     if (this.performanceHUD.update(this._frameStamp ?? now, this.player.position, this.renderer, active, this.localLights)) {
       this.renderer.adaptResolution(this.performanceHUD.metrics.frameMs, performance.now() - now);
@@ -1287,7 +1334,7 @@ export class Game {
         [this.dealer, reserved.dealer, 'Dealer', '💀', '#9b59b6', { dealer: true }]]
         .flatMap(([entity, fallback, name, icon, color, extra]) => {
           const pos = entity?.position ?? fallback;
-          return pos ? [{ name, icon, color, x: pos.x, z: pos.z, ...extra }] : [];
+          return pos ? [{ name, icon, color, x: pos.x, z: pos.z, fijo: true, ...extra }] : [];
         })];
       if (this.world?.active?.tileTypeAt) this._poiCache.push(...(this._landmarks ??= cityLandmarks()));
       if (this.cart) this._poiCache.push({ name: 'Carreta', icon: '🛒', x: this.cart.position.x, z: this.cart.position.z, color: '#f39c12' });

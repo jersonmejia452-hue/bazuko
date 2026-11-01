@@ -41,7 +41,7 @@ export class MeleeCombat {
     if (typeof attacker.stats?.energia !== 'number') return true;
     if (attacker.stats.energia < ATTACK_ENERGY) {
       if (typeof window !== 'undefined' && window.dispatchEvent) window.dispatchEvent(new CustomEvent('toast', {
-        detail: { text: '⚠️ ¡Estás demasiado exhausto para pelear! Necesitas descansar.', type: 'warn' }
+        detail: { text: 'No doy más para pelear. Tengo que descansar.', type: 'warn' }
       }));
       return false;
     }

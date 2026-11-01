@@ -109,14 +109,14 @@ export class RoadRageSystem {
       this.driver.exitCar(car, this._door);
       this._people?.push(this.driver);
       this.state = 'out';
-      toast('😡 ¡El conductor se bajó con una varilla! Corre (Shift).', 'death');
+      toast('¡El conductor se bajó con una varilla! Córrale.', 'death');
     }
     car.driverDoor(this._door, this._doorSide);
     this._door.y = this._ground(this._door.x, this._door.z, car.position.y);
     const result = this.driver.think(dt, { player: this.player.position, door: this._door, canChase });
     if (result === 'swing') this.audio?.playWhoosh?.();
     else if (result === 'hit') this._hitPlayer();
-    else if (result === 'giveup') toast('😮‍💨 El conductor dejó de perseguirte y vuelve a su carro.', 'info');
+    else if (result === 'giveup') toast('El conductor dejó de perseguirme y vuelve a su carro.', 'info');
     else if (result === 'home') this._release();
     if (this.driver.active) this.driver.update(dt, { player: this.player.position });
   }
@@ -130,9 +130,9 @@ export class RoadRageSystem {
     const damage = Math.round(min + this.random() * (max - min));
     this.stats.salud = Math.max(0, this.stats.salud - damage);
     this.audio?.playThud?.();
-    this.player.receiveHit?.(this.player.position.clone().sub(this.driver.position), 2.2);
+    this.player.receiveHit?.(this.player.position.clone().sub(this.driver.position), 2.2, { salud: this.stats.salud });
     this.onPlayerHurt?.(damage);
-    toast(`🩸 ¡Te pegaron con la varilla! −${damage} de salud.`, 'death');
+    toast(`¡Me pegaron con la varilla! −${damage} de salud.`, 'death');
   }
 
   /** Personajes para precargar junto con los demás NPC. */

@@ -271,7 +271,6 @@ test('Ajustes marca lo elegido aunque el cambio aún no se aplique', () => {
       return { tag, className: '', textContent: '', children: [], attributes: {}, addEventListener() {}, setAttribute(k, v) { this.attributes[k] = v; },
         append(...nodes) { this.children.push(...nodes); }, appendChild(node) { this.children.push(node); return node; } };
     },
-    createElementNS(ns, tag) { return this.createElement(tag); }
   };
   let config = null;
   const game = {
@@ -287,9 +286,12 @@ test('Ajustes marca lo elegido aunque el cambio aún no se aplique', () => {
     for (const child of node?.children ?? []) walk(child);
   };
   walk(config.render().body);
-  const primary = label => buttons.find(b => b.children.includes(label)).className.includes('btn--primary');
-  assert.equal(primary('⚖️ Media'), true);
-  assert.equal(primary('⚡ Baja'), false);
+  const elegido = label => {
+    const b = buttons.find(n => n.children[0]?.textContent === label);
+    return b.attributes['aria-pressed'] === 'true' && b.children[0].className === 'elegido';
+  };
+  assert.equal(elegido('Media'), true);
+  assert.equal(elegido('Baja'), false);
   config.onClose?.();
 });
 
@@ -320,7 +322,6 @@ test('Ajustes avisa cuando la calidad subió o bajó sola, no mientras se aplica
       return { tag, className: '', textContent: '', children: [], attributes: {}, addEventListener() {}, setAttribute(k, v) { this.attributes[k] = v; },
         append(...nodes) { this.children.push(...nodes); }, appendChild(node) { this.children.push(node); return node; } };
     },
-    createElementNS(ns, tag) { return this.createElement(tag); }
   };
   const hint = renderer => {
     let config = null;
@@ -333,7 +334,7 @@ test('Ajustes avisa cuando la calidad subió o bajó sola, no mientras se aplica
     openPauseMenu(game, 'ajustes');
     let text = null;
     const walk = node => {
-      if (typeof node?.textContent === 'string' && node.textContent.startsWith('Baja da más FPS')) text = node.textContent;
+      if (typeof node?.textContent === 'string' && node.textContent.startsWith('Baja va más fluido')) text = node.textContent;
       for (const child of node?.children ?? []) walk(child);
     };
     walk(config.render().body);

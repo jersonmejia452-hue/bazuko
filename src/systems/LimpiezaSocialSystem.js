@@ -226,7 +226,7 @@ export class LimpiezaSocialSystem {
     this.leader.say('¡Ese es! ¡Cásquenlo!', 3);
     this.state = 'out';
     this.timer = 0;
-    toast('🚙 Una camioneta negra frenó en seco: ¡limpieza social! Corre (Shift) y no te dejes alcanzar.', 'death');
+    toast('Una camioneta negra frenó en seco: limpieza social. Córrale y no se deje alcanzar.', 'warn');
   }
 
   _hunt(dt, canChase) {
@@ -239,7 +239,7 @@ export class LimpiezaSocialSystem {
       else if (result === 'hit') this._hitPlayer(m);
       else if (result === 'giveup' && !this._gaveUp) {
         this._gaveUp = true;
-        toast(canChase ? '😮‍💨 Se cansaron de perseguirte y vuelven a la camioneta.' : '🚙 Se devuelven a la camioneta.', 'info');
+        toast(canChase ? 'Se cansaron de perseguirte y vuelven a la camioneta.' : 'Se devuelven a la camioneta.', 'info');
       }
     }
     // el jefe se sube cuando sus muchachos ya volvieron
@@ -264,6 +264,7 @@ export class LimpiezaSocialSystem {
 
   _hitPlayer(member) {
     if (!this.stats || this.stats.salud <= 0) return;
+    if (this.player.isRagdollActive) return; // ya está en el piso: el siguiente golpe es cuando se pare
     if (!member?.active || !canReachCombatTarget({ from: member.position, to: this.player.position,
       maxDistance: SQUAD.attackRange + .4, collisions: this.collisions, getWaterInfo: this.getWaterInfo,
       toInWater: !!this.player.isSwimming })) return;
@@ -272,9 +273,9 @@ export class LimpiezaSocialSystem {
     this.stats.salud = Math.max(0, this.stats.salud - damage);
     this.audio?.playThud?.();
     // a diferencia del conductor, siguen pegando aunque esté tambaleando
-    this.player.receiveHit?.(this.player.position.clone().sub(member.position), 1.6);
+    this.player.receiveHit?.(this.player.position.clone().sub(member.position), 1.6, { salud: this.stats.salud });
     this.onPlayerHurt?.(damage);
-    toast(`🩸 ¡Cachazo! −${damage} de salud.`, 'death');
+    toast(`Me dieron un cachazo: −${damage} de salud.`, 'death');
   }
 
   /** Personajes para precargar junto con los demás NPC. */

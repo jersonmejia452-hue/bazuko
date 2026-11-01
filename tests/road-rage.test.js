@@ -248,7 +248,7 @@ test('se rinde si el jugador escapa, vuelve a su carro y el tráfico continúa',
   player.position.set(system.driver.position.x + ROAD_RAGE.giveUpDistance + 5, 0, system.driver.position.z);
   run(system, traffic, player, 1 / 30);
   assert.equal(system.driver.state, 'return');
-  assert.ok(toasts.some(text => /dejó de perseguirte/.test(text)));
+  assert.ok(toasts.some(text => /dejó de perseguirme/.test(text)));
   run(system, traffic, player, 15);
   assert.equal(system.active, false);
   assert.equal(vehicle.hold, false);

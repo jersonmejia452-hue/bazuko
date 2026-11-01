@@ -112,7 +112,7 @@ test('creador visual adaptable y accesible con movimiento reducido', async ({ pa
   await expect(page.getByRole('button', { name: 'Guardar foto', exact: true })).toBeInViewport();
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
-  await expect(page.locator('#menu-title')).toHaveText('Partida en Pausa');
+  await expect(page.locator('#menu-title')).toHaveText('Un momentico');
   for (const tabName of ['Estado', 'Ajustes', 'Controles', 'Mapa']) {
     await page.getByRole('tab', { name: new RegExp(tabName) }).click();
     const overflow = await page.locator('#menu-body').evaluate(body => body.scrollWidth - body.clientWidth);
@@ -128,14 +128,14 @@ test('partida nueva, talentos, recetas y edición del personaje', async ({ page 
   await expect(page.locator('#day-display')).toHaveText('Día 1');
   await page.keyboard.press('T');
   await expect(page.locator('#talent-panel')).toHaveClass(/open/);
-  await expect(page.locator('#talent-panel')).toContainText('Árbol de Talentos');
+  await expect(page.locator('#talent-panel')).toContainText('Mañas');
   await page.keyboard.press('Escape');
   await expect(page.locator('#talent-panel')).not.toHaveClass(/open/);
   await expect(page.locator('#menu')).toBeHidden();
 
   await page.keyboard.press('C');
   await expect(page.locator('#craft-panel')).toHaveClass(/open/);
-  await expect(page.locator('#craft-panel')).toContainText('Mesa de Crafteo');
+  await expect(page.locator('#craft-panel')).toContainText('La mesa');
   await expect(page.locator('#craft-panel .craft-recipe').first()).toBeVisible();
   await expect(page.locator('#craft-panel .craft-go')).toBeDisabled();
   // Con los materiales de la curita, elegirla y fabricarla desde el banco.
@@ -150,12 +150,12 @@ test('partida nueva, talentos, recetas y edición del personaje', async ({ page 
   await expect(page.locator('#craft-panel .craft-recipe[data-id="curita"]')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('#craft-panel .craft-go').click();
   expect(await page.evaluate(() => window.__game.inventory.count('curita'))).toBe(2);
-  await expect(page.locator('#craft-panel .craft-reason')).toContainText('Te faltan 2 materiales');
+  await expect(page.locator('#craft-panel .craft-reason')).toContainText('Me faltan 2 materiales');
   // Un panel abierto pausa el juego: cerrarlo antes de editar la apariencia.
   await page.keyboard.press('Escape');
   await page.keyboard.press('P');
   await expect(page.locator('#creator-modal')).toBeVisible();
-  await expect(page.locator('#creator-title')).toHaveText('Crea tu personaje');
+  await expect(page.locator('#creator-title')).toHaveText('Su personaje');
   await page.locator('#creator-close').click();
   await expect(page.locator('#creator-modal')).toBeHidden();
 });
@@ -163,11 +163,11 @@ test('partida nueva, talentos, recetas y edición del personaje', async ({ page 
 test('ayuda bajo demanda, inventario y pausa sin abrir dos paneles al pulsar Escape', async ({ page }) => {
   await startNewGame(page);
   const help = page.locator('#controls-help-toggle');
-  await expect(help).toHaveText('!');
+  await expect(help).toHaveText('Ayuda');
   await expect(help).toHaveAttribute('aria-expanded', 'false');
   await help.click();
   await expect(page.locator('#controls-help-content')).toBeVisible();
-  await expect(page.locator('#controls-help-content')).toContainText('Inventario');
+  await expect(page.locator('#controls-help-content')).toContainText('El costal');
   await help.click();
   await expect(help).toHaveAttribute('aria-expanded', 'false');
 
@@ -181,7 +181,7 @@ test('ayuda bajo demanda, inventario y pausa sin abrir dos paneles al pulsar Esc
   await expect(page.locator('#menu')).toBeHidden();
   await page.keyboard.press('Escape');
   await expect(page.locator('#menu')).toBeVisible();
-  await expect(page.locator('#menu-title')).toHaveText('Partida en Pausa');
+  await expect(page.locator('#menu-title')).toHaveText('Un momentico');
   await page.keyboard.press('Escape');
   await expect(page.locator('#menu')).toBeHidden();
 
@@ -202,7 +202,7 @@ test('mapa con M, destino por clic y por la lista, ruta en el radar y pestañas 
   await expect(page.locator('#minimap-info')).not.toBeEmpty();
 
   await page.keyboard.press('m');
-  await expect(page.locator('#menu-title')).toHaveText('Partida en Pausa');
+  await expect(page.locator('#menu-title')).toHaveText('Un momentico');
   await expect(page.getByRole('tab', { name: /Mapa/ })).toHaveAttribute('aria-selected', 'true');
   const canvas = page.locator('.map-view__canvas');
   await expect(canvas).toBeVisible();
@@ -280,7 +280,7 @@ test('radar y mapa señalan lo que necesitas: M + Enter traza la ruta a la fogat
 
   // Los filtros dejan solo lo que sirve y explican por qué no hay opción.
   await page.locator('.map-view__filter', { hasText: 'Agua' }).click();
-  await expect(page.locator('.map-view__no-option')).toContainText('No te alcanza: agua desde');
+  await expect(page.locator('.map-view__no-option')).toContainText('No alcanza: agua desde');
   await expect(page.locator('.map-view__place', { hasText: 'Fritanga La Mona' })).toContainText('sin plata');
   await page.locator('.map-view__filter', { hasText: 'Todo' }).click();
   await expect(page.locator('.map-view__no-option')).toHaveCount(0);
@@ -347,7 +347,7 @@ test('volumen por categoría en Ajustes y pisadas al caminar', async ({ page }) 
   await page.keyboard.up('w');
 
   await page.keyboard.press('Escape');
-  await expect(page.locator('#menu-title')).toHaveText('Partida en Pausa');
+  await expect(page.locator('#menu-title')).toHaveText('Un momentico');
   await page.getByRole('tab', { name: /Ajustes/ }).click();
   for (const name of ['ambiente', 'tráfico', 'voces', 'efectos']) {
     await expect(page.getByRole('slider', { name: `Volumen de ${name}` })).toBeVisible();

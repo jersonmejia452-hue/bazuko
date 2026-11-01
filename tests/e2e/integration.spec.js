@@ -538,13 +538,13 @@ test('sin plata de noche: radar y mapa llevan al Dealer, E abre su tienda y solo
   });
   const radar = page.locator('#minimap-info');
   await expect(radar).toContainText('Dealer');
-  await expect(radar).toContainText('Sin plata: vende');
+  await expect(radar).toContainText('Sin plata: venda');
 
   await page.keyboard.press('m');
   const go = page.locator('.map-view__nearest');
   await expect(go).toHaveText('Ir a vender');
   await expect(go).toBeFocused();
-  await expect(page.locator('.map-view__no-option')).toContainText('Vende sustancias');
+  await expect(page.locator('.map-view__no-option')).toContainText('Venda sustancias');
   await page.keyboard.press('Enter');
   expect(await page.evaluate(() => window.__game.gps.waypoint?.name)).toBe('Dealer');
   await page.keyboard.press('m');
@@ -555,7 +555,7 @@ test('sin plata de noche: radar y mapa llevan al Dealer, E abre su tienda y solo
     player.position.set(at.x + .6, game.world.active.getMovementGroundHeight(at.x + .6, at.z, 0), at.z);
     player.root.position.copy(player.position); player.velocity.set(0, 0, 0); player.resetGrounding();
   });
-  await expect(page.locator('#interaction-prompt')).toContainText('Dealer');
+  await expect(page.locator('#interaction-prompt')).toContainText('jíbaro');
   await page.keyboard.press('e');
   const panel = page.locator('#dealer-panel');
   await expect(panel).toHaveClass(/open/);
@@ -761,7 +761,7 @@ test('dormir sucio en la pose nueva puede pegar sarna y la pomada la cura; sin l
     return onTop;
   };
   expect(await usePomada(), 'el aviso queda encima del inventario').toBe(true);
-  await toastShown('No tienes sarna');
+  await toastShown('No tengo sarna');
   expect(await page.evaluate(() => window.__game.inventory.count('pomada'))).toBe(1);
 
   await frames(page, 10);
@@ -778,14 +778,14 @@ test('dormir sucio en la pose nueva puede pegar sarna y la pomada la cura; sin l
   expect(asleep.frames, 'el sueño se dibuja cuadro a cuadro').toBeGreaterThan(1);
   expect(asleep.lowest, `de pie mide ${standing}`).toBeLessThan(standing * .6);
   expect(await skeletonIsFinite(page)).toBe(true);
-  await toastShown('Dormiste sucio');
+  await toastShown('Dormí sucio');
   expect(await page.evaluate(() => window.__game.player.action), 'despierto no sigue acostado').toBe(null);
   await expect.poll(() => bodyHeight(page)).toBeGreaterThan(standing * .9);
   await expect(page.locator('#disease-panel')).toContainText('Sarna');
   expect(await page.evaluate(() => !!JSON.parse(localStorage.getItem('habitante-de-calle-save-v1')).diseases.active.sarna), 'queda guardada').toBe(true);
 
   await usePomada();
-  await toastShown('Curado: Sarna');
+  await toastShown('Me curé: Sarna');
   expect(await page.evaluate(() => [window.__game.diseases.hasAny, window.__game.inventory.count('pomada')])).toEqual([false, 0]);
   expect(errors).toEqual([]);
 });

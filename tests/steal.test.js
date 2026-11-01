@@ -258,7 +258,7 @@ test('con el costal lleno no dice que obtuviste el objeto', () => {
   const random = Math.random;
   Math.random = () => .1;
   try { steal._giveLoot(CONFIG.lootMoneyCosquilleo, true); } finally { Math.random = random; }
-  assert.ok(toasts.some(text => text.includes('No te cabe')), toasts.join(' | '));
+  assert.ok(toasts.some(text => text.includes('No me cabe')), toasts.join(' | '));
   assert.ok(!toasts.some(text => text.includes('Objeto obtenido')));
 });
 

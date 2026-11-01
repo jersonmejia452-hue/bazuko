@@ -20,7 +20,7 @@ Cada archivo de `src/ui/item-art/` (salvo esos dos) se adaptó de la misma forma
 | `cable.svg` | Cable cobre | [Wire coil](https://game-icons.net/1x1/delapouite/wire-coil.html) | Delapouite |
 | `pilas.svg` | Pilas AA | [Battery pack](https://game-icons.net/1x1/sbed/battery-pack.html) | Sbed |
 | `madera.svg` | Tablas | [Planks](https://game-icons.net/1x1/delapouite/planks.html) | Delapouite |
-| `botella.svg` | Botella PET | [Water bottle](https://game-icons.net/1x1/delapouite/water-bottle.html) | Delapouite |
+| `botella.svg` | Botella | [Water bottle](https://game-icons.net/1x1/delapouite/water-bottle.html) | Delapouite |
 | `carton.svg` | Cartón | [Cardboard box](https://game-icons.net/1x1/delapouite/cardboard-box.html) | Delapouite |
 | `lata.svg` | Lata vacía | [Soda can](https://game-icons.net/1x1/guard13007/soda-can.html) | Guard13007 |
 | `pastilla.svg` | Pastilla | [Pill](https://game-icons.net/1x1/lorc/pill.html) | Lorc |
@@ -33,8 +33,8 @@ Cada archivo de `src/ui/item-art/` (salvo esos dos) se adaptó de la misma forma
 | `radio.svg` | Radio auto | [Boombox](https://game-icons.net/1x1/delapouite/boombox.html) | Delapouite |
 | `pan.svg` | Pan duro | [Bread](https://game-icons.net/1x1/delapouite/bread.html) | Delapouite |
 | `lataComida.svg` | Lata de atún | [Canned fish](https://game-icons.net/1x1/delapouite/canned-fish.html) | Delapouite |
-| `agua.svg` | Botella agua | [Water drop](https://game-icons.net/1x1/sbed/water-drop.html) | Sbed |
-| `refresco.svg` | Refresco | [Soda bottle](https://game-icons.net/1x1/caro-asercion/soda-bottle.html) | Caro Asercion |
+| `agua.svg` | Botella de agua | [Water drop](https://game-icons.net/1x1/sbed/water-drop.html) | Sbed |
+| `refresco.svg` | Gaseosa | [Soda bottle](https://game-icons.net/1x1/caro-asercion/soda-bottle.html) | Caro Asercion |
 | `cafe.svg` | Café caliente | [Coffee mug](https://game-icons.net/1x1/lorc/coffee-mug.html) | Lorc |
 | `tintico.svg` | Tintico | [Coffee cup](https://game-icons.net/1x1/delapouite/coffee-cup.html) | Delapouite |
 | `vendaje.svg` | Vendaje | [Bandage roll](https://game-icons.net/1x1/lorc/bandage-roll.html) | Lorc |
@@ -49,14 +49,14 @@ Cada archivo de `src/ui/item-art/` (salvo esos dos) se adaptó de la misma forma
 | `lona.svg` | Lona azul | [Rolled cloth](https://game-icons.net/1x1/delapouite/rolled-cloth.html) | Delapouite |
 | `colchon.svg` | Colchón viejo | [Bed](https://game-icons.net/1x1/delapouite/bed.html) | Delapouite |
 | `vela.svg` | Vela | [Candle light](https://game-icons.net/1x1/lorc/candle-light.html) | Lorc |
-| `popo.svg` | Mojón de popó | [Turd](https://game-icons.net/1x1/lorc/turd.html) | Lorc |
+| `popo.svg` | Popó | [Turd](https://game-icons.net/1x1/lorc/turd.html) | Lorc |
 
 ## Objetos sin icono
 
-- `pegante`: la colección no tiene un icono de pegante o tubo de pegamento que se lea a ese tamaño; los tubos disponibles parecen probetas. Conserva el emoji 🧪 del catálogo.
-- `basuco`: no hay un icono de pipa o papeleta que se distinga del cigarrillo y la hierba. Conserva su emoji del catálogo.
-- `empanada`, `morcilla`, `papaCriolla` y `aguapanela`: la comida callejera bogotana no tiene equivalentes legibles en la colección. Conservan sus emojis (🥟, 🌭, 🥔, 🍵).
+- `pegante`: la colección no tiene un icono de pegante o tubo de pegamento que se lea a ese tamaño; los tubos disponibles parecen probetas. Usa su dibujo de la letra del juego.
+- `basuco`: no hay un icono de pipa o papeleta que se distinga del cigarrillo y la hierba. Usa su dibujo de la letra del juego.
+- `empanada`, `morcilla`, `papaCriolla` y `aguapanela`: la comida callejera bogotana no tiene equivalentes legibles en la colección. Usan sus dibujos de la letra del juego.
 
 El retrovisor y la radio de carro usan los iconos más cercanos que hay (un espejo de mano y una grabadora): la colección no tiene espejos laterales ni radios de tablero.
 
-`src/ui/itemArt.js` expone los iconos y recurre al emoji del catálogo cuando un objeto no tiene icono. Al añadir un icono, documentar aquí su origen y autor: `tests/crafting.test.js` comprueba que cada archivo tenga su fila con enlace y autor, y que todo objeto del catálogo tenga icono salvo los listados arriba.
+`src/ui/itemArt.js` expone los iconos y recurre al dibujo de la letra cuando un objeto no tiene icono (`itemIcon` en `src/data/items.js`). Al añadir un icono, documentar aquí su origen y autor: `tests/crafting.test.js` comprueba que cada archivo tenga su fila con enlace y autor, y que todo objeto del catálogo tenga icono salvo los listados arriba.

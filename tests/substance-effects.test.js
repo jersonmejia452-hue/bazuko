@@ -194,7 +194,7 @@ test('mientras dura el efecto el canvas lleva el filtro de la receta y al termin
 
 test('sin efecto no toca el filtro de otros sistemas', () => {
   const { fx, canvas, camera } = visualFixture();
-  canvas.style.filter = 'contrast(140%)'; // la psicosis lo escribe en cada cuadro
+  canvas.style.filter = 'contrast(140%)'; // lo escribió alguien más
   fx.beforeRender(camera); fx.afterRender(camera);
   assert.equal(canvas.style.filter, 'contrast(140%)');
 });

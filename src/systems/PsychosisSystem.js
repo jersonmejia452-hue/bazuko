@@ -1,27 +1,23 @@
 // src/systems/PsychosisSystem.js
 import * as THREE from 'three';
+import { VOCES, sitioParaVoz } from '../ui/momentosTextos.js';
+
+// Lo que una voz nunca tapa: las cifras y lo que se oprime.
+const NO_TAPAR = '#hud-dock, #topbar, #wanted, #quickbar, #panel-dock, #interaction-prompt, #retazo, #acciones, #joystick';
+const VOCES_A_LA_VEZ = 2;
+// Lo que se mueve la cámara con la malilla o la paranoia. Nada pasa de 0,5 Hz: 0,003 rad/ms son 0,48 Hz y 0,0016, 0,25 Hz.
+const RESPIRA_RAD_MS = 0.003;
+const DERIVA_RAD_MS = 0.0016;
 
 const _forward = new THREE.Vector3();
 const _toGhost = new THREE.Vector3();
 
-const PARANOIA_WHISPERS = [
-  '¿QUIÉN ESTÁ AHÍ?',
-  'TE ESTÁN SIGUIENDO',
-  'NO MIRES ATRÁS',
-  'TODOS TE ESTÁN MIRANDO',
-  '¡VIENEN POR TI!',
-  'ESTÁN EN LAS PAREDES',
-  'NO CONFÍES EN NADIE',
-  '¡ESOS CARROS TE VIGILAN!',
-  '¡CORRE!'
-];
-
 const PARANOIA_MUTTERINGS = [
-  '🗣️ "¡¡Dejen de vigilarme, sé quiénes son!!"',
-  '🗣️ "¡¡Están en las sombras... nos tienen acorralados!!"',
-  '🗣️ "¡¡No me toquen, aléjense de mí!!"',
-  '🗣️ "¿Quién anda susurrando mi nombre?"',
-  '🗣️ "¡¡Esos peatones son policías encubiertos!!"'
+  'Dejen de vigilarme, sé quiénes son',
+  'Están en las sombras, me tienen acorralado',
+  'No me toquen, aléjense de mí',
+  '¿Quién anda diciendo mi nombre?',
+  'Esos peatones son tombos encubiertos'
 ];
 
 export class PsychosisSystem {
@@ -49,7 +45,6 @@ export class PsychosisSystem {
 
     // Elementos DOM
     this.overlayEl = null;
-    this.warningEl = null;
     this.voicesEl = null;
     this._initDOM();
   }
@@ -57,7 +52,6 @@ export class PsychosisSystem {
   _initDOM() {
     if (typeof document === 'undefined') return;
     this.overlayEl = document.getElementById('psychosis-overlay');
-    this.warningEl = document.getElementById('psychosis-warning');
     this.voicesEl = document.querySelector('.psychosis-voices');
   }
 
@@ -141,24 +135,31 @@ export class PsychosisSystem {
     };
   }
 
+  /** Una voz escrita sobre la escena. Si no hay un sitio libre, se calla: nunca tapa cifras ni, en persecución, el centro. */
   _spawnFloatingWhisper() {
     if (typeof document === 'undefined') return;
-    if (!this.voicesEl && !this.overlayEl) return;
     const container = this.voicesEl ?? this.overlayEl;
+    if (!container || container.querySelectorAll('.hallucination-word').length >= VOCES_A_LA_VEZ) return;
 
     const wordEl = document.createElement('div');
     wordEl.className = 'hallucination-word';
-    wordEl.textContent = PARANOIA_WHISPERS[Math.floor(Math.random() * PARANOIA_WHISPERS.length)];
-
-    const x = 10 + Math.random() * 75;
-    const y = 15 + Math.random() * 65;
-    wordEl.style.left = `${x}vw`;
-    wordEl.style.top = `${y}vh`;
-
+    wordEl.textContent = VOCES[Math.floor(Math.random() * VOCES.length)];
+    wordEl.style.visibility = 'hidden';
     container.appendChild(wordEl);
-    setTimeout(() => {
-      wordEl.remove();
-    }, 3400);
+
+    const ocupado = [...document.querySelectorAll(NO_TAPAR)].flatMap((e) => {
+      const r = e.getBoundingClientRect();
+      return r.width && r.height ? [{ x: r.x, y: r.y, w: r.width, h: r.height }] : [];
+    });
+    const sitio = sitioParaVoz({
+      ancho: innerWidth, alto: innerHeight, vozAncho: wordEl.offsetWidth, vozAlto: wordEl.offsetHeight,
+      ocupado, persecucion: !!globalThis.window?.__game?.traffic?.inPursuit,
+    });
+    if (!sitio) { wordEl.remove(); return; }
+    wordEl.style.left = `${sitio.x}px`;
+    wordEl.style.top = `${sitio.y}px`;
+    wordEl.style.visibility = '';
+    setTimeout(() => wordEl.remove(), 3400);
   }
 
   _clearShadowPeople() {
@@ -209,10 +210,9 @@ export class PsychosisSystem {
         this._clearShadowPeople();
         if (typeof document !== 'undefined') {
           this.overlayEl?.classList.remove('active');
-          if (this.warningEl) this.warningEl.style.display = 'none';
-          const canvas = document.getElementById('game-canvas');
-          if (canvas) canvas.style.filter = '';
+          document.body?.classList.remove('voces');
         }
+        this._capasPuestas = false;
         if (cameraRig?.camera) {
           cameraRig.camera.fov = cameraRig.baseFov ?? 55;
           cameraRig.camera.updateProjectionMatrix();
@@ -224,33 +224,23 @@ export class PsychosisSystem {
     this.active = true;
     const severity = Math.max(fromWithdrawal ?? 0, fromDrug ?? 0); // 0 a 1
 
-    // 1. Efectos DOM y distorsión cromática visual
-    if (typeof document !== 'undefined') {
+    // 1. La escena se oscurece por los bordes y el HUD se corre un poco. Sin filtros: la urgencia la dan las voces.
+    // Se pone una vez: escribirlo en cada cuadro le pega al navegador aunque no cambie nada.
+    if (typeof document !== 'undefined' && !this._capasPuestas) {
       if (!this.overlayEl) this._initDOM();
       this.overlayEl?.classList.add('active');
-      if (this.warningEl) {
-        this.warningEl.style.display = abstinencia >= 80 ? 'block' : 'none';
-      }
-
-      // la imagen de la paranoia inducida la pone su efecto de consumo (SubstanceEffects)
-      const canvas = fromWithdrawal != null ? document.getElementById('game-canvas') : null;
-      if (canvas) {
-        const time = performance.now();
-        const hue = Math.sin(time * 0.003) * 14 * severity;
-        const contrast = 100 + 40 * severity;
-        const sat = 100 + 45 * severity;
-        canvas.style.filter = `contrast(${contrast.toFixed(1)}%) saturate(${sat.toFixed(1)}%) hue-rotate(${hue.toFixed(1)}deg)`;
-      }
+      document.body?.classList.add('voces');
+      this._capasPuestas = true;
     }
 
-    // 2. Distorsión de cámara: respiración de FOV y temblor
+    // 2. Distorsión de cámara: una respiración lenta. Nada tiembla: nada oscila a más de 0,5 Hz, y con movimiento reducido
+    // la cámara se queda quieta.
     if (cameraRig?.camera) {
+      this._movimiento ??= globalThis.matchMedia?.('(prefers-reduced-motion: reduce)') ?? { matches: false };
+      const quieto = this._movimiento.matches;
       const time = performance.now();
-      const fovPulse = Math.sin(time * 0.0045) * 3.2 * severity;
-      cameraRig.camera.fov = (cameraRig.baseFov ?? 55) + fovPulse;
-      if (severity > 0.6) {
-        cameraRig.camera.rotation.z += (Math.random() - 0.5) * 0.007 * severity;
-      }
+      cameraRig.camera.fov = (cameraRig.baseFov ?? 55) + (quieto ? 0 : Math.sin(time * RESPIRA_RAD_MS) * 3.2 * severity);
+      if (!quieto && severity > 0.6) cameraRig.camera.rotation.z += Math.sin(time * DERIVA_RAD_MS) * 0.012 * severity;
       cameraRig.camera.updateProjectionMatrix();
     }
 
@@ -362,8 +352,7 @@ export class PsychosisSystem {
     this._clearShadowPeople();
     if (typeof document !== 'undefined') {
       this.overlayEl?.classList.remove('active');
-      const canvas = document.getElementById('game-canvas');
-      if (canvas) canvas.style.filter = '';
+      document.body?.classList.remove('voces');
     }
   }
 }

@@ -3,11 +3,12 @@ import * as THREE from 'three';
 import { COLORS } from '../utils/constants.js';
 
 /**
- * Mesa de crafteo, solo visible: el menú se abre con C, sin acercarse.
+ * La mesa. Junto a ella, E abre lo mismo que C abre desde cualquier parte.
  */
 export class CraftingStation {
   constructor(scene, position) {
     this.scene = scene;
+    this.kind = 'mesa';
 
     this.group = new THREE.Group();
     this.group.position.copy(position);

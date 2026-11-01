@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 import { MapView } from '../src/ui/MapView.js';
+import { pasarTexto } from '../src/ui/pictos.js';
 
 // DOM mínimo: lo justo para armar el panel, pulsar sus botones y seguir el foco.
 function node(tag) {
@@ -66,7 +67,7 @@ const pressed = (code, extra = {}) => ({ code, prevented: 0, stopped: 0, prevent
 
 beforeEach(() => {
   globalThis.window = new EventTarget();
-  globalThis.document = { activeElement: null, createElement: node, createElementNS: (_, tag) => node(tag) };
+  globalThis.document = { activeElement: null, createElement: node };
   globalThis.requestAnimationFrame = (fn) => fn();
 });
 
@@ -74,13 +75,13 @@ test('«Todo» sin necesidad: sin botón, las fogatas en una fila y orden a pie'
   const map = view({ walk: (_, to) => (to === gasolinera ? 5 : Math.abs(to.x)) });
   assert.equal(cta(map), undefined);
   assert.equal(noOption(map), undefined);
-  assert.deepEqual(rowNames(map), ['Gasolinera', 'Dulces y minutos', 'Fogata de caneca', 'Crafteo', 'Recicladora El Progreso']);
+  assert.deepEqual(rowNames(map), ['Gasolinera', 'Dulces y minutos', 'Fogata de caneca', 'La mesa', 'Recicladora El Progreso']);
   assert.equal(text(byClass(map.sidebar, 'map-view__list-title')[0]), 'Ir a… (más cerca a pie primero)');
-  assert.match(text(byClass(map.sidebar, 'map-view__dest')[0]), /Haz clic en el mapa/);
+  assert.match(text(byClass(map.sidebar, 'map-view__dest')[0]), /Haga clic en el mapa/);
   const metas = byClass(map.sidebar, 'map-view__place-meta').map(text);
-  assert.ok(metas.includes('Solo referencia ∙ no vende'));
-  assert.ok(metas.includes('Calor gratis ∙ El Cartucho'));
-  assert.ok(metas.includes('Comida ∙ agua ∙ calor ∙ desde $ 1.200'));
+  assert.ok(metas.includes('Solo referencia, no vende'));
+  assert.ok(metas.includes('Calor gratis, El Cartucho'));
+  assert.ok(metas.includes('Comida, agua, calor, desde $ 1.200'));
   assert.ok(metas.includes('Se abre con C, desde cualquier sitio'), 'la mesa no se usa caminando hasta ella');
   assert.ok(byClass(map.sidebar, 'map-view__place-meta').some(meta => meta.textContent.endsWith('desde $ 1.200')), 'el precio no se parte en dos líneas');
   assert.equal(filter(map, 'todo').attributes['aria-pressed'], 'true');
@@ -100,7 +101,7 @@ test('con frío y sin plata, el botón marca la fogata de menor recorrido a pie'
   const map = view({ needs: FREEZING, walk: (_, to) => (to === FIRES[0] ? 500 : Math.abs(to.x)) });
   assert.equal(text(cta(map)), 'Ir al calor más cercano');
   assert.equal(map._focusCta, cta(map), 'M + Enter debe trazar la ruta');
-  assert.match(text(byClass(map.sidebar, 'map-view__dest')[0]), /🥶 Te estás congelando/);
+  assert.match(text(byClass(map.sidebar, 'map-view__dest')[0]), /Me estoy congelando/);
   assert.ok(filter(map, 'calor').className.includes('is-need'));
   assert.equal(filter(map, 'todo').attributes['aria-pressed'], 'true', 'el filtro nunca cambia solo');
   click(cta(map));
@@ -113,7 +114,7 @@ test('si ya lleva con qué resolverlo, avisa y no manda a comprar', () => {
   const map = view({ needs: { ...FREEZING, carried: { calor: 'Empanada con ají' } } });
   assert.equal(cta(map), undefined);
   assert.equal(noOption(map), undefined);
-  assert.match(text(byClass(map.sidebar, 'map-view__dest')[0]), /Llevas: Empanada con ají ∙ cierra el mapa y úsalo con I/);
+  assert.match(text(byClass(map.sidebar, 'map-view__dest')[0]), /Llevo: Empanada con ají\. Se usa desde el costal con I/);
   // Con el filtro elegido a mano sí ofrece ir, porque lo pidió el jugador.
   click(filter(map, 'calor'));
   assert.equal(text(cta(map)), 'Ir al calor más cercano');
@@ -124,26 +125,26 @@ test('con el filtro «Agua» y sin plata explica por qué; con reciclaje ofrece 
   click(filter(map, 'agua'));
   assert.equal(filter(map, 'agua').attributes['aria-pressed'], 'true');
   assert.equal(cta(map), undefined);
-  assert.equal(text(noOption(map)), 'No te alcanza: agua desde $ 2.000. Pide limosna (B).');
+  assert.equal(text(noOption(map)), 'No alcanza: agua desde $ 2.000. Pida limosna (B).');
   assert.deepEqual(rowNames(map), ['Dulces y minutos'], 'el filtro deja solo lo que sirve');
-  assert.equal(text(byClass(map.sidebar, 'map-view__list-title')[0]), 'Ir a… (primero lo que puedes usar)');
+  assert.equal(text(byClass(map.sidebar, 'map-view__list-title')[0]), 'Ir a… (primero lo que sirve)');
   const [row] = byClass(map.sidebar, 'map-view__place');
   assert.ok(row.className.includes('is-broke'));
-  assert.equal(text(byClass(map.sidebar, 'map-view__place-meta')[0]), 'Agua desde $ 2.000 ∙ sin plata');
+  assert.equal(text(byClass(map.sidebar, 'map-view__place-meta')[0]), 'Agua desde $ 2.000, sin plata');
   assert.equal(map._focusCta, null);
 
   const material = { money: 0, carriesRecyclables: true, recycleValue: 2000, recycleKg: 1, carried: {} };
   const selling = view({ needs: material });
   click(filter(selling, 'agua'));
   assert.equal(text(cta(selling)), 'Ir a vender');
-  assert.equal(text(noOption(selling)), 'No te alcanza: agua desde $ 2.000. Vende material o pide limosna (B).', 'el botón no borra el motivo');
+  assert.equal(text(noOption(selling)), 'No alcanza: agua desde $ 2.000. Venda material o pida limosna (B).', 'el botón no borra el motivo');
   click(cta(selling));
   assert.equal(selling.game.marked[0].name, 'Recicladora El Progreso');
 
   const little = view({ needs: { ...material, recycleValue: 1999 } });
   click(filter(little, 'agua'));
   assert.equal(cta(little), undefined, 'si lo que cobras no alcanza, el viaje no sirve');
-  assert.match(text(noOption(little)), /Vende material o pide limosna/);
+  assert.match(text(noOption(little)), /Venda material o pida limosna/);
 });
 
 test('sin plata, de noche y con sustancias, «Ir a vender» lleva al Dealer si paga lo suficiente', () => {
@@ -153,7 +154,7 @@ test('sin plata, de noche y con sustancias, «Ir a vender» lleva al Dealer si p
   const map = view({ pois, needs: hungry });
   assert.equal(text(cta(map)), 'Ir a vender');
   assert.equal(map._focusCta, cta(map), 'M + Enter también lleva a vender');
-  assert.equal(text(noOption(map)), 'No te alcanza: comida desde $ 1.200. Vende sustancias o pide limosna (B).');
+  assert.equal(text(noOption(map)), 'No alcanza: comida desde $ 1.200. Venda sustancias o pida limosna (B).');
   click(cta(map));
   assert.equal(map.game.marked[0].name, 'Dealer');
 
@@ -169,9 +170,9 @@ test('con el costal lleno lo dice, y «Ir a vender» nunca lleva al Dealer', () 
 
   const thirsty = view({ pois, needs: { ...full, need: 'agua' } });
   assert.equal(text(cta(thirsty)), 'Ir a vender');
-  assert.equal(text(noOption(thirsty)), 'No te cabe en el costal: vende material o tira algo.');
+  assert.equal(text(noOption(thirsty)), 'No cabe en el costal: venda material o tire algo.');
   click(filter(thirsty, 'agua'));
-  assert.equal(text(byClass(thirsty.sidebar, 'map-view__place-meta')[0]), 'Agua desde $ 2.000 ∙ no te cabe');
+  assert.equal(text(byClass(thirsty.sidebar, 'map-view__place-meta')[0]), 'Agua desde $ 2.000, no cabe');
   click(cta(thirsty));
   assert.equal(thirsty.game.marked[0].name, 'Recicladora El Progreso');
 
@@ -188,7 +189,7 @@ test('si «Ir a vender» lleva al Dealer, el texto no pide vender material', () 
 
   const hungry = view({ pois: [stall, dealer], needs });
   assert.equal(text(cta(hungry)), 'Ir a vender');
-  assert.equal(text(noOption(hungry)), 'Lo que te alcanza no te cabe: vende sustancias o tira algo.');
+  assert.equal(text(noOption(hungry)), 'Lo que alcanza no cabe: venda sustancias o tire algo.');
   click(cta(hungry));
   assert.equal(hungry.game.marked[0].name, 'Dealer');
 });
@@ -198,12 +199,12 @@ test('«Vender» distingue entre no llevar nada y que el dealer solo compre de n
   const pois = [...POIS, dealer];
   const empty = view({ pois, needs: { money: 0, carried: {} } });
   click(filter(empty, 'vender'));
-  assert.equal(text(noOption(empty)), 'No llevas nada que te compren.');
+  assert.equal(text(noOption(empty)), 'No llevo nada que me compren.');
   assert.equal(byClass(empty.sidebar, 'map-view__place').some(row => row.className.includes('is-broke')), false);
 
   const day = view({ pois, needs: { carriesSubstances: true, night: false, carried: {} } });
   click(filter(day, 'vender'));
-  assert.equal(text(noOption(day)), 'El dealer solo compra de noche ∙ desde las 20:00.');
+  assert.equal(text(noOption(day)), 'El jíbaro solo compra de noche, desde las 20:00.');
 
   const night = view({ pois, needs: { carriesSubstances: true, night: true, carried: {} } });
   click(filter(night, 'vender'));
@@ -215,8 +216,8 @@ test('con destino y «Todo» no hay botón; con un filtro sí, y reemplaza el de
   const waypoint = { name: 'Crafteo', icon: '🔨', x: 10, z: 0 };
   const map = view({ waypoint, needs: FREEZING });
   assert.equal(cta(map), undefined);
-  assert.match(text(byClass(map.sidebar, 'map-view__dest')[0]), /🔨 Crafteo/);
-  assert.ok(byClass(map.sidebar, 'map-view__place').find(row => text(row).includes('Crafteo')).className.includes('is-active'));
+  assert.match(text(byClass(map.sidebar, 'map-view__dest')[0]), /La mesa/);
+  assert.ok(byClass(map.sidebar, 'map-view__place').find(row => text(row).includes('La mesa')).className.includes('is-active'));
   click(filter(map, 'calor'));
   click(cta(map));
   assert.equal(map.game.gps.waypoint.name, 'Fogata de caneca');
@@ -477,7 +478,7 @@ test('Enter en el lienzo marca el centro solo si se movió la vista, y nunca ree
 test('«Centrar en mí» y «Ver toda la ciudad» deshacen el movimiento: Enter ya no reemplaza la ruta', () => {
   const map = view({ needs: FREEZING });
   click(cta(map));
-  map.game.mapRaster = { originX: 0, originZ: 0, worldWidth: 240, worldHeight: 322 };
+  map.game.mapPlan = { originX: 0, originZ: 0, worldWidth: 240, worldHeight: 322 };
   for (const reset of ['centerOnPlayer', 'fitCity']) {
     map._onKey(pressed('ArrowRight'));
     map[reset]();
@@ -531,9 +532,8 @@ test('el lienzo dibuja según zoom y filtro, y atenúa lo que no coincide', () =
   const state = {};
   const ctx = new Proxy(state, {
     get(target, key) {
-      if (key === 'measureText') return () => ({ width: 10 });
-      if (key === 'arc') return (x, y, r) => log.push({ r, alpha: target.globalAlpha ?? 1 });
-      if (key === 'fillText') return (t) => log.push({ text: t, alpha: target.globalAlpha ?? 1 });
+      // Cada lugar es una imagen ya hecha: lo que se comprueba es cuál se pega, a qué tamaño y con qué opacidad.
+      if (key === 'drawImage') return (img) => { if (img.glyph) log.push({ text: img.glyph, size: img.size, alpha: target.globalAlpha ?? 1 }); };
       if (key in target) return target[key];
       return () => {};
     },
@@ -541,27 +541,29 @@ test('el lienzo dibuja según zoom y filtro, y atenúa lo que no coincide', () =
   });
   const map = view();
   map.ctx = ctx;
-  const icons = () => log.filter(e => e.text).map(e => e.text);
+  map._hornoAlDia = () => {};
+  map._dibujo = (glyph, size) => ({ canvas: { glyph, size }, w: size, h: size });
+  map._reparto = () => [];
+  const icons = () => log.map(e => e.text);
+  const fire = pasarTexto('🔥'), mesa = pasarTexto('🔨');
 
   map.zoom = 1;
   map.draw();
-  assert.ok(!icons().includes('🔥') && !icons().includes('🍬'));
-  assert.ok(icons().includes('🔨'));
+  assert.ok(!icons().includes(fire) && !icons().includes(pasarTexto('🍬')));
+  assert.ok(icons().includes(mesa));
 
   log.length = 0;
   map.zoom = 2;
   map.draw();
-  const service = log.findIndex(e => e.text === '🔥');
-  assert.ok(service > 0);
-  assert.equal(log[service - 1].r, 7, 'en «Todo», puestos y fogatas van más pequeños');
-  assert.equal(log[log.findIndex(e => e.text === '🔨') - 1].r, 10);
+  assert.equal(log.find(e => e.text === fire).size, 18, 'en «Todo», puestos y fogatas van más pequeños');
+  assert.equal(log.find(e => e.text === mesa).size, 24);
 
   log.length = 0;
   map.filter = 'calor';
   map.draw();
-  const lit = log.findIndex(e => e.text === '🔥'), dim = log.findIndex(e => e.text === '🔨');
+  const lit = log.findIndex(e => e.text === fire), dim = log.findIndex(e => e.text === mesa);
   assert.equal(log[lit].alpha, 1);
-  assert.equal(log[lit - 1].r, 10, 'con filtro, lo que coincide va a tamaño normal');
+  assert.equal(log[lit].size, 24, 'con filtro, lo que coincide va a tamaño normal');
   assert.equal(log[dim].alpha, .35);
   assert.ok(dim < lit, 'lo atenuado queda debajo');
   assert.equal(state.globalAlpha, 1, 'la opacidad vuelve a la normalidad');
