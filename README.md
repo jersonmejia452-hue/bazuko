@@ -43,7 +43,7 @@ Este proyecto es un fork de [juanagogo/bazuko](https://github.com/juanagogo/bazu
 
 ## Capturas
 
-La [galería de cambios integrados](docs/cambios-integrados.md) reúne **10 capturas actuales, dos por cada uno de los cinco temas principales**, de la interfaz, personajes, barrios, vehículos, combate y natación.
+La [galería de cambios integrados](docs/cambios-integrados.md) reúne **12 capturas actuales, dos por cada uno de los seis temas principales**, de la interfaz, personajes, barrios, vehículos, combate y natación.
 
 Las imágenes siguientes conservan las vistas nocturnas compartidas durante el desarrollo; la galería anterior muestra la interfaz y los modelos actuales.
 

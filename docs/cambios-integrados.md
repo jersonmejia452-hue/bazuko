@@ -1,6 +1,6 @@
 # Cambios principales de BAZUKO
 
-10 capturas reales, dos por cada uno de los cinco temas principales. Tomadas el 1 de noviembre de 2026 en Chromium sobre el código `fe7c7f725c8db46440758c21d6730777d78ded84`, convertidas a WebP para reducir su peso.
+12 capturas reales, dos por cada uno de los seis temas principales. Tomadas el 1 de noviembre de 2026 en Chromium sobre el código `fe7c7f725c8db46440758c21d6730777d78ded84`, convertidas a WebP para reducir su peso.
 
 Las escenas se prepararon en sesiones locales aisladas. Las capturas de sala se identifican en cada apartado; las imágenes no son mediciones de FPS ni pruebas en dispositivos físicos o producción.
 
@@ -43,3 +43,11 @@ Golpes y reacciones en la partida, armas y combos; entrada al lago, flotación, 
 | Golpe y reacción | Natación en el lago |
 | --- | --- |
 | ![Golpe y reacción](images/cambios-integrados/16-02-golpe.webp) | ![Natación en el lago](images/cambios-integrados/17-01-nadar.webp) |
+
+## 6. Gráficos del escenario en escritorio
+
+Dos vistas de la ciudad 3D: avenida con pavimento, señalización, edificios y viaducto; parque con agua, ribera, vegetación y ambiente de lluvia. Ambas capturas son de escritorio a 1440 × 900.
+
+| Avenida y detalles urbanos | Parque, lago y viaducto |
+| --- | --- |
+| ![Gráficos de la avenida](images/cambios-integrados/18-01-avenida-graficos.webp) | ![Gráficos del parque y viaducto](images/cambios-integrados/18-02-parque-viaducto-graficos.webp) |
