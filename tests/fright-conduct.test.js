@@ -1120,4 +1120,3 @@ test('al conductor bravo el golpe no lo pone a correr como si huyera', async () 
   assert.notEqual(npc.character.last?.stance, 'huir');
   assert.equal(npc.character.last?.running, false);
 });
-

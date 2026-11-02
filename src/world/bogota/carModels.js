@@ -848,4 +848,3 @@ export const MODEL_PAINTS = {
 };
 export const TAXI_COLOR = taxiYellow[0];
 export const POLICE_COLOR = '#cfd2d2';
-

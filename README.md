@@ -43,7 +43,9 @@ Este proyecto es un fork de [juanagogo/bazuko](https://github.com/juanagogo/bazu
 
 ## Capturas
 
-Las capturas actuales muestran la ciudad de noche en tercera persona, con edificios de distintas alturas, tráfico y los nuevos espacios urbanos. Son imágenes reales del juego compartidas durante el desarrollo.
+La [galería de cambios integrados](docs/cambios-integrados.md) reúne **34 capturas actuales, dos por cada uno de los 17 temas**, de la interfaz, personajes, barrios, vehículos, combate y natación.
+
+Las imágenes siguientes conservan las vistas nocturnas compartidas durante el desarrollo; la galería anterior muestra la interfaz y los modelos actuales.
 
 ### Parque, palomas y El Chato
 
