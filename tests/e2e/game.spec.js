@@ -360,7 +360,8 @@ test('volumen por categoría en Ajustes y pisadas al caminar', async ({ page }) 
 
 test('salto en el bucle real, fabricación con costal lleno y llegada a un edificio', async ({ page }) => {
   await startNewGame(page);
-  await page.locator('#game-canvas').click();
+  // El clic ahora inicia un golpe y bloquea el salto durante el ataque.
+  // Esta prueba de movimiento empieza directamente con el teclado.
   await page.evaluate(() => {
     const player = window.__game.player;
     const probe = window.__jumpProbe = { start: player.position.y, peak: player.position.y, active: true };
