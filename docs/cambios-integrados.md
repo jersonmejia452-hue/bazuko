@@ -139,4 +139,3 @@ Entrada al lago, flotación, estela y regreso a tierra; el viaducto conserva su 
 | Natación en el lago | Salida a la orilla |
 | --- | --- |
 | ![Natación en el lago](images/cambios-integrados/17-01-nadar.webp) | ![Salida a la orilla](images/cambios-integrados/17-02-orilla.webp) |
-
