@@ -68,6 +68,10 @@ import { LimpiezaSocialSystem } from '../systems/LimpiezaSocialSystem.js';
 import { SubstanceEffects } from '../systems/SubstanceEffects.js';
 import { SUBSTANCE_EFFECTS } from '../data/substanceEffects.js';
 import { StealSystem } from '../features/steal.js';
+import { CarjackSystem } from '../systems/CarjackSystem.js';
+import { MirrorCinematic } from '../ui/MirrorCinematic.js';
+import { ObjectiveSystem } from '../systems/ObjectiveSystem.js';
+import { ObjectiveTracker } from '../ui/ObjectiveTracker.js';
 import { openRadioModal } from '../ui/RadioModal.js';
 
 
@@ -174,10 +178,20 @@ export class Game {
 
     this.droppedItems = new DroppedItemSystem(this);
     this.steal = new StealSystem(this);
+
+    // Objetivos de la primera hora: escuchan los eventos que ya emite el juego.
+    this.objectives = new ObjectiveSystem();
+    for (const name of new Set(this.objectives.defs.map(d => d.event).filter(Boolean))) {
+      window.addEventListener(name, (e) => this.objectives.notify(name, e.detail));
+    }
+    this._objectiveTimer = 0;
+    this._objectiveRoute = null;
     this.interaction.personCloserThan = (distance) => this.steal.personCloserThan(distance);
     this.zorra = new ZorraSystem();
     this.interaction.zorra = this.zorra;
     this.zorraCtl = new ZorraController(this);
+    this.carjack = new CarjackSystem(this);
+    this.mirrorCinematic = new MirrorCinematic(this);
 
     // HUD, menús y creador de personaje
     this.hud = new HUD();
@@ -200,6 +214,7 @@ export class Game {
     this.hud.setMuted(this.audio.isMuted());
     this.creator = createCreator({ audio: null });
     this.inventoryUI = new InventoryUI(this.inventory, this);
+    this.objectiveTracker = new ObjectiveTracker({ onRoute: () => this.routeToObjective() });
     this.panelDock = createPanelDock(this);
     this.cameraRig.canControl = () => this.photoMode?.active || (!this.paused && !this.isSleeping &&
       !this.hud._talentOpen && !this.hud._craftOpen && !this.hud._dealerOpen);
@@ -282,6 +297,7 @@ export class Game {
 
     const district = this.world.active;
     this._loadIfSave();
+    this._startObjectives();
     // Cada entrada comienza de noche y con lluvia, también al retomar un guardado.
     this.clock.hour = 22;
     if (this.weather) {
@@ -452,6 +468,79 @@ export class Game {
     this.gpsBeacon?.set(wp, wp ? this.world.active?.getGroundHeight?.(wp.x, wp.z) ?? 0 : 0);
   }
 
+  /** Ubicación y nombre del lugar al que apunta un objetivo. */
+  _objectiveTarget(def) {
+    const reserved = this.world.active?.reserved ?? {};
+    const places = {
+      bed: [this.cambuche?.position ?? reserved.bed, 'Cambuche', '⛺'],
+      sell: [this.sellPoint?.position ?? reserved.sell, 'Recicladora El Progreso', '♻️'],
+      shop: [this.shop?.position ?? reserved.shop, 'Tienda La Esquinita', '🏪'],
+      craft: [this.craftingStation?.position ?? reserved.craft, 'Crafteo', '🔨'],
+      dog: [this.dog?.position, 'El Chato', '🐕']
+    };
+    const [pos, name, icon] = places[def?.target] ?? [];
+    return pos && Number.isFinite(pos.x) && Number.isFinite(pos.z) ? { x: pos.x, z: pos.z, name, icon } : null;
+  }
+
+  _isObjectiveRoute() {
+    const wp = this.gps?.waypoint, own = this._objectiveRoute;
+    return !!(wp && own && Math.abs(wp.x - own.x) < .01 && Math.abs(wp.z - own.z) < .01);
+  }
+
+  /** La cinta del cartón: marca la ruta al lugar del objetivo actual. */
+  routeToObjective({ silent = false } = {}) {
+    const current = this.objectives?.current;
+    const target = this._objectiveTarget(current);
+    if (!target || !this.gps) {
+      if (!silent && current) this._avisar(current.hint, 'info');
+      return false;
+    }
+    this._objectiveRoute = target;
+    return this.setGpsWaypoint(target, { silent });
+  }
+
+  /** Al cargar: alcanza el estado guardado y marca la ruta del primer objetivo. */
+  _startObjectives() {
+    if (!this.objectives) return;
+    if (this._objectivesCatchUp) this.objectives.catchUp(this);
+    this._objectivesCatchUp = false;
+    this._activateObjective();
+    this._renderObjective();
+  }
+
+  /** Marca la ruta del objetivo nuevo si el jugador no tiene un destino propio. */
+  _activateObjective() {
+    if (this.gps?.waypoint && !this._isObjectiveRoute()) return;
+    if (this._isObjectiveRoute()) this.clearGpsWaypoint();
+    if (this.objectives.current?.target) this.routeToObjective({ silent: true });
+  }
+
+  _renderObjective() {
+    const o = this.objectives;
+    this.objectiveTracker?.render(o.current, o.progress(this), o.index, o.total);
+  }
+
+  _updateObjectives(dt) {
+    if (!this.objectives) return;
+    this._objectiveTimer -= dt;
+    if (this._objectiveTimer > 0) return;
+    this._objectiveTimer = .25;
+    // Una partida importada sin objetivos se pone al día igual que al cargar.
+    if (this._objectivesCatchUp) { this._startObjectives(); return; }
+    const done = this.objectives.update(this);
+    if (done) {
+      const { dinero = 0, xp = 0 } = done.reward ?? {};
+      if (dinero) this.stats.dinero += dinero;
+      if (xp) this.stats.addXP(xp, this.talents);
+      const parts = [dinero && `+${cop(dinero)}`, xp && `+${xp} de experiencia`].filter(Boolean);
+      this._avisar(`Objetivo cumplido: ${done.title}${parts.length ? ` (${parts.join(', ')})` : ''}`, 'rare');
+      if (this.objectives.finished) this._avisar('Ya sabe sobrevivir en la calle. El resto de Bogotá es suyo.', 'rare');
+      this._activateObjective();
+      this._save();
+    }
+    this._renderObjective();
+  }
+
   /** Yaw de la cámara a partir de su matriz real; sirve en vista isométrica y de tercera persona. */
   _cameraYaw() {
     const e = this.cameraRig.camera.matrixWorld.elements;
@@ -489,6 +578,7 @@ export class Game {
     this.traffic = null;
     this.pickups.forEach((p) => p.dispose());
     this.pickups = [];
+    this.carjack?.reset();
     this.cars.forEach((c) => c.dispose());
     this.cars = [];
     this.interaction.targets = [];
@@ -762,7 +852,13 @@ export class Game {
       if (data.cart && this.cart) {
         this.cart.loadState(data.cart, this.player, this.inventory);
       }
+      if (data.carroRobado) {
+        this.carjack?.restore(data.carroRobado, { CarClass: Car,
+          migrate: (pos) => this.world.active?.migrateSavedPosition?.(pos, data.worldLayoutVersion) });
+      }
       if (data.gps && this.gps) this.setGpsWaypoint({ ...data.gps, name: RENAMED_PLACES[data.gps.name] ?? data.gps.name }, { silent: true });
+      // Sin datos de objetivos es una partida anterior: se saltan los ya cumplidos sin premio.
+      this._objectivesCatchUp = !!this.objectives && !this.objectives.deserialize(data.objectives);
 
     }
   }
@@ -791,7 +887,9 @@ export class Game {
       radio: this.radio ? { isOn: this.radio.isOn, freq: this.radio.frequency, battery: this.radio.battery } : null,
       dog: { isFriend: !!this.dog?.isFriend, look: this.dog?.look ?? null },
       cart: this.cart ? this.cart.saveState() : null,
-      gps: this.gps?.serialize() ?? null
+      gps: this.gps?.serialize() ?? null,
+      carroRobado: this.carjack?.serialize() ?? null,
+      objectives: this.objectives?.serialize() ?? null
     };
   }
 
@@ -944,12 +1042,29 @@ export class Game {
     return !!c && Math.hypot(this.player.position.x - c.x, this.player.position.z - c.z) < radius;
   }
 
+  /** Temblor leve, proporcional al daño recibido en un cuadro; el desgaste lento (hambre, frío) no alcanza el umbral. */
+  _shakeOnDamage() {
+    const salud = this.stats?.salud;
+    if (!Number.isFinite(salud)) return 0;
+    const lost = (this._saludVista ?? salud) - salud;
+    this._saludVista = salud;
+    if (lost < 2) return 0;
+    // Mínimo a propósito: un golpe se nota, no sacude.
+    const amount = Math.min(.45, .15 + lost / 60);
+    this.cameraRig?.addTrauma?.(amount);
+    return amount;
+  }
+
   _onVehicleImpact({ speed, direction }) {
+    // Dentro de un carro robado los choques los resuelve CarjackSystem.
+    if (this.carjack?.driving) return;
     if (this._deathPending || this.stats.salud <= 0 || (this._vehicleImpactCooldown ?? 0) > 0) return;
     const damage = Math.min(100, Math.max(4, Math.round(.6 * speed ** 2 + 1.5 * speed)));
     this.stats.salud = Math.max(0, this.stats.salud - damage);
     this.stats.energia = Math.max(0, this.stats.energia - damage * .25);
     this._vehicleImpactCooldown = 1.5;
+    // Un atropello mortal corta el bucle antes del paso de temblor: se aplica aquí mismo.
+    this._shakeOnDamage();
     this._syncVehicleColliders();
     this.player.receiveVehicleImpact(direction, speed, { collisions: this.collisions });
     if (this.stats.salud === 0) this._deathCause = 'atropello';
@@ -1124,6 +1239,7 @@ export class Game {
     this.poopSystem?.activeProjectiles?.forEach?.(p => p.dispose?.());
     if (this.poopSystem) this.poopSystem.activeProjectiles = [];
 
+    this.carjack?.reset();
     const district = this.world.active;
     if (district?.reserved) {
       const spawn = district.reserved.respawn ?? { x: district.reserved.bed.x, z: district.reserved.bed.z + 2 };
@@ -1253,8 +1369,10 @@ export class Game {
     this.cameraRig.prepareMovement();
     const previousX = this.player.position.x, previousZ = this.player.position.z;
     this._syncVehicleColliders?.();
-    this._updatePlayerMovement(dt);
-    this.zorraCtl?.update(dt, this.input);
+    // Robo de carros: mientras se maneja, el carro reemplaza el movimiento a pie.
+    const driving = !this.player.isStunned && !this.player.isSwimming && (this.carjack?.update(dt, this.input) ?? false);
+    if (!driving) this._updatePlayerMovement(dt);
+    if (!driving) this.zorraCtl?.update(dt, this.input);
     this.waterEffects?.update(dt, this.player);
     if (this.player.waterFrame?.entered) this.audio.playWaterSplash?.(this.player.waterFrame.entryIntensity);
     this._swimSoundTimer = Math.max(0, (this._swimSoundTimer ?? 0) - dt);
@@ -1285,7 +1403,7 @@ export class Game {
     // Los objetos caducan antes de procesar E; los menús y la pestaña oculta pausan el plazo.
     this.droppedItems.update(dt);
     // 7. Interacción (basura, autos, recicladora, tienda, cambuche, dealer)
-    if (!this.player.isStunned) {
+    if (!this.player.isStunned && !driving) {
       // Los temporizadores y la selección de basura terminan normalmente al entrar;
       // nadar no permite comerciar ni iniciar acciones terrestres bajo el agua.
       const controls = this.player.isSwimming
@@ -1293,12 +1411,15 @@ export class Game {
       this.interaction.update(dt, controls, this.clock);
       if (this.player.isSwimming) this.interaction.currentTarget = this.interaction.currentTargetType = null;
     }
-    if (!this.player.isSwimming) this.steal?.update(dt);
+    if (!this.player.isSwimming && !driving) this.steal?.update(dt);
     else if (this.steal?.minigameActive) this.steal._endMinigame(false, 'cancel');
+    this.interaction.carjackPrompt = driving ? null : this.carjack?.prompt ?? null;
+    this.mirrorCinematic?.update(dt);
+    this._updateObjectives(dt);
     if (this._handleDeath()) return;
 
     // 7b. Mecánica de popó y lanzamiento a peatones
-    if (!this.player.isStunned && !this.player.isSwimming && this.input.consumePress('KeyX')) {
+    if (!this.player.isStunned && !this.player.isSwimming && !driving && this.input.consumePress('KeyX')) {
       const hasPoop = this.inventory.count('popo') > 0;
       if (hasPoop) {
         this.poopSystem.throwPoop(this.player, this.cameraRig);
@@ -1306,7 +1427,7 @@ export class Game {
         this.poopSystem.poop(this.player);
       }
     }
-    if (!this.player.isStunned && !this.player.isSwimming && this.input.consumePress('KeyZ')) {
+    if (!this.player.isStunned && !this.player.isSwimming && !driving && this.input.consumePress('KeyZ')) {
       this.poopSystem.poop(this.player);
     }
     this.poopSystem.update(dt);
@@ -1351,13 +1472,14 @@ export class Game {
     this.cart?.update(dt, this.player, this.audio);
 
     // 10. Audio
-    const moving = !this.player.isStunned && (this.input.axis.x !== 0 || this.input.axis.z !== 0 || Math.hypot(this.player.position.x - previousX, this.player.position.z - previousZ) > .001);
+    const moving = !this.player.isStunned && !driving && (this.input.axis.x !== 0 || this.input.axis.z !== 0 || Math.hypot(this.player.position.x - previousX, this.player.position.z - previousZ) > .001);
     const groundType = this.world.active?.getGroundTypeAt?.(this.player.position.x, this.player.position.z) ?? 'sidewalk';
     const isRaining = !!this.weather?.isRaining;
-    this.audio.updateWorld?.(dt, this.player.position, this.cameraRig.camera, this.traffic?.vehicles ?? [], this.world.active?.busServices ?? this.world.active?.busService, this.world.active?.npcs ?? []);
+    const audible = this.carjack?.audioEntry ? [...(this.traffic?.vehicles ?? []), this.carjack.audioEntry] : (this.traffic?.vehicles ?? []);
+    this.audio.updateWorld?.(dt, this.player.position, this.cameraRig.camera, audible, this.world.active?.busServices ?? this.world.active?.busService, this.world.active?.npcs ?? []);
     this.audio.setRaining?.(isRaining);
     // Las pisadas siguen la distancia recorrida en el suelo; en el aire no suenan.
-    const travelled = this.player.isGrounded === false || this.player.inWater ? 0 : Math.hypot(this.player.position.x - previousX, this.player.position.z - previousZ);
+    const travelled = driving || this.player.isGrounded === false || this.player.inWater ? 0 : Math.hypot(this.player.position.x - previousX, this.player.position.z - previousZ);
     this.audio.updateSteps(moving && this.player.zorraMult > 0, this.input.isRunning && this.player.canRun, groundType, isRaining, travelled, dt);
     this.audio.updateBoost(this.interaction.boostActive);
     this.overlays?.update?.(dt, this.weather, this.stats, this.psychosis);
@@ -1375,6 +1497,9 @@ export class Game {
     this.gpsBeacon?.update(dt, this.player.position);
     this.minimap?.update(this.player.position, this._cameraYaw(), this._getPOIs(now), now,
       { gps: this.gps, needs: this._needs, running: this.input.isRunning && (this.input.axis.x !== 0 || this.input.axis.z !== 0) });
+
+    // 12b. La cámara acusa cada golpe que baja la salud de una vez (atropellos, puños, varillas).
+    this._shakeOnDamage();
 
     // 13. UI
     this.hud.setMovementState?.(this.player);

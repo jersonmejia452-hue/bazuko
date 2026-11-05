@@ -177,3 +177,14 @@ test('sin respaldo, una partida legible con la suma vieja se carga igual', () =>
   assert.equal(save.load().stats.dinero, 5);
   assert.equal(almacen.getItem(`${KEY}-suma`), null);
 });
+
+test('el saneado conserva las secciones que no conoce, como objetivos y carro robado', () => {
+  const almacen = memoria();
+  const save = new SaveSystem(almacen);
+  const objectives = { index: 3, done: ['comer'] };
+  const carroRobado = { id: 'taxi-2', pos: [1, 0, 2] };
+  save.save({ ...partida(), objectives, carroRobado });
+  const leida = save.load();
+  assert.deepEqual(leida.objectives, objectives);
+  assert.deepEqual(leida.carroRobado, carroRobado);
+});
