@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SaveSystem, AUTOSAVE_INTERVAL } from '../src/systems/SaveSystem.js';
+import { SaveSystem, AUTOSAVE_INTERVAL, SAVE_VERSION, parseSave } from '../src/systems/SaveSystem.js';
 
 const memoryStorage = () => {
   const data = new Map();
@@ -17,7 +17,7 @@ test('guarda y carga la partida con versión y fecha', () => {
   assert.equal(save.save({ stats: { dinero: 5000 } }), true);
   const data = save.load();
   assert.equal(data.stats.dinero, 5000);
-  assert.equal(data.v, 2);
+  assert.equal(data.v, SAVE_VERSION);
   assert.equal(typeof data.savedAt, 'number');
 });
 
@@ -39,7 +39,7 @@ test('un guardado dañado no sobrescribe el respaldo bueno', () => {
   save.save({ stats: { dinero: 2000 } });
   storage.setItem('habitante-de-calle-save-v1', 'basura');
   save.save({ stats: { dinero: 3000 } });
-  assert.equal(JSON.parse(storage.getItem('habitante-de-calle-save-v1-respaldo')).stats.dinero, 1000);
+  assert.equal(parseSave(storage.getItem('habitante-de-calle-save-v1-respaldo')).stats.dinero, 1000);
 });
 
 test('sin partida devuelve null y sin almacenamiento no falla', () => {
