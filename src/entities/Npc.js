@@ -180,8 +180,9 @@ const CONDUCT = {
 const FALL = { length: 1.9, body: .42, trunk: .24, step: .32, floor: .3, curb: .09, low: .12, high: 1.2, legs: .85, legsBody: .15, turnUntil: .55 };
 // De menos a más giro: lo que menos se note. Más allá de esto se escurre donde está.
 // Paso de quien deambula: tarda `rampTime` s en tomar el paso desde quieto y, con el destino de lado o
-// detrás (coseno bajo `facingCos`), gira con pasos cortos (`turnPace` del paso) y más rápido (`turnBoost`).
-export const STRIDE = Object.freeze({ rampTime: .45, facingCos: .3, turnPace: .18, turnRate: 5, turnBoost: 4, stopTime: .2 });
+// detrás (coseno bajo `facingCos`), gira con pasos cortos (`turnPace` del paso) y más rápido (`turnBoost`). En los
+// últimos `arriveDist` m de su recorrido acorta el paso hasta `arrivePace` y se detiene sin clavarse.
+export const STRIDE = Object.freeze({ rampTime: .45, facingCos: .3, turnPace: .18, turnRate: 5, turnBoost: 4, stopTime: .2, arriveDist: .7, arrivePace: .3 });
 const NO_TURN = [0];
 const FALL_TURNS = [0, Math.PI / 4, -Math.PI / 4, Math.PI / 2, -Math.PI / 2, 3 * Math.PI / 4, -3 * Math.PI / 4, Math.PI];
 // Lo que se le cae a quien queda noqueado, en metros desde sus pies: `x` hacia su izquierda y `z` hacia adelante. Queda
@@ -725,7 +726,10 @@ export class Npc {
       // con pasos cortos y luego toma el paso. Antes salía a toda marcha de lado mientras giraba.
       const off = wrapAngle(Math.atan2(d.x, d.z) - this.root.rotation.y);
       const facing = Math.max(STRIDE.turnPace, (Math.cos(off) - STRIDE.facingCos) / (1 - STRIDE.facingCos));
-      this._stride = Math.min(facing, (this._stride ?? 0) + dt / STRIDE.rampTime);
+      // Al final del recorrido frena en los últimos pasos en vez de clavarse en seco.
+      const last = !this.route[this.routeIndex + 1] || !(this.navigation || this.fijo?.out);
+      const arrive = last ? Math.max(STRIDE.arrivePace, Math.min(1, dist / STRIDE.arriveDist)) : 1;
+      this._stride = Math.min(facing, arrive, (this._stride ?? 0) + dt / STRIDE.rampTime);
       const step = Math.min(dist, this._paceNow() * this._stride * dt);
       const next = this._nextPosition.copy(this.position).addScaledVector(d.normalize(), step);
       if (!this._canStep(next.x, next.z)) {
