@@ -17,6 +17,7 @@ import {
 } from '../utils/constants.js';
 import { cop } from '../utils/money.js';
 import { originEffect } from '../data/origins.js';
+import { TEXTOS_ZORRA } from '../data/zorra.js';
 
 export class InteractionSystem {
   constructor(player, inventory, stats, audio, diseaseSystem, talentSystem, craftingSystem) {
@@ -32,6 +33,7 @@ export class InteractionSystem {
     this.originId = null;   // origen del personaje (ver data/origins.js)
     this.currentTarget = null;
     this.currentTargetType = null;
+    this.zorra = null;      // ZorraSystem; lo asigna el juego
 
     this.boostActive = false;
     this.boostTimer = 0;
@@ -91,6 +93,7 @@ export class InteractionSystem {
     let nearestDist = INTERACT_RANGE;
 
     for (const t of this.targets) {
+      if (t.interactable === false) continue;
       // Un carro sin nada que robar no da aviso ni le quita el turno a lo que tenga al lado.
       if (t.stealable === false) continue;
       // Un carro se alcanza también desde sus espejos; lo demás, desde su centro.
@@ -99,7 +102,10 @@ export class InteractionSystem {
         nearestDist = d;
         nearest = t;
         // Determinar tipo por `kind` o por métodos disponibles
-        if (t.kind === 'shop') nearestType = 'shop';
+        if (t.kind === 'dropped-item') nearestType = 'dropped-item';
+        if (t.kind === 'bolirana') nearestType = 'bolirana';
+        if (t.kind === 'zorra' || t.kind === 'reciclador') nearestType = t.kind;
+        else if (t.kind === 'shop') nearestType = 'shop';
         else if (t.kind === 'cambuche') nearestType = 'cambuche';
         else if (t.kind === 'dog') nearestType = 'dog';
         else if (t.kind === 'cart') nearestType = 'cart';
@@ -153,11 +159,17 @@ export class InteractionSystem {
     // Sin objetivo la tecla sigue libre: el cosquilleo la lee después, en `StealSystem`.
     if (nearest && input.consumePress('KeyE')) {
       switch (nearestType) {
+        case 'dropped-item':
+          this._collectDroppedItem(nearest);
+          break;
         case 'pickup':
           this._harvestTrash(nearest, false);
           break;
         case 'sell':
           window.dispatchEvent(new CustomEvent('open-recycler'));
+          break;
+        case 'bolirana':
+          window.dispatchEvent(new CustomEvent('open-bolirana', { detail: { target: nearest } }));
           break;
         case 'shop':
           window.dispatchEvent(new CustomEvent('open-shop', { detail: { target: nearest } }));
@@ -171,6 +183,9 @@ export class InteractionSystem {
         case 'fireBarrel':
           this._warmAtFire(nearest);
           break;
+        case 'reciclador':
+          nearest.interactuar();
+          break;
         case 'dog':
           this._interactDog(nearest);
           break;
@@ -178,6 +193,10 @@ export class InteractionSystem {
           nearest.toggleGrab(this.player, this.inventory);
           break;
         case 'car':
+          if (this.zorra?.empujando) {
+            window.dispatchEvent(new CustomEvent('toast', { detail: { text: TEXTOS_ZORRA.sueltaPrimero, type: 'warn' } }));
+            break;
+          }
           this._stealCar(nearest);
           break;
         case 'dealer':
@@ -193,8 +212,9 @@ export class InteractionSystem {
     }
 
     // === Pedir limosna (B o L) ===
+    // Con carros en rojo al lado y algo con qué trabajar, la tecla es del rebusque (RebusqueSystem).
     if (input.consumePress('KeyB') || input.consumePress('KeyL')) {
-      this._beg();
+      if (!this.rebusque?.intentar()) this._beg();
     }
 
     // === Boost (F) ===
@@ -214,6 +234,16 @@ export class InteractionSystem {
       this.stats.saludMental = Math.min(100, this.stats.saludMental + 15);
       window.dispatchEvent(new CustomEvent('toast', {
         detail: { text: `Le di ${ITEMS[foodItem.id]?.name ?? 'comida'} a El Chato. Ahora me acompaña.`, type: 'rare' }
+      }));
+    } else if (dog.isFriend && dog.guarding) {
+      dog.stopGuarding();
+      dog.pet();
+      window.dispatchEvent(new CustomEvent('toast', { detail: { text: 'Llamé a El Chato y ya me acompaña otra vez.', type: 'info' } }));
+    } else if (dog.isFriend && dog.cambucheCerca && dog.cambuchePos) {
+      dog.guard(dog.cambuchePos);
+      dog.pet();
+      window.dispatchEvent(new CustomEvent('toast', {
+        detail: { text: 'Le pedí a El Chato que cuidara el cambuche. De noche espanta a los ladrones.', type: 'info' }
       }));
     } else {
       if (!dog.pet()) return;
@@ -250,6 +280,23 @@ export class InteractionSystem {
         text: 'Me calenté las manos en la fogata: +calor, +ánimo, +energía.',
         type: 'info'
       }
+    }));
+  }
+
+  _collectDroppedItem(target) {
+    const quantity = target.collect();
+    if (!quantity) {
+      this.audio?.play('full');
+      window.dispatchEvent(new CustomEvent('toast', {
+        detail: { text: target.collectError || 'El objeto ya no está disponible.', type: 'info' }
+      }));
+      return;
+    }
+    this.audio?.play('pickup');
+    this.player.playAction?.('buscar', .4);
+    // Recuperar lo propio no vuelve a dar XP, rareza, ánimo ni riesgo de enfermedad.
+    window.dispatchEvent(new CustomEvent('pickup', {
+      detail: { added: [`${target.item.name}${quantity > 1 ? ` ×${quantity}` : ''}`], rare: null, sorted: false }
     }));
   }
 
@@ -340,7 +387,7 @@ export class InteractionSystem {
     }
 
     window.dispatchEvent(new CustomEvent('steal', {
-      detail: { added, caught: result.caught, police: false, chase: false }
+      detail: { added, caught: result.caught, police: false, chase: false, car: target, mirror: result.items.includes('retrovisor') }
     }));
   }
 
@@ -517,7 +564,8 @@ export class InteractionSystem {
     const isRare = Math.random() < 0.08;
     const amount = isRare
       ? (Math.random() < 0.5 ? 5000 : 10000)
-      : Math.round((2 + Math.random() * 13) * this._origin('begMult')) * 100;
+      : Math.round((2 + Math.random() * 13) * this._origin('begMult') * (this.reputation?.multiplicadorLimosna ?? 1)
+        * (this.jornada?.franja?.limosna ?? 1)) * 100;
 
     this.stats.dinero += amount;
     this.stats.animo = Math.min(100, this.stats.animo + (isRare ? 6 : 2));

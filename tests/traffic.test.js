@@ -4,7 +4,8 @@ import { beforeEach, mock, test } from 'node:test';
 import * as THREE from 'three';
 import * as textures from '../src/world/bogota/textures.js';
 import { TrafficRoute } from '../src/world/bogota/TrafficRoute.js';
-import { trafficTargetVehicles } from '../src/systems/trafficDensity.js';
+import { trafficTargetVehicles, motoShare } from '../src/systems/trafficDensity.js';
+import { MOTO_LATERAL } from '../src/world/bogota/motos.js';
 
 beforeEach(() => { globalThis.window = new EventTarget(); });
 
@@ -133,6 +134,29 @@ test('el tráfico recorre vueltas completas, gira las ruedas y mantiene la dista
     car.update(1000);
     assert.equal(car.marker.visible, false, 'Un carro de tráfico no muestra el marcador de estacionado');
   }
+  traffic.dispose();
+});
+
+test('una moto se cuela por su franja y pasa el carro parado del carril', () => {
+  const scene = new THREE.Scene();
+  const route = new TrafficRoute(0, 600, 0, 90);
+  const traffic = new TrafficSystem(scene, [route], { carsPerRoute: 0, random: () => .5 });
+  // El conteo decide el tipo sin gastar azar: 7 es moto y 10 es carro.
+  traffic._spawnCount = 6;
+  const moto = traffic._spawn(scene, route, 20, false);
+  assert.equal(moto.car.isMoto, true);
+  traffic._spawnCount = 9;
+  const car = traffic._spawn(scene, route, 30, false);
+  assert.ok(!car.car.isMoto, 'El décimo del conteo sigue siendo carro');
+  car.cruiseSpeed = 0;
+  for (let frame = 0; frame < 400; frame++) traffic.update(.1);
+  assert.ok(car.speed < .1, `El carro parado se movió a ${car.speed}`);
+  const behind = (car.distance - moto.distance + route.length) % route.length;
+  assert.ok(behind > route.length / 2, `La moto quedó ${behind} m por detrás del carro`);
+  // Y la franja es la suya: a un lado del carril, no encima del carro.
+  route.sample(moto.distance, traffic._position, traffic._direction);
+  const gap = Math.hypot(moto.car.position.x - traffic._position.x, moto.car.position.z - traffic._position.z);
+  assert.ok(Math.abs(gap - MOTO_LATERAL) < .01, `Franja a ${gap.toFixed(2)} m`);
   traffic.dispose();
 });
 
@@ -304,7 +328,9 @@ test('cada carro cambia de recorrido sin teletransportarse, invertir rumbo ni au
     const positions = traffic.vehicles.map(vehicle => vehicle.car.position.clone());
     traffic.update(.1);
     traffic.vehicles.forEach((vehicle, index) => {
-      assert.ok(vehicle.car.position.distanceTo(positions[index]) <= vehicle.cruiseSpeed * .1 + 1e-6);
+      // La moto va por su franja, a un lado del carril: en el giro su cuerpo recorre un arco algo mayor que la línea.
+      const limit = vehicle.cruiseSpeed * .1 * (1 + (vehicle.lateral ?? 0) / 3.2) + 1e-6;
+      assert.ok(vehicle.car.position.distanceTo(positions[index]) <= limit);
       assert.ok(Number.isFinite(vehicle.distance));
     });
   }
@@ -561,6 +587,22 @@ test('un cruce repentino provoca atropello sin eliminar la velocidad de frenado'
   }
   assert.equal(hits.length, 1, 'Un mismo contacto no aplica daño en cada cuadro');
   assert.ok(stopped, 'El conductor sigue frenando después del impacto hasta detenerse');
+  traffic.dispose();
+});
+
+test('el contacto al frenar a baja velocidad también registra el atropello', () => {
+  const traffic = new TrafficSystem(new THREE.Scene(), [new TrafficRoute(0, 240, 0, 240, 3.2)], { carsPerRoute: 1, random: () => .5 });
+  const vehicle = traffic.vehicles[0], direction = new THREE.Vector3();
+  placeOnStraight(vehicle, 20, 0, 1, 0);
+  vehicle.speed = 0.8;
+  vehicle.route.sample(vehicle.distance, vehicle.car.position, direction);
+  const player = vehicle.car.position.clone().addScaledVector(direction, vehicle.car.length / 2 + 0.55);
+  const hits = [];
+
+  traffic._checkPlayerImpact(vehicle, player, vehicle.distance, 0.02, hit => hits.push(hit));
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0].speed, 0.8);
+  assert.ok(vehicle.impactStop);
   traffic.dispose();
 });
 
@@ -927,15 +969,18 @@ test('las redes del centro y del oriente no comparten carril', () => {
 /** Monta el tráfico como Game al poblar Bogotá, con el azar sembrado, y lo corre con city.update como Game._loop. */
 async function runLikeTheGame(randomSeed, minutes, { chases = false, density = 'normal', hour = 7 } = {}) {
   const original = Math.random;
-  let state = 0;
-  const next = () => {
-    state = (state + 0x6D2B79F5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  // Cada generador lleva su propio estado y arranca igual con la misma semilla.
+  const generator = () => {
+    let state = Math.imul(randomSeed + 1, 2654435761) >>> 0;
+    return () => {
+      state = (state + 0x6D2B79F5) >>> 0;
+      let t = state;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
   };
-  const seed = () => { state = Math.imul(randomSeed + 1, 2654435761) >>> 0; Math.random = next; };
+  const seed = () => { Math.random = generator(); };
   seed();
   // El habla de los peatones sortea con `performance.now()`: sin congelar el reloj, el azar que gastan depende de la
   // máquina y cada corrida da una ciudad distinta. Con este reloj de mentira las semillas se repiten.
@@ -946,7 +991,8 @@ async function runLikeTheGame(randomSeed, minutes, { chases = false, density = '
     const scene = new THREE.Scene(), collisions = new CollisionSystem(), city = new Bogota();
     city.build(scene, collisions);
     await Promise.all(city.npcs.map(npc => npc.ready));
-    // El tráfico se siembra de nuevo y lleva su propio generador: así no depende de cuánto azar gastó la ciudad al levantarse.
+    // La ciudad se siembra de nuevo y el tráfico lleva un generador aparte: así no depende de cuánto azar gastó la ciudad
+    // al levantarse ni del que gastan los peatones cuadro a cuadro (lo que dicen, a quién le hablan).
     seed();
     const parking = city.getParkingSpots();
     for (let i = parking.length - 1; i > 0; i--) {
@@ -963,7 +1009,7 @@ async function runLikeTheGame(randomSeed, minutes, { chases = false, density = '
       car.position.x += offset.x; car.position.z += offset.z;
       parked.push(car);
     }
-    const traffic = new TrafficSystem(scene, city.getTrafficRoutes(), { policeCount: 2, random: next });
+    const traffic = new TrafficSystem(scene, city.getTrafficRoutes(), { policeCount: 2, random: generator() });
     traffic.onVehicleRemoved = () => { removals++; };
     traffic.setDensity(density);
     traffic.setParkedCars(parked);
@@ -1059,6 +1105,9 @@ for (const seed of [1, 3, 11, 22, 29]) {
 
 
 // Los trancones que el jugador ve se quedan; el que no ve se despeja solo, y la flota repone el carro en un tramo libre.
+// Una semilla puede pasar los 8 minutos sin ningún trabado lejos (lo que cambia la secuencia del azar, como la
+// persecución o los testigos, cambia cuál), así que la retirada se exige en el conjunto de semillas.
+const retiradosPorSemilla = [];
 for (const seed of [1, 3, 11, 22, 29]) {
   test(`fuera de la vista ningún carro se queda parado, semilla ${seed}`, async () => {
     const { farWorst, vehicles, removals } = await runLikeTheGame(seed, 8, { density: 'maxima', hour: 8 });
@@ -1067,9 +1116,37 @@ for (const seed of [1, 3, 11, 22, 29]) {
       `${farWorst.kind} parado ${farWorst.seconds.toFixed(0)} s lejos de la vista en ${farWorst.x?.toFixed(1)},${farWorst.z?.toFixed(1)}`);
     assert.ok(Math.abs(vehicles - target) <= 3, `${vehicles} vehículos, objetivo ${target}`);
     // Retira a los trabados; si la cifra se dispara, el trancón se está comiendo la flota lejana.
-    assert.ok(removals > 0 && removals <= 20, `${removals} retirados`);
+    assert.ok(removals <= 20, `${removals} retirados`);
+    retiradosPorSemilla.push(removals);
   });
 }
+
+test('fuera de la vista la flota retira trabados en al menos varias semillas', () => {
+  assert.equal(retiradosPorSemilla.length, 5);
+  assert.ok(retiradosPorSemilla.filter(n => n > 0).length >= 3, `retirados por semilla: ${retiradosPorSemilla.join(', ')}`);
+});
+
+test('una patrulla trabada lejos de la vista reaparece en un tramo libre en vez de quedarse parada', () => {
+  const scene = new THREE.Scene(), route = new TrafficRoute(0, 200, 0, 120, 3.2);
+  let n = 0;
+  const traffic = new TrafficSystem(scene, [route], { carsPerRoute: 0, policeCount: 1, random: () => (n++ * .37) % 1 });
+  const patrol = traffic.vehicles.find(vehicle => vehicle.police);
+  traffic._viewPosition.set(-400, 0, -400);
+  const before = patrol.car.position.clone();
+  patrol.speed = 0;
+  for (let t = 0; t < 44; t += .5) traffic._clearStuck(.5);
+  assert.ok(patrol.car.position.distanceTo(before) < 1e-9, 'antes del límite sigue donde estaba');
+  for (let t = 0; t < 2; t += .5) traffic._clearStuck(.5);
+  assert.ok(traffic.vehicles.includes(patrol), 'la patrulla no se retira');
+  assert.ok(patrol.car.position.distanceTo(before) > 8, 'reaparece en otro tramo');
+  assert.ok(patrol.stoppedFor < 2, `parada desde hace ${patrol.stoppedFor} s`); // el reloj de parado empezó de nuevo
+  // Cerca del jugador no se mueve: el trancón que se ve se queda.
+  const seen = patrol.car.position.clone();
+  traffic._viewPosition.copy(seen);
+  for (let t = 0; t < 60; t += .5) traffic._clearStuck(.5);
+  assert.ok(patrol.car.position.distanceTo(seen) < 1e-9);
+  traffic.dispose();
+});
 
 test('el montaje diario crece lejos de la vista y se encoge de noche', () => {
   const scene = new THREE.Scene(), route = new TrafficRoute(0, 200, 0, 120, 3.2);

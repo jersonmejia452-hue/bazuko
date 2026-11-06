@@ -79,7 +79,12 @@ export class TrafficSignals {
     const axis = Math.abs(direction.x) >= Math.abs(direction.z) ? 0 : 1;
     const red = signalState(this.time, axis) !== 0;
     if (!red && !vehicle) return false;
+    // Primero lo más selectivo: casi ningún punto cae junto a un cruce. Las demás condiciones
+    // solo filtran, así que el orden no cambia el resultado.
+    const padX = axis === 0 ? length / 2 + .8 : 0;
+    const padZ = axis === 1 ? length / 2 + .8 : 0;
     for (const node of this.nodes) {
+      if (!(point.x >= node.x0 - padX && point.x <= node.x1 + padX && point.z >= node.z0 - padZ && point.z <= node.z1 + padZ)) continue;
       const claim = this.reservations.get(node);
       if (vehicle && claim?.owners.get(vehicle)?.entered) continue;
       // Quien ya está en el cruce lo despeja aunque cambie la luz.
@@ -90,10 +95,27 @@ export class TrafficSignals {
         ? (direction.x > 0 ? current.x < node.x0 : current.x > node.x1)
         : (direction.z > 0 ? current.z < node.z0 : current.z > node.z1);
       if (!approaching) continue;
-      const padX = axis === 0 ? length / 2 + .8 : 0;
-      const padZ = axis === 1 ? length / 2 + .8 : 0;
-      if (point.x >= node.x0 - padX && point.x <= node.x1 + padX && point.z >= node.z0 - padZ && point.z <= node.z1 + padZ) {
-        if (red || (vehicle && claim && !claim.owners.has(vehicle))) return true;
+      if (red || (vehicle && claim && !claim.owners.has(vehicle))) return true;
+    }
+    return false;
+  }
+
+  /**
+   * ¿Hay un semáforo en rojo (o amarillo) delante de quien está en `position` mirando hacia `direction`,
+   * a menos de `reach` metros del cruce? Sirve para la cola entera, no solo para el primero.
+   */
+  redAhead(position, direction, reach = 30) {
+    const axis = Math.abs(direction.x) >= Math.abs(direction.z) ? 0 : 1;
+    if (signalState(this.time, axis) === 0) return false;
+    for (const node of this.nodes) {
+      if (axis === 0) {
+        if (position.z < node.z0 - 1 || position.z > node.z1 + 1) continue;
+        const gap = direction.x > 0 ? node.x0 - position.x : position.x - node.x1;
+        if (gap >= 0 && gap <= reach) return true;
+      } else {
+        if (position.x < node.x0 - 1 || position.x > node.x1 + 1) continue;
+        const gap = direction.z > 0 ? node.z0 - position.z : position.z - node.z1;
+        if (gap >= 0 && gap <= reach) return true;
       }
     }
     return false;

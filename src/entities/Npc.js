@@ -13,8 +13,12 @@ import { LOW_STANCES, SEARCH_ACTION, personLook, pickArchetype, pickStop, pickWa
 import { UMBRELLA_REST, createCane, createClosedStick, createPhone, createUmbrella } from '../character/props.js';
 import { HAND_ON_FLOOR } from '../character/stances.js';
 import { WEAPONS } from '../data/weapons.js';
+import { NPC_VOICE_BANK } from '../data/npcVoices.js';
+import { vozPara } from '../data/vocesCalle.js';
+import { NpcCombat } from '../systems/NpcCombat.js';
 import { canReachCombatTarget, resolveCombatWalk } from '../systems/CombatGeometry.js';
 import { acabarFrase, empezarFrase } from '../ui/frases.js';
+import { ShuffleBag, sameSex } from '../systems/voiceVariety.js';
 
 const any = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
@@ -27,6 +31,12 @@ const POOP_SCREAMS = [
   '¡¡QUÉ PESTILENCIA, AUXILIO ME EMBARRARON!!',
   '¡¡MALDITO ENFERMO, ME LAS VA A PAGAR!!'
 ];
+const CAR_SCREAMS = [
+  '¡¡AY, ME ATROPELLÓ ESE LOCO!!',
+  '¡¡MIRE POR DÓNDE MANEJA, GONORREA!!',
+  '¡¡CASI ME MATA, HIJUEPUTA!!',
+  '¡¡AUXILIO, UN CARRO ME LLEVÓ!!'
+];
 const THEFT_SCREAMS = [
   '¡¡LADRÓN, ME ESTÁ ROBANDO!!',
   '¡¡GONORREA, SUÉLTEME EL BOLSILLO!!',
@@ -36,6 +46,37 @@ const THEFT_SCREAMS = [
 ];
 
 // Distancias (m) al jugador
+export { NPC_VOICE_BANK } from '../data/npcVoices.js';
+
+const voiceLastPlayedAt = new Map();
+const voiceBags = new Map();
+const VOICE_REPEAT_DELAY = 8000;
+
+/**
+ * Una frase de la situación que le cuadre a esa persona: de su sexo (sin marcar = hombre) y de su voz
+ * (`voz`). Quien tiene voz dice las suyas; si en esa situación no tiene ninguna, alguna sin voz marcada, nunca
+ * la de otro. Sin voz todavía, cualquiera de su sexo. Barajada: no se repite ninguna hasta que salgan todas.
+ */
+export function getRandomVoice(category, gender, voz = null) {
+  const bank = NPC_VOICE_BANK[category]?.filter(entry => sameSex(entry, gender)) ?? [];
+  let pool = voz ? bank.filter(entry => entry.voz === voz) : bank;
+  if (!pool.length && voz) pool = bank.filter(entry => !entry.voz);
+  const now = performance.now();
+  const available = pool.filter(entry => now - (voiceLastPlayedAt.get(entry.audio) ?? -Infinity) >= VOICE_REPEAT_DELAY);
+  if (!voiceBags.has(category)) voiceBags.set(category, new ShuffleBag());
+  const entry = voiceBags.get(category).draw(available, item => item.audio);
+  if (!entry) return null;
+  voiceLastPlayedAt.set(entry.audio, now);
+  return entry;
+}
+
+const ASSAULT_SPEED = 3.8; // m/s, lo que corre quien se suma a una golpiza (NpcCombat)
+const AMBIENT_VOICE_DISTANCE = 2.8;
+const AMBIENT_VOICE_COOLDOWN = 14000;
+// El vendedor en su puesto y quien pide en el piso le hablan a quien pasa cerca, sin que tenga que rozarlos.
+const CALL_OUT_DISTANCE = 6.5, CALL_OUT_MIN = 16, CALL_OUT_EXTRA = 14; // m, s, s
+const SMELL_VOICE_CHANCE = .55; // de cada vez que alguien se tapa la nariz, cuántas lo dice en voz alta
+
 export const NPC_LOD = {
   fullIn: 7,       // cerca: pasa al modelo completo
   fullOut: 10,     // se aleja: vuelve al liviano (histéresis para que no parpadee)
@@ -79,6 +120,9 @@ const CHANGED_UNSEEN = .3; // s sin animarse: lo que hizo mientras tanto nadie l
 
 // Golpes: sin muerte ni desaparición. A 0 de salud el peatón cae, queda tendido y se levanta huyendo.
 export const NPC_HEALTH = 100;
+/** m/s desde los que un carro tira al peatón al piso; más despacio solo lo empuja (≈ 22 km/h). */
+export const CAR_KNOCKDOWN_SPEED = 6;
+
 export const NPC_COMBAT = {
   stagger: 0.28,   // s de sacudón tras cada golpe (no camina; el golpe lo empuja)
   flee: 5,         // s de huida veloz tras recibir un golpe
@@ -135,6 +179,9 @@ const CONDUCT = {
 // Al caer: el largo que ocupa acostado, de los pies a la cabeza, y lo que aguanta de desnivel debajo del cuerpo.
 const FALL = { length: 1.9, body: .42, trunk: .24, step: .32, floor: .3, curb: .09, low: .12, high: 1.2, legs: .85, legsBody: .15, turnUntil: .55 };
 // De menos a más giro: lo que menos se note. Más allá de esto se escurre donde está.
+// Paso de quien deambula: tarda `rampTime` s en tomar el paso desde quieto y, con el destino de lado o
+// detrás (coseno bajo `facingCos`), gira con pasos cortos (`turnPace` del paso) y más rápido (`turnBoost`).
+export const STRIDE = Object.freeze({ rampTime: .45, facingCos: .3, turnPace: .18, turnRate: 5, turnBoost: 4, stopTime: .2 });
 const NO_TURN = [0];
 const FALL_TURNS = [0, Math.PI / 4, -Math.PI / 4, Math.PI / 2, -Math.PI / 2, 3 * Math.PI / 4, -3 * Math.PI / 4, Math.PI];
 // Lo que se le cae a quien queda noqueado, en metros desde sus pies: `x` hacia su izquierda y `z` hacia adelante. Queda
@@ -277,6 +324,13 @@ export class Npc {
     this._punchFacing = this.root.rotation.y;
     this.maxHealth = NPC_HEALTH;
     this.health = NPC_HEALTH;
+    this.valentia = Math.random();
+    this.assaultAction = null;
+    this.combatActionDuration = 0;
+    this.combatAI = new NpcCombat(this);
+    this._lastVoiceTime = 0;
+    this._lastPlayerDistance = Infinity;
+    this._lastSpokenTime = 0;
     this.koState = null;       // null | 'down' (cayendo o tendido) | 'rising'
     this.koTimer = 0;
     this._koBlend = 0;         // 0 de pie .. 1 tendido
@@ -369,7 +423,8 @@ export class Npc {
     return null;
   }
 
-  hitByPoop(projectileOrigin = null) {
+  /** `voz: false` cuando no fue popó (el carro robado que casi lo atropella usa el mismo susto). */
+  hitByPoop(projectileOrigin = null, { voz = true } = {}) {
     this.isSplatted = true;
     this.splatTimer = 12;
     this._fleeFrom(projectileOrigin);
@@ -388,12 +443,193 @@ export class Npc {
     }
 
     this._scream(POOP_SCREAMS);
+    if (voz) this.speakScenario('poop', true);
+  }
+
+  /**
+   * Lo golpea un carro (el que maneja el jugador). Rápido lo tira al piso hacia donde va el carro y
+   * se levanta para huir; despacio lo empuja, trastabilla y sale corriendo. Sin mancha ni botín.
+   * @param {{x:number, z:number}} carPosition centro del carro
+   * @param {number} speed m/s del carro
+   * @param {{x:number, z:number}} [heading] hacia dónde avanza el carro: el cuerpo sale despedido hacia ese lado
+   */
+  hitByCar(carPosition, speed = 5, heading = null) {
+    if (this._disposed || this.koState) return false;
+    this._witness = null;
+    let dx = this.position.x - (carPosition?.x ?? this.position.x), dz = this.position.z - (carPosition?.z ?? this.position.z);
+    // Lo que manda es el empuje del carro; el lado solo lo abre un poco.
+    if (heading && Number.isFinite(heading.x) && Number.isFinite(heading.z)) {
+      const side = Math.hypot(dx, dz) || 1;
+      dx = heading.x * 1.6 + dx / side * .6; dz = heading.z * 1.6 + dz / side * .6;
+    }
+    const len = Math.hypot(dx, dz);
+    if (len > 1e-4) this._lastHit.set(dx / len, 0, dz / len);
+    this.panicDir = { x: this._lastHit.x, z: this._lastHit.z };
+    this._punchFacing = Math.atan2(-this._lastHit.x, -this._lastHit.z);
+    this.target = null; this.route = []; this.routeIndex = 0; this.wait = 0;
+    this._cowering = false; this._fleeRouted = false;
+    this.combatAI?.dispose?.();
+    const low = LOW_STANCES.has(this.stance);
+    const bench = this.fijo?.stance === 'banca' && !this.fijo.out && low;
+    this._leaveSpot();
+    const push = Math.min(3.2, Math.max(0, speed) * .35);
+    // El empujón recorre `push` metros mientras dura el sacudón (ver _updateReaction).
+    this._knockVel.copy(this._lastHit).multiplyScalar(low ? 0 : push * 2 / NPC_COMBAT.stagger);
+    this.staggerTimer = NPC_COMBAT.stagger;
+    if (speed >= CAR_KNOCKDOWN_SPEED || low) {
+      this.health = 0;
+      this._startKnockout(bench);
+    } else {
+      this._hitReactionRemaining = NPC_HIT_REACTION_DURATION;
+      this.action = 'recibirGolpe'; this.actionProgress = 0; this.moving = false;
+      if (this._ownsLocomotionState) this.state = 'recibirGolpe';
+      this._setFleeAway(this._lastHit.x, this._lastHit.z);
+      this.fleeDir.copy(this._lastHit);
+      this.fleeTimer = Math.max(this.fleeTimer, NPC_COMBAT.flee);
+      this.panicTimer = NPC_COMBAT.flee;
+    }
+    this._scream(CAR_SCREAMS);
+    return true;
   }
 
   /** Lo pillaron metiéndole la mano o le arrancaron algo: huye gritando, sin mancha. */
+  /** Lo que `NpcCombat` y el agarre consultan: un desmayado no pelea ni se deja agarrar. */
+  get hp() { return this.koState ? 0 : this.health; }
+  set hp(value) { this.health = value; }
+
+  /**
+   * La voz que le toca por quién es (ver vozPara); una vez dada no cambia. Los subtipos sin persona dicen la suya
+   * con `vozArquetipo`; sin arquetipo ni voz, la primera frase con voz marcada se la deja.
+   */
+  _castVoice() {
+    const real = this.look?.real ?? this.person?.real;
+    const arquetipo = this.vozArquetipo ?? this.person?.arquetipo;
+    return arquetipo ? vozPara({ arquetipo, sexo: real?.sexo ?? this.person?.sexo, edad: real?.edad }) : null;
+  }
+
+  /** Una frase del banco de voces: burbuja y audio, sin repetir ni encimarse. */
+  speakScenario(category, force = false) {
+    const knockoutVoice = category === 'knockout';
+    if (this._disposed || (this.hp <= 0 && !knockoutVoice)) return false;
+    const now = performance.now();
+    if (!force && this._lastVoiceTime > 0 && now - this._lastVoiceTime < 2500) return false;
+    this._voz ??= this._castVoice();
+    const entry = getRandomVoice(category, this.look?.real?.sexo, this._voz);
+    if (!entry) return false;
+    // La primera frase con voz marcada le deja esa voz para siempre.
+    this._voz ??= entry.voz ?? null;
+    this._lastVoiceTime = now;
+    this.say(entry.text, 3.5);
+    this.audio ??= globalThis.window?.__game?.audio;
+    this.audio?.playNpcVoice?.(entry.audio, this, { allowKnockedOut: knockoutVoice });
+    return true;
+  }
+
+  /** Se suma a la golpiza: deja lo que hacía y va hacia `target` por la red peatonal. */
+  beginAssault(target, action = 'golpe_jab', delay = 0, robberyChase = false) {
+    if (!target || this.hp <= 0 || this._disposed) return;
+    const player = target.position ? target : { position: target };
+    this.fleeTimer = 0; this.target = null; this.route = []; this.routeIndex = 0;
+    this._cowering = false; this._fleeRouted = false;
+    this._leaveSpot();
+    this.audio = player.audio ?? this.audio;
+    this.combatAI.entrarEnCombate(player);
+    this.combatAI.state = 'acercarse';
+    this.combatAI.timer = delay;
+    this.combatAI.activationDelay = delay;
+    this.combatAI.mob = true;
+    this.combatAI.robberyChase = robberyChase;
+  }
+
+  resetAggro() {
+    this.assaultAction = null;
+    this.combatAI?.dispose();
+  }
+
+  static clearAllAggro(npcs) {
+    if (!Array.isArray(npcs)) return;
+    for (const npc of npcs) npc?.resetAggro();
+  }
+
+  /** Pelea en curso o agarre: manda sobre la conducta de calle. Al terminar, la persona retoma lo suyo. */
+  _updateAssault(dt, ctx) {
+    if (this.koState) return false;
+    if (this.grabbed) { this.moving = false; return true; }
+    const ai = this.combatAI;
+    if (ai.state === 'libre') {
+      if (this._assaulting) { this._assaulting = false; this.action = null; this.moving = false; this.assaultAction = null; }
+      return false;
+    }
+    this._assaulting = true;
+    if (this._hitReactionRemaining > 0) return true;
+    const x = this.position.x, z = this.position.z;
+    ai.update(dt);
+    this.moving = this.position.x !== x || this.position.z !== z;
+    return ai.state !== 'libre';
+  }
+
+  /** Quien se cruza con el jugador a veces le dice algo; una sola vez por pasada y con enfriamiento. */
+  _updateAmbientVoice() {
+    const dist = this._playerDist;
+    const passedBy = dist < AMBIENT_VOICE_DISTANCE && this._lastPlayerDistance >= AMBIENT_VOICE_DISTANCE && this.moving;
+    this._lastPlayerDistance = dist;
+    if (!passedBy || this.koState || this.constructor !== Npc) return;
+    const now = performance.now();
+    if (this._lastSpokenTime && now - this._lastSpokenTime <= AMBIENT_VOICE_COOLDOWN) return;
+    this._lastSpokenTime = now;
+    this.speakScenario('ambient');
+  }
+
+  /** El vendedor ofrece y quien pide en el piso pide: a quien pasa cerca, cada tanto y sin repetirse. */
+  _updateCallOut(dt) {
+    if (!this.isVendor && this.stance !== 'pedir') return;
+    if ((this._callOutIn ??= Math.random() * CALL_OUT_MIN) > 0) { this._callOutIn -= dt; return; }
+    if (!(this._playerDist < CALL_OUT_DISTANCE) || this.koState || this.fleeTimer > 0 || this._bubbleTimer > 0) return;
+    this._callOutIn = CALL_OUT_MIN + Math.random() * CALL_OUT_EXTRA;
+    this._lastSpokenTime = performance.now();
+    this.speakScenario('ambient');
+  }
+
+  /** Daño sin atacante: el derribo del agarre. */
+  applyDamage(amount) {
+    return this.takeHit({ damage: amount });
+  }
+
+  /**
+   * Testigo de un robo o una pelea: se queda quieto mirando al jugador con el celular, grabando o llamando a la
+   * Policía, durante `seconds`. Un golpe, un susto o quedar noqueado lo interrumpen (ver WitnessSystem).
+   */
+  witness(mode, seconds) {
+    if (this.koState || this.isVendor || this.fijo) return false;
+    this._witness = { mode, time: seconds };
+    this._witnessFinished = false;
+    this.target = null;
+    this.route = [];
+    return true;
+  }
+
+  stopWitness() { this._witness = null; }
+
+  get witnessing() { return this._witness?.mode ?? null; }
+
+  /** Quieto, de frente al jugador y con el celular arriba mientras dura. */
+  _updateWitness(dt) {
+    const w = this._witness;
+    if (!w) return false;
+    if (this.koState || this.fleeTimer > 0) { this._witness = null; return false; }
+    if ((w.time -= dt) <= 0) { this._witness = null; this._witnessFinished = true; return false; }
+    this.moving = false;
+    if (this._player) {
+      const yaw = Math.atan2(this._player.x - this.position.x, this._player.z - this.position.z);
+      this.root.rotation.y += wrapAngle(yaw - this.root.rotation.y) * Math.min(1, dt * 6);
+    }
+    return true;
+  }
+
   alarmedByTheft(thiefPosition = null) {
     this._fleeFrom(thiefPosition);
     this._scream(THEFT_SCREAMS);
+    this.speakScenario('robbed', true);
   }
 
   // Dirección de huida: alejarse del origen del susto
@@ -437,6 +673,9 @@ export class Npc {
   }
 
   _walk(dt) {
+    // Se detuvo de verdad (no solo un cuadro al cambiar de punto de la ruta): el próximo arranque vuelve a tomar el paso.
+    this._stillFor = this.moving ? 0 : (this._stillFor ?? 0) + dt;
+    if (this._stillFor > STRIDE.stopTime) this._stride = 0;
     this.moving = false;
     if (this.koState || this.staggerTimer > 0) return; // noqueado o sacudido: no camina
 
@@ -482,7 +721,12 @@ export class Npc {
         return;
       }
       if (this._spotTaken()) return;
-      const step = Math.min(dist, this._paceNow() * dt);
+      // Arranca y gira como quien camina: si el destino le queda de lado o detrás, primero da la vuelta
+      // con pasos cortos y luego toma el paso. Antes salía a toda marcha de lado mientras giraba.
+      const off = wrapAngle(Math.atan2(d.x, d.z) - this.root.rotation.y);
+      const facing = Math.max(STRIDE.turnPace, (Math.cos(off) - STRIDE.facingCos) / (1 - STRIDE.facingCos));
+      this._stride = Math.min(facing, (this._stride ?? 0) + dt / STRIDE.rampTime);
+      const step = Math.min(dist, this._paceNow() * this._stride * dt);
       const next = this._nextPosition.copy(this.position).addScaledVector(d.normalize(), step);
       if (!this._canStep(next.x, next.z)) {
         this.target = null;
@@ -494,7 +738,7 @@ export class Npc {
       next.y = this.groundHeight(next.x, next.z);
       this.position.copy(next);
       this.moving = step > 0;
-      this.root.rotation.y += wrapAngle(Math.atan2(d.x, d.z) - this.root.rotation.y) * Math.min(1, dt * 5);
+      this.root.rotation.y += off * Math.min(1, dt * (STRIDE.turnRate + STRIDE.turnBoost * (1 - this._stride)));
       if (step >= dist) this._advanceTarget();
     }
   }
@@ -782,6 +1026,7 @@ export class Npc {
   _stanceNow() {
     const person = this.person;
     if (!person || LOW_STANCES.has(this.stance)) return this.stance;
+    if (this._witness) return this._witness.mode === 'llamar' ? 'telefono' : 'celular';
     if (this._noseTimer > 0) return 'nariz';
     if (this._raining && !this.isVendor && !(this.fijo?.techo && !this.fijo.out)) {
       if (person.paraguas !== null) return 'paraguas';
@@ -830,6 +1075,7 @@ export class Npc {
       && !this.koState && this.fleeTimer <= 0 && !LOW_STANCES.has(this.stance) && !(this._raining && this.person.paraguas !== null && !this.fijo?.techo)) {
       this._noseTimer = 2 + Math.random() * 2;
       this._noseCooldown = this._noseTimer + 8 + Math.random() * 12;
+      if (Math.random() < SMELL_VOICE_CHANCE) this.speakScenario('smell');
     }
   }
 
@@ -867,8 +1113,11 @@ export class Npc {
    */
   update(dt, ctx = {}) {
     if (this._riseLeft > 0) this._riseLeft = Math.max(0, this._riseLeft - dt);
-    if (this.person) this._updateConduct(dt, ctx);
+    const fighting = this._updateAssault(dt, ctx);
+    if (fighting) this._measurePlayer(ctx);
+    else if (this.person) this._updateConduct(dt, ctx);
     else this._measurePlayer(ctx);
+    if (!fighting) { this._updateAmbientVoice(); this._updateCallOut(dt); }
     const reactionTime = Math.min(dt, this._hitReactionRemaining);
     this._updateReaction(dt);
     const countering = this._updateCounterAttack(Math.max(0, dt - reactionTime));
@@ -884,7 +1133,9 @@ export class Npc {
       if (this._ownsLocomotionState) this.state = 'defend';
     } else {
       if (this.action === 'recibirGolpe') { this.action = null; this.actionProgress = 0; }
-      if (!this.koState && dt > reactionTime) this._walk(dt - reactionTime);
+      if (fighting) this.action = this.grabbed ? 'ser_agarrado' : this.assaultAction;
+      else if (!this.koState && dt > reactionTime && this._updateWitness(dt - reactionTime)) { /* quieto, grabando */ }
+      else if (!this.koState && dt > reactionTime) this._walk(dt - reactionTime);
       else this.moving = false;
       if (this._ownsLocomotionState) this.state = this.koState ?? (this.moving ? (this.fleeTimer > 0 ? 'flee' : 'walk') : 'idle');
     }
@@ -941,8 +1192,8 @@ export class Npc {
     // La velocidad va en metros del modelo: con la talla cambia el largo del paso, no se patina.
     const scale = REALISTIC_SCALE * (this.look?.real?.talla?.alto ?? 1);
     this.character.update(Math.min(this.animAcc, 0.2), {
-      speed: this.moving ? (this.fleeTimer > 0 ? this.walkSpeed * 2.4 : this._paceNow()) / scale : 0,
-      running: this.moving && this.fleeTimer > 0,
+      speed: this.moving ? (fighting ? ASSAULT_SPEED : this.fleeTimer > 0 ? this.walkSpeed * 2.4 : this._paceNow() * (this._stride || 1)) / scale : 0,
+      running: this.moving && (fighting || this.fleeTimer > 0),
       ...this.poseParams,
       state: this.state, action: this.action, actionProgress: this.actionProgress,
       attack: this._counterPose ?? this.poseParams?.attack,
@@ -1049,6 +1300,7 @@ export class Npc {
    * Los IDs se deduplican por atacante, sin bloquear pasos legítimos del combo.
    */
   takeHit({ damage = 10, dir = null, knockback = 0, attacker = null, weapon = 'punos', attackId = null, id = null } = {}) {
+    this._witness = null; // un golpe le hace soltar el celular
     if (this._disposed || this.koState || !Number.isFinite(damage) || damage <= 0) return false;
     if (!this._acceptAttackId(attacker, attackId ?? id)) return false;
     let dx = dir?.x ?? 0, dz = dir?.z ?? 0;
@@ -1059,6 +1311,8 @@ export class Npc {
     this._punchFacing = Math.atan2(-this._lastHit.x, -this._lastHit.z);
     this._combatCollisions = attacker?._lastCollisions ?? this._combatCollisions;
     this.health = Math.max(0, this.health - damage);
+    this.combatAI.dispose();
+    this.audio = attacker?.audio ?? this.audio;
     this.target = null; this.route = []; this.routeIndex = 0; this.wait = 0;
     this._cowering = false;
     this._fleeRouted = false;
@@ -1072,8 +1326,11 @@ export class Npc {
     if (this._ownsLocomotionState) this.state = 'recibirGolpe';
     // Quien está en el piso no sale rodando con el golpe: primero tiene que pararse.
     this._knockVel.copy(this._lastHit).multiplyScalar(low || !Number.isFinite(knockback) ? 0 : Math.max(0, knockback) * 2 / NPC_COMBAT.stagger);
-    if (this.health <= 0) this._startKnockout(bench);
-    else {
+    if (this.health <= 0) {
+      this._startKnockout(bench);
+      this.speakScenario('knockout', true);
+    } else {
+      this.speakScenario('hit', true);
       this._setFleeAway(this._lastHit.x, this._lastHit.z);
       this.fleeDir.copy(this._lastHit);
       this.fleeTimer = Math.max(this.fleeTimer, NPC_COMBAT.flee);
@@ -1509,6 +1766,7 @@ export class Npc {
     if (this._disposed) return;
     this._disposed = true;
     this._clearCounterAttack();
+    this.combatAI?.dispose();
     if (this._bubbleEl) {
       this._bubbleEl.remove();
       this._bubbleEl = null;
