@@ -464,6 +464,25 @@ test('arranca tomando el paso: no sale a toda marcha desde quieto, y el modelo a
   npc.dispose();
 });
 
+test('al llegar al final de su recorrido acorta el paso y no se clava en seco', async () => {
+  const npc = await person('oficinista');
+  walkTo(npc, [16, 0, 2], Math.PI / 2);
+  npc._stride = 1;
+  const near = () => npc.position.clone().add(new THREE.Vector3(0, 0, 3));
+  const speeds = [];
+  while (npc.target && speeds.length < 400) {
+    const before = npc.position.clone();
+    npc.update(.05, { player: near() });
+    speeds.push({ left: 16 - npc.position.x, v: npc.position.distanceTo(before) / .05 });
+  }
+  assert.ok(!npc.target, 'llegó');
+  const cruising = speeds.find(s => s.left > 1.5).v, lastStep = speeds.at(-2).v;
+  assert.ok(Math.abs(cruising - npc.walkSpeed) < 1e-6, `de camino a ${cruising}`);
+  assert.ok(lastStep < npc.walkSpeed * .5, `último paso a ${lastStep}`);
+  assert.ok(lastStep >= npc.walkSpeed * STRIDE.arrivePace - 1e-6, 'pero sin detenerse antes de llegar');
+  npc.dispose();
+});
+
 test('con el destino a la espalda primero da la vuelta con pasos cortos y luego camina', async () => {
   const npc = await person('oficinista');
   walkTo(npc, [2, 0, 2], Math.PI / 2); // mira hacia +x y el destino queda detrás
