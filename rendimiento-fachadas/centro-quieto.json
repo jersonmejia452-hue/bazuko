@@ -1,0 +1,103 @@
+{
+  "escena": "centro-quieto",
+  "paso": 60,
+  "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+  "montajeAntes": {
+    "x": 53,
+    "y": 0.12,
+    "z": 55,
+    "hora": 10,
+    "congelar": {
+      "gente": true,
+      "trafico": true,
+      "buses": true
+    },
+    "ocultar": {
+      "gente": true,
+      "trafico": true
+    }
+  },
+  "montajeDespues": {
+    "x": 53,
+    "y": 0.12,
+    "z": 55,
+    "hora": 10,
+    "congelar": {
+      "gente": true,
+      "trafico": true,
+      "buses": true
+    },
+    "ocultar": {
+      "gente": true,
+      "trafico": true
+    }
+  },
+  "imagenes": [
+    {
+      "imagen": 1,
+      "pixelesQueCambian": 140,
+      "de": 256000,
+      "maxima": 53,
+      "media": 0.016,
+      "sombraAntes": true,
+      "sombraDespues": true,
+      "pedidosAntes": 1361,
+      "pedidosDespues": 1361
+    },
+    {
+      "imagen": 2,
+      "pixelesQueCambian": 139,
+      "de": 256000,
+      "maxima": 53,
+      "media": 0.016,
+      "sombraAntes": true,
+      "sombraDespues": true,
+      "pedidosAntes": 1361,
+      "pedidosDespues": 1361
+    },
+    {
+      "imagen": 3,
+      "pixelesQueCambian": 140,
+      "de": 256000,
+      "maxima": 54,
+      "media": 0.016,
+      "sombraAntes": true,
+      "sombraDespues": true,
+      "pedidosAntes": 1361,
+      "pedidosDespues": 1361
+    },
+    {
+      "imagen": 4,
+      "pixelesQueCambian": 137,
+      "de": 256000,
+      "maxima": 53,
+      "media": 0.016,
+      "sombraAntes": true,
+      "sombraDespues": true,
+      "pedidosAntes": 1361,
+      "pedidosDespues": 1361
+    },
+    {
+      "imagen": 5,
+      "pixelesQueCambian": 138,
+      "de": 256000,
+      "maxima": 53,
+      "media": 0.015,
+      "sombraAntes": true,
+      "sombraDespues": true,
+      "pedidosAntes": 1361,
+      "pedidosDespues": 1361
+    },
+    {
+      "imagen": 6,
+      "pixelesQueCambian": 134,
+      "de": 256000,
+      "maxima": 53,
+      "media": 0.015,
+      "sombraAntes": true,
+      "sombraDespues": true,
+      "pedidosAntes": 1361,
+      "pedidosDespues": 1361
+    }
+  ]
+}
