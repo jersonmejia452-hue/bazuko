@@ -13,6 +13,7 @@ import { Player } from '../src/entities/Player.js';
 import { Bicycle } from '../src/entities/Bicycle.js';
 import { CollisionSystem } from '../src/systems/CollisionSystem.js';
 import { StatsSystem } from '../src/systems/StatsSystem.js';
+import { SangreGolpes } from '../src/systems/SangreGolpes.js';
 import { CHARACTER_SCALE } from '../src/utils/constants.js';
 
 globalThis.ProgressEvent ??= class { constructor(type, values) { Object.assign(this, { type }, values); } };
@@ -86,6 +87,7 @@ function handSurfaces(character, side) {
   assert.ok(patches.length, `superficie de la mano ${side}`);
   return patches;
 }
+
 function gripDistance(grip, patches) {
   const { radiusTop, height } = grip.geometry.parameters;
   const samples = [-.45, -.2, 0, .2, .45].flatMap(t => [0, 1, 2, 3, 4, 5].map(i => {
@@ -104,6 +106,7 @@ function gripDistance(grip, patches) {
   }
   return Math.sqrt(gap);
 }
+
 test('los dos cuerpos agarran la dirección final de la bicicleta y giran con los pedales', async () => {
   const scene = new THREE.Scene();
   const input = { axis: { x: 0, z: 0 }, isRunning: false, consumePress: () => false, isDown: () => false };
@@ -385,6 +388,52 @@ test('el gancho izquierdo barre desde fuera y llega al frente con el codo abiert
     } finally { character.dispose(); }
   }
 });
+
+test('a 0,25× el trazo de cada golpe nace con la mano visible de los dos modelos y se queda en ese punto', async t => {
+  const escena = new THREE.Scene(), dt = .25 / 60;
+  const camara = new THREE.PerspectiveCamera(45, 16 / 10, .05, 50);
+  camara.position.set(-3.2, 1.4, .6);
+  camara.lookAt(0, 1, .5); camara.updateMatrixWorld();
+  const input = { axis: { x: 0, z: 0 }, consumePress: () => false, isDown: () => false };
+  const jugador = new Player(escena, input);
+  const sangre = new SangreGolpes(escena, {}, jugador, null);
+  t.after(() => { sangre.dispose(); jugador.dispose(); });
+  sangre.setNivel('discreta', false);
+  jugador.position.set(0, 0, 0);
+  jugador.root.position.copy(jugador.position);
+  jugador.root.rotation.y = 0;
+  const victima = { position: new THREE.Vector3(0, 0, .82) };
+  for (const modelo of ['realista', 'procedural']) {
+    await jugador.setModel(modelo);
+    const cuerpo = jugador.character;
+    for (const [paso, lado] of [[0, 'Left'], [1, 'Right'], [2, 'Left']]) {
+      sangre.limpiar();
+      const ataque = { id: 10 + paso, step: paso, weapon: 'punos', phase: 'windup', progress: 0 };
+      const pose = () => cuerpo.update(dt, { attack: ataque, action: 'golpear', movement: { grounded: true } });
+      for (let cuadro = 0; cuadro <= 20; cuadro++) { ataque.progress = cuadro / 24; pose(); }
+      const atacante = { root: jugador.root, position: jugador.position, character: cuerpo, attack: ataque };
+      sangre.contacto(atacante, victima, 'punos', 12, ataque.id);
+      const marca = sangre.contactos.children[0];
+      const ancla = modelo === 'realista' ? joint(cuerpo.group, lado + 'HandMiddle1')
+        : cuerpo.group.getObjectByName(lado.toLowerCase() + 'Hand');
+      const anterior = ancla.getWorldPosition(new THREE.Vector3());
+      ataque.phase = 'active'; ataque.progress = 0; pose();
+      const contacto = ancla.getWorldPosition(new THREE.Vector3());
+      assert.ok(anterior.distanceTo(contacto) > .012);
+      marca.onBeforeRender(null, escena, camara);
+      const pixelY = p => p.clone().project(camara).y * 400; // mitad de una ventana de 800 px de alto
+      assert.ok(Math.abs(pixelY(marca.position) - pixelY(contacto)) < 3, `${modelo}, altura del golpe ${paso + 1}`);
+      assert.ok(marca.position.distanceTo(contacto) < .13);
+      assert.ok(camara.position.distanceTo(marca.position) < camara.position.distanceTo(contacto), 'sale a la superficie visible de la mano');
+      assert.equal(marca.material.depthTest, true);
+      const fijada = marca.position.clone();
+      ataque.phase = 'recovery'; ataque.progress = 1; pose();
+      marca.onBeforeRender(null, escena, camara);
+      assert.deepEqual(marca.position, fijada);
+    }
+  }
+});
+
 test('el cruzado coincide con el contacto a 30, 60 y 144 FPS y transfiere la guardia al cambiar de LOD', async t => {
   const look = { real: { sexo: 'mujer', edad: 'mayor', ropa: 'saco' } };
   const close = await createRealisticCharacter(look, { andar: 'trote' });
@@ -420,6 +469,7 @@ test('el cruzado coincide con el contacto a 30, 60 y 144 FPS y transfiere la gua
     for (const side of ['Left', 'Right']) assert.ok(arm(close, side).y < -.40, 'al terminar la ventana las manos vuelven al andar');
   }
 });
+
 test('solo la mano que golpea sin arma recoge los dedos y el pulgar hasta el contacto', async () => {
   const character = await createRealisticCharacter({ real: { sexo: 'mujer', edad: 'joven' } }, { andar: 'trote' });
   try {
@@ -458,6 +508,7 @@ test('solo la mano que golpea sin arma recoge los dedos y el pulgar hasta el con
     }
   } finally { character.dispose(); }
 });
+
 test('las cinco yemas envuelven cada objeto en reposo y al contactar, y sueltan los dedos al desequiparlo', async t => {
   for (const [sexo, edad, lod] of [['hombre', 'adulto', false], ['mujer', 'mayor', true]]) {
     const character = await createRealisticCharacter({ real: { sexo, edad } }, { lod });
@@ -495,6 +546,7 @@ test('las cinco yemas envuelven cada objeto en reposo y al contactar, y sueltan 
     }
   }
 });
+
 test('las suelas vestidas conservan el piso al arrancar, correr y frenar en distintas fases', async () => {
   for (const [sexo, edad, calzado, lod, fps] of [['hombre', 'adulto', 'tenis', false, 60], ['mujer', 'mayor', 'botas', true, 30]]) {
     const character = await createRealisticCharacter({ real: { sexo, edad, calzado } }, { andar: 'trote', lod });
@@ -564,6 +616,8 @@ test('en el esqueleto del peatón el cuello se aparta en el sentido del golpe mi
     npc.dispose();
   }
 });
+
+// Picos en grados durante la reacción al golpe. El peatón de pie recibe el muelle en el grupo entero.
 for (const [postura, ejeEsperado, columnaEsperada, cabezaEsperada, cuerpoEsperado] of [
   ['sentado',      12.49, 13.34, 18.90, 0],
   ['acurrucado',   38.49, 28.03, 15.16, 0],
@@ -619,6 +673,7 @@ for (const [postura, ejeEsperado, columnaEsperada, cabezaEsperada, cuerpoEsperad
     }
   });
 }
+
 test('el personaje procedural recibe salto y nado con el mismo contrato de movimiento', () => {
   const character = createCharacter();
   character.group.scale.setScalar(CHARACTER_SCALE);
