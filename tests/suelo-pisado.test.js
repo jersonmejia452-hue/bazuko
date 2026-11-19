@@ -159,3 +159,19 @@ test('la tierra entra al programa del andén y lee la máscara de desgaste que y
   assert.match(tierra.fragmentShader, /dirtTone/);
 });
 
+test('los andenes se apagan y se ensucian contra el sardinel y la fachada, sin tocar la Candelaria', () => {
+  const city = new Bogota();
+  city.map = city._layout();
+  city._buildGround(city.map);
+  for (const key of ['sidewalk', 'sidewalk_cambuche', 'sidewalk_comercio', 'sidewalk_lago', 'sidewalk_chapinero']) {
+    assert.equal(city.groundMaterials[key].color.getHexString(), 'cdc8bc', key);
+  }
+  const shader = { uniforms: {}, vertexShader: '#include <project_vertex>', fragmentShader: '#include <map_fragment>\n#include <lights_fragment_begin>' };
+  city.groundMaterials.sidewalk.onBeforeCompile(shader);
+  const glsl = shader.fragmentShader;
+  assert.match(glsl, /1\. - smoothstep\( \.2, \.3, pavingCurbSide \)/, '25 cm contra el sardinel');
+  assert.match(glsl, /1\. - smoothstep\( \.28, \.42, pavingFromWall \)/, '35 cm contra la fachada');
+  assert.match(glsl, /1\. - \.2 \* pavingGrime \* step\( \.5, uPavingKind \) \* step\( uPavingKind, 3\.5 \)/, 'un 20 % menos, ni en la Candelaria ni en la tierra');
+  const sinChicles = recorded(() => TX.sidewalk(11)).maps.map.image.log.filter(entry => entry[0] === 'createRadialGradient').length;
+  assert.ok(sinChicles > 120, `el andén pinta sus chicles (${sinChicles} manchas)`);
+});
