@@ -87,6 +87,19 @@ Los escenarios esperan a que termine la pantalla de carga antes de interactuar. 
 
 El escenario de regresiones comprueba además que Espacio eleve al jugador en el bucle real, que el panel permita fabricar con 20 kg ocupados cuando los ingredientes liberan espacio y que marcar Colpatria complete la llegada en una acera accesible.
 
+## Verificación de una escena
+
+`npm run verify -- --escena parque` abre el juego con el Playwright del repositorio, espera a que la escena esté lista, guarda una captura y escribe los errores de la consola en `work/verificar/`. Las escenas son las zonas de `ZONA_NOMBRES` y las pantallas de entrada `creador` y `nota`. No hay esperas fijas: el juego avisa cuando está listo, con un tope de 5 minutos.
+
+Los argumentos de Chromium se cambian con un solo mecanismo: `--navegador-args`, la variable `BAZUKO_NAVEGADOR_ARGS` o lo que vaya después de un `--` suelto. Si se indica alguno, sustituye los de SwiftShader. En un Mac con GPU:
+
+```sh
+npm run verify -- --escena parque --navegador-args=--use-angle=metal
+npm run verify -- --escena parque -- --use-angle=metal
+```
+
+`npm run verify -- --listar` muestra las escenas disponibles. `--ventana` abre Chromium con ventana.
+
 ## Actualización visual
 
 La dirección, paleta y límites de la actualización están en [direccion-visual.md](direccion-visual.md).

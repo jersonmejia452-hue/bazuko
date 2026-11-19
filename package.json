@@ -9,6 +9,7 @@
     "fuente": "node tools/fuente/dibujar.mjs && node tools/fuente/marcas.mjs && node tools/fuente/marca.mjs",
     "imprenta": "node tools/fuente/imprenta.mjs",
     "benchmark:performance": "node tools/benchmark-performance.mjs",
+    "verify": "node tools/verificar.mjs",
     "test": "node --experimental-test-module-mocks --test tests/*.test.js",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

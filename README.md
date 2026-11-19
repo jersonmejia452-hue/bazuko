@@ -277,7 +277,7 @@ npm run preview
 
 La compilación se genera en `dist/`. Abre la dirección que muestre el comando de previsualización.
 
-Las pruebas de navegador con Playwright y su instalación se explican en [docs/testing.md](docs/testing.md). Incluyen creación del personaje, fabricación, ayuda, inventario y pausa. Antes de ejecutarlas, instala Chromium como indica esa guía.
+Las pruebas de navegador con Playwright y su instalación se explican en [docs/testing.md](docs/testing.md). Incluyen creación del personaje, fabricación, ayuda, inventario y pausa. Antes de ejecutarlas, instala Chromium como indica esa guía. Para abrir una escena, tomar una captura y guardar los errores de la consola: `npm run verify -- --escena parque`.
 
 Para revisar una animación del jugador cuadro a cuadro, `tools/animacion/tiras.mjs` toma tiras de fotogramas en la sala con un Vite ya abierto y mide tirones y patinaje de los pies; el uso está en [salto, caída y aterrizaje](docs/animacion-salto.md#medir).
 
