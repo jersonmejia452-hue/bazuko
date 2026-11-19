@@ -16,7 +16,11 @@ import { streetCaneContactY } from '../character/streetCane.js';
 import { BENCH_EXIT, benchPush, HAND_ON_FLOOR } from '../character/stances.js';
 import { WEAPONS } from '../data/weapons.js';
 import { canReachCombatTarget, resolveCombatWalk } from '../systems/CombatGeometry.js';
+import { canGreet } from '../systems/StreetVoices.js';
 import { acabarFrase, empezarFrase } from '../ui/frases.js';
+import { esElJugador, vocesDelJuego } from '../systems/voces/acceso.js';
+import { CONVERSATION_FLOOR_GAP, onSidewalk } from './npc/conversationSpace.js';
+import { sideStepRoom } from './npc/steering.js';
 import { seededRandom } from './npc/mind.js';
 
 const any = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -158,6 +162,7 @@ const DROP_TURNS = [0, Math.PI / 2, -Math.PI / 2, Math.PI]; // si en ninguno cab
 const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
 const _xAxis = new THREE.Vector3(1, 0, 0);
 const _yAxis = new THREE.Vector3(0, 1, 0);
+const _conversationEye = new THREE.Vector3();
 // Conversando: a qué distancia da por llegado a su sitio, qué tan rápido se voltea hacia el otro y hasta dónde gira
 // la cabeza para mirarlo (más que al jugador: a quien le hablan lo miran de frente).
 const TALK = { arrive: .08, turn: 4, lookMax: 1.25 };
@@ -460,15 +465,19 @@ export class Npc {
       this.root.add(this.splatMesh);
     }
 
-    this._scream(POOP_SCREAMS);
+    // Si lo dice con su voz grabada y su burbuja, no sale además el grito en texto; lo demás sigue igual.
+    this._scream(POOP_SCREAMS, vocesDelJuego()?.decirPopo?.(this) === true);
     return true;
   }
 
-  /** Lo pillaron metiéndole la mano o le arrancaron algo: huye gritando, sin mancha. */
-  alarmedByTheft(thiefPosition = null) {
+  /**
+   * Lo pillaron metiéndole la mano o le arrancaron algo: huye gritando, sin mancha. Con `yaGrito`, ya lo gritó con su
+   * voz grabada y su burbuja (AudioSystem.voces): no sale además el grito en texto, y lo demás sigue igual.
+   */
+  alarmedByTheft(thiefPosition = null, yaGrito = false) {
     if (this._disposed || this.isDead) return;
     this._fleeFrom(thiefPosition);
-    this._scream(THEFT_SCREAMS);
+    this._scream(THEFT_SCREAMS, yaGrito);
   }
 
   // Dirección de huida: alejarse del origen del susto
@@ -500,10 +509,12 @@ export class Npc {
     this._fleeAwayZ = z;
   }
 
-  _scream(screams) {
-    const msg = any(screams);
+  /** El grito en el aviso y, a veces, las monedas que se le caen del susto. `callado`: ya gritó con su voz. */
+  _scream(screams, callado = false) {
+    const grito = any(screams); // se sortea siempre: con voz o sin ella, el azar que sigue es el mismo
+    const msg = callado ? null : grito;
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-      window.dispatchEvent(new CustomEvent('toast', { detail: { text: msg, type: 'warn' } }));
+      if (msg) window.dispatchEvent(new CustomEvent('toast', { detail: { text: msg, type: 'warn' } }));
       // 35% de probabilidad de soltar monedas del pánico
       if (Math.random() < 0.35) {
         const droppedMoney = 500 * (1 + Math.floor(Math.random() * 4));
@@ -594,8 +605,7 @@ export class Npc {
   }
 
   /**
-   * Va a paso normal hasta `talk.spot`, a distancia de conversación del otro, y queda de frente a él. Si algo le corta
-   * el paso se queda donde está: no rodea ni sale del andén por una charla. El fijo no se mueve de su sitio.
+   * Se acerca al interlocutor o abre paso. Conserva su ruta para retomarla después. El fijo se queda en su sitio.
    */
   _converse(dt) {
     const talk = this.talk, other = talk.partner.position;
@@ -605,16 +615,23 @@ export class Npc {
       const dist = d ? d.length() : 0;
       if (dist < TALK.arrive) talk.ready = true;
       else {
-        const step = Math.min(dist, this._paceNow() * dt);
-        const next = this._nextPosition.copy(this.position).addScaledVector(d.normalize(), step);
-        if (!this._canStep(next.x, next.z)) talk.ready = true;
-        else {
-          next.y = this.groundHeight(next.x, next.z);
-          this.position.copy(next);
-          this.moving = step > 0;
-          this.root.rotation.y += wrapAngle(Math.atan2(d.x, d.z) - this.root.rotation.y) * Math.min(1, dt * 5);
+        let step = Math.min(dist, this._paceNow() * dt);
+        d.normalize();
+        const grid = this.mind?.system?.grid;
+        if (grid) step *= sideStepRoom(grid, this, d.x * step, d.z * step);
+        if (step <= 0) return; // espera a que el tercero libere el espacio
+        const next = this._nextPosition.copy(this.position).addScaledVector(d, step);
+        next.y = this.groundHeight(next.x, next.z);
+        if (!onSidewalk(this, next) || !this._canStep(next.x, next.z) || this._entersSolid(next)
+          || Math.abs(next.y - this.position.y) > CONVERSATION_FLOOR_GAP) {
+          talk.ready = talk.yielding === true;
+          talk.blocked = !talk.ready;
           return;
         }
+        this.position.copy(next);
+        this.moving = true;
+        this.root.rotation.y += wrapAngle(Math.atan2(d.x, d.z) - this.root.rotation.y) * Math.min(1, dt * 5);
+        return;
       }
     }
     if (this.fijo) return;
@@ -1047,6 +1064,11 @@ export class Npc {
       this.wait = .5 + Math.random() * 1.5;
     }
     if (this._noseTimer > 0) this._noseTimer -= dt;
+    // Con el jugador sucio ya cerca se pide el audio de lo que diría por el olor, una vez por persona.
+    if (!this._olorPedido && (ctx.hygiene ?? 100) < CONDUCT.noseHygiene && this._playerDist < CONDUCT.noseRange * 3) {
+      this._olorPedido = true;
+      vocesDelJuego()?.prepararOlor?.(this);
+    }
     if (this._noseCooldown > 0) this._noseCooldown -= dt;
     else if ((ctx.hygiene ?? 100) < CONDUCT.noseHygiene && this._playerDist < CONDUCT.noseRange
       && !this.koState && this.fleeTimer <= 0 && !LOW_STANCES.has(this.stance)) {
@@ -1057,7 +1079,9 @@ export class Npc {
         this._fleeFrom(ctx.player);
         this.fleeTimer = 4.0;
       }
-      this.say(this.isVendor ? '¡Aléjese del puesto con esa peste!' : any(BOGOTA_DIRTY_PHRASES));
+      // El texto se sortea siempre: así el azar del juego es el mismo con voz o sin ella.
+      const queja = this.isVendor ? '¡Aléjese del puesto con esa peste!' : any(BOGOTA_DIRTY_PHRASES);
+      if (vocesDelJuego()?.decirOlor?.(this) !== true) this.say(queja);
     }
   }
 
@@ -1066,7 +1090,7 @@ export class Npc {
     if (!this.person || this.character !== this.fullChar) return 0;
     if (this.koState || this.fleeTimer > 0 || this.action || NO_GLANCE.has(stance)) return 0;
     // Conversando mira a quien le habla, no al jugador: la cabeza completa lo que el cuerpo no ha girado.
-    const partner = this.talk?.partner?.position;
+    const partner = (this.talk?.attention ?? this.talk?.partner)?.position;
     if (partner) {
       const toPartner = wrapAngle(Math.atan2(partner.x - this.position.x, partner.z - this.position.z) - this.root.rotation.y);
       return Math.max(-TALK.lookMax, Math.min(TALK.lookMax, toPartner));
@@ -1226,6 +1250,16 @@ export class Npc {
     const interval = dist > NPC_LOD.animEvery ? .1 * budget : budget > 1 ? budget / 60 : 0;
     // Recién cambiado de modelo se anima ya: un cuadro con el modelo nuevo en su pose de reposo se ve como un destello.
     if (interval && this.animAcc < interval && !this._poseStale) return;
+    const talk = this.talk, partner = talk?.partner;
+    const canAttend = this.poseParams?.look == null && !this.koState && this.fleeTimer <= 0 && !this.action
+      && !NO_GLANCE.has(stance) && !LOW_STANCES.has(stance);
+    const attention = canAttend && talk?.attention;
+    const attending = canAttend && !talk?.yielding && talk?.ready && partner?.talk?.ready && partner.talk.partner === this;
+    let conversationEye = null;
+    if (attention) {
+      const { x, y, z } = attention.position;
+      conversationEye = attention.character?.eyePosition?.(_conversationEye) ?? _conversationEye.set(x, y + 1.55, z);
+    } else if (attending) conversationEye = partner.character?.eyePosition?.(_conversationEye) ?? null;
     const look = this.isDead ? 0 : this.poseParams?.look ?? (stance === 'mirar-surtido' ? 0 : this.mind?.gaze(stance) ?? this._glanceAt(ctx, stance));
     // La velocidad va en metros del modelo: con la talla cambia el largo del paso, no se patina.
     const scale = REALISTIC_SCALE * (this.look?.real?.talla?.alto ?? 1);
@@ -1241,7 +1275,9 @@ export class Npc {
       troncoDirigido: this.hitLean.active,
       attack: this._counterPose ?? this.poseParams?.attack,
       combatGuard: this._counter?.phase === 'warning' || this._counter?.phase === 'wait' || !!this.poseParams?.combatGuard,
-      look,
+      look: conversationEye ? 0 : look,
+      conversationEye,
+      conversationNod: attending ? talk.nod : 0,
       // Caer sigue a la misma mezcla que acuesta el cuerpo.
       stance,
       style: this.poseParams?.style ?? this.style,
@@ -1417,7 +1453,13 @@ export class Npc {
       this.fleeDir.copy(this._lastHit);
       this.fleeTimer = Math.max(this.fleeTimer, NPC_COMBAT.flee);
       this.panicTimer = NPC_COMBAT.flee;
-      if (this._bubbleTimer <= 0) this.say(HIT_PHRASES[Math.floor(Math.random() * HIT_PHRASES.length)], 4);
+      if (this._bubbleTimer <= 0) {
+        // El texto se sortea siempre: así el azar del juego es el mismo con voz o sin ella.
+        const queja = HIT_PHRASES[Math.floor(Math.random() * HIT_PHRASES.length)];
+        // Si le pegó el jugador y lo dice con su voz, la burbuja es la de la grabación y dura lo mismo que la de texto.
+        if (esElJugador(attacker) && vocesDelJuego()?.decirGolpeado?.(this) === true) this._bubbleTimer = Math.max(this._bubbleTimer, 4);
+        else this.say(queja, 4);
+      }
       if (!low) this._counterAttack(attacker);
     }
     if (this.looted) return 0;
@@ -1799,6 +1841,15 @@ export class Npc {
     empezarFrase(this);
   }
 
+  /** Se le quita la burbuja si todavía dice `text`: la voz grabada que la acompañaba se cortó. */
+  callar(text) {
+    if (!this._bubbleEl || this._bubbleEl.textContent !== text) return;
+    this._bubbleEl.remove();
+    this._bubbleEl = null;
+    this._bubbleTimer = 0;
+    acabarFrase(this);
+  }
+
   /** La burbuja se acaba a su tiempo aunque quien habló haya salido de cámara: si no, queda flotando para siempre. */
   _tickBubble(dt) {
     if (!(this._bubbleTimer > 0)) return;
@@ -1811,8 +1862,7 @@ export class Npc {
   }
 
   _updateSpeech(dt, ctx) {
-    if (!ctx.player || this.koState || this.action === 'recibirGolpe' || this._counter || this.panicTimer > 0) return;
-    if (this.stance === 'dormido' || this.talk) return; // conversando le habla al otro, no al jugador
+    if (!ctx.player || this._bubbleEl || !canGreet(this)) return;
     const now = performance.now();
 
     if (this._playerDist < 2.8 && (now - this._lastSpokenTime > 14000)) {
