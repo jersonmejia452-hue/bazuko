@@ -81,6 +81,8 @@ En equipos donde SwiftShader no termina la preparación gráfica, ejecutar con l
 PLAYWRIGHT_GPU=1 npm run test:e2e:headed
 ```
 
+`PLAYWRIGHT_GPU=1` no cambia: deja los argumentos de Chromium vacíos. Para añadir `--use-angle=metal` u otras opciones, se usa `BAZUKO_NAVEGADOR_ARGS` (lo lee el mismo módulo que la CLI).
+
 Playwright inicia su propio Vite en `127.0.0.1:5188`, con puerto estricto y sin reutilizar otro servidor, para verificar esta copia del proyecto. Ejecuta Chromium con un solo worker y WebGL por software para limitar el uso de GPU y memoria. Cada prueba limpia el almacenamiento local de su contexto aislado; no borra la partida de tu navegador habitual.
 
 Los escenarios esperan a que termine la pantalla de carga antes de interactuar. Verifican creación del personaje, talentos, recetas de fabricación, edición de apariencia, ayuda plegable, inventario y pausa. Se cierra fabricación antes de editar el personaje para respetar la pausa actual. Se comprueba que Escape cierre un panel sin abrir simultáneamente otro.
@@ -91,11 +93,11 @@ El escenario de regresiones comprueba además que Espacio eleve al jugador en el
 
 `npm run verify -- --escena parque` abre el juego con el Playwright del repositorio, espera a que la escena esté lista, guarda una captura y escribe los errores de la consola en `work/verificar/`. Las escenas son las zonas de `ZONA_NOMBRES` y las pantallas de entrada `creador` y `nota`. No hay esperas fijas: el juego avisa cuando está listo, con un tope de 5 minutos.
 
-Los argumentos de Chromium se cambian con un solo mecanismo: `--navegador-args`, la variable `BAZUKO_NAVEGADOR_ARGS` o lo que vaya después de un `--` suelto. Si se indica alguno, sustituye los de SwiftShader. En un Mac con GPU:
+Los argumentos de Chromium los decide un solo módulo (`tools/navegador-args.mjs`), el mismo de las pruebas de navegador. `PLAYWRIGHT_GPU=1` sigue dejando la lista vacía, como hasta ahora. Las opciones extra se pasan solo con `BAZUKO_NAVEGADOR_ARGS`, encima de lo que decidió `PLAYWRIGHT_GPU`: un `--use-angle` posterior reemplaza el anterior; si el ángulo final no es SwiftShader, se retira `--enable-unsafe-swiftshader` salvo que la variable lo pida. En un Mac, `PLAYWRIGHT_GPU=1` solo puede seguir en SwiftShader sin ventana; para Metal:
 
 ```sh
-npm run verify -- --escena parque --navegador-args=--use-angle=metal
-npm run verify -- --escena parque -- --use-angle=metal
+PLAYWRIGHT_GPU=1 BAZUKO_NAVEGADOR_ARGS='--use-angle=metal' npm run verify -- --escena parque
+PLAYWRIGHT_GPU=1 BAZUKO_NAVEGADOR_ARGS='--use-angle=metal' npm run test:e2e:headed
 ```
 
 `npm run verify -- --listar` muestra las escenas disponibles. `--ventana` abre Chromium con ventana.

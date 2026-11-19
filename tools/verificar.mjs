@@ -5,18 +5,17 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from '@playwright/test';
+import { argsNavegador } from './navegador-args.mjs';
 import {
-  AYUDA, TOPE_MS, URL_PREDETERMINADA, argsNavegadorDeCli, asegurarTope, parsearCli
+  AYUDA, TOPE_MS, URL_PREDETERMINADA, asegurarTope, parsearCli
 } from './verificar/args.mjs';
 import { listarEscenas, nombresEscenas, resolverEscena } from './verificar/escenas.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 export { catalogoEscenas, listarEscenas, nombresEscenas, resolverEscena } from './verificar/escenas.mjs';
-export {
-  ARGS_NAVEGADOR_PREDETERMINADOS, TOPE_MS, VARIABLE_NAVEGADOR, argsNavegadorDeCli,
-  fusionarArgsNavegador, parsearCli, partirArgsNavegador, resolverArgsNavegador
-} from './verificar/args.mjs';
+export { AYUDA, TOPE_MS, parsearCli } from './verificar/args.mjs';
+export { argsNavegador, VARIABLE_NAVEGADOR } from './navegador-args.mjs';
 
 async function responde(url) {
   try {
@@ -199,13 +198,12 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     return { listar: true, escenas: nombresEscenas() };
   }
   const escena = resolverEscena(cli.escena);
-  const argsNavegador = argsNavegadorDeCli(cli, env);
   const resultado = await verificarEscena({
     escena,
     salida: cli.salida,
     url: cli.url,
     ventana: cli.ventana,
-    argsNavegador
+    argsNavegador: argsNavegador(env)
   });
   console.log(`Captura: ${resultado.captura}`);
   console.log(`Errores: ${resultado.registro}`);

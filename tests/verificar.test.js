@@ -2,10 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ZONA_NOMBRES, zonaDe } from '../src/ui/ZonaAviso.js';
 import { LAKE_PARK } from '../src/world/bogota/LakePark.js';
-import {
-  ARGS_NAVEGADOR_PREDETERMINADOS, TOPE_MS, VARIABLE_NAVEGADOR, argsNavegadorDeCli,
-  fusionarArgsNavegador, parsearCli, partirArgsNavegador, resolverArgsNavegador
-} from '../tools/verificar/args.mjs';
+import { TOPE_MS, parsearCli } from '../tools/verificar/args.mjs';
+import { VARIABLE_NAVEGADOR } from '../tools/navegador-args.mjs';
 import {
   catalogoEscenas, listarEscenas, nombresEscenas, normalizarNombre, puntoEnZona, resolverEscena
 } from '../tools/verificar/escenas.mjs';
@@ -80,56 +78,7 @@ test('cualquier nombre que no esté en el catálogo se rechaza, semilla 20261118
   assert.throws(() => resolverEscena('   ', catalogo), /Falta --escena/);
 });
 
-test('partir, fusionar y resolver los argumentos del navegador se sostienen con entradas generadas, semilla 20261118', () => {
-  const rnd = azar(20261118);
-  const banderas = ['--use-angle', '--enable-unsafe-swiftshader', '--no-sandbox', '--disable-dev-shm-usage', '--window-size', '--foo'];
-  const valores = ['metal', 'swiftshader', 'gl', '1', '1280,800', 'bar', 'vulkan'];
-
-  assert.deepEqual(resolverArgsNavegador({}), [...ARGS_NAVEGADOR_PREDETERMINADOS]);
-  assert.deepEqual(resolverArgsNavegador({ cli: [], envTexto: undefined }), [...ARGS_NAVEGADOR_PREDETERMINADOS]);
-  assert.deepEqual(resolverArgsNavegador({ cli: [], envTexto: '' }), []);
-  assert.deepEqual(resolverArgsNavegador({ cli: ['--use-angle=metal'] }), ['--use-angle=metal']);
-  assert.deepEqual(
-    resolverArgsNavegador({ envTexto: '--use-angle=swiftshader --no-sandbox', cli: ['--use-angle=metal'] }),
-    ['--use-angle=metal', '--no-sandbox']
-  );
-  assert.deepEqual(partirArgsNavegador('--use-angle=metal --no-sandbox'), ['--use-angle=metal', '--no-sandbox']);
-  assert.deepEqual(partirArgsNavegador(" --foo='a b' --bar=\"c d\" "), ['--foo=a b', '--bar=c d']);
-
-  for (let i = 0; i < 200; i++) {
-    const armar = (n) => {
-      const lista = [];
-      for (let k = 0; k < n; k++) {
-        const flag = banderas[entero(rnd, 0, banderas.length - 1)];
-        lista.push(flag === '--enable-unsafe-swiftshader' || flag === '--no-sandbox' || rnd() < .3
-          ? flag
-          : `${flag}=${valores[entero(rnd, 0, valores.length - 1)]}`);
-      }
-      return lista;
-    };
-    const base = armar(entero(rnd, 0, 6));
-    const extra = armar(entero(rnd, 0, 6));
-    const fusion = fusionarArgsNavegador(base, extra);
-    const ultimo = new Map();
-    for (const arg of [...base, ...extra]) {
-      const clave = arg.startsWith('--') && arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg;
-      ultimo.set(clave, arg);
-    }
-    assert.deepEqual(new Set(fusion), new Set(ultimo.values()));
-    for (const arg of fusion) {
-      const clave = arg.startsWith('--') && arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg;
-      assert.equal(arg, ultimo.get(clave), `la última mención de ${clave} debe quedar`);
-    }
-    assert.equal(fusion.length, ultimo.size);
-
-    const envLista = armar(entero(rnd, 0, 4));
-    const cliLista = armar(entero(rnd, 0, 4));
-    const resuelto = resolverArgsNavegador({ envTexto: envLista.join(' '), cli: cliLista });
-    assert.deepEqual(resuelto, fusionarArgsNavegador(envLista, cliLista));
-  }
-});
-
-test('parsearCli lee --escena, --navegador-args, la variable y lo que va después de --, semilla 20261118', () => {
+test('parsearCli lee --escena y rechaza opciones de Chromium en la línea de comandos, semilla 20261118', () => {
   const rnd = azar(20261118);
   const ids = nombresEscenas();
   for (let i = 0; i < 200; i++) {
@@ -137,36 +86,23 @@ test('parsearCli lee --escena, --navegador-args, la variable y lo que va despué
     const salida = `work/out-${i}`;
     const url = `http://127.0.0.1:${entero(rnd, 1024, 9999)}/`;
     const ventana = rnd() < .5;
-    const extra = [];
-    const nExtra = entero(rnd, 0, 3);
-    for (let k = 0; k < nExtra; k++) extra.push(`--opt-${k}=${entero(rnd, 1, 9)}`);
-    const nav = [`--use-angle=${rnd() < .5 ? 'metal' : 'swiftshader'}`];
-    const argv = ['--escena', id, '--salida', salida, '--url', url, '--navegador-args', nav[0]];
+    const argv = ['--escena', id, '--salida', salida, '--url', url];
     if (ventana) argv.push('--ventana');
-    if (extra.length) argv.push('--', ...extra);
     const cli = parsearCli(argv);
     assert.equal(cli.escena, id);
     assert.equal(cli.salida, salida);
     assert.equal(cli.url, url);
     assert.equal(cli.ventana, ventana);
-    assert.deepEqual(cli.navegadorArgs, nav);
-    assert.deepEqual(cli.extraNavegador, extra);
-    const env = rnd() < .5 ? { [VARIABLE_NAVEGADOR]: '--no-sandbox' } : {};
-    const args = argsNavegadorDeCli(cli, env);
-    const esperados = Object.hasOwn(env, VARIABLE_NAVEGADOR) || nav.length || extra.length
-      ? fusionarArgsNavegador(partirArgsNavegador(env[VARIABLE_NAVEGADOR] ?? ''), [...nav, ...extra])
-      : [...ARGS_NAVEGADOR_PREDETERMINADOS];
-    assert.deepEqual(args, esperados);
+    assert.equal('navegadorArgs' in cli, false);
+    assert.equal('extraNavegador' in cli, false);
   }
   const vacio = parsearCli([]);
   assert.equal(vacio.escena, undefined);
   assert.equal(vacio.listar, false);
   assert.equal(vacio.ayuda, false);
-  assert.deepEqual(argsNavegadorDeCli(vacio, {}), [...ARGS_NAVEGADOR_PREDETERMINADOS]);
-  assert.deepEqual(argsNavegadorDeCli(vacio, { [VARIABLE_NAVEGADOR]: '' }), []);
-  assert.deepEqual(parsearCli(['--navegador-args', '--use-angle=metal']).navegadorArgs, ['--use-angle=metal']);
-  assert.deepEqual(parsearCli(['--navegador-args=--use-angle=metal']).navegadorArgs, ['--use-angle=metal']);
   assert.throws(() => parsearCli(['--desconocido']), /desconocido|Unknown|parse/i);
+  assert.throws(() => parsearCli(['--navegador-args=--use-angle=metal']), /navegador-args|Unknown|parse/i);
+  assert.throws(() => parsearCli(['--escena', 'parque', '--', '--use-angle=metal']), new RegExp(VARIABLE_NAVEGADOR));
 });
 
 test('puntoEnZona usa zonaDe y encuentra un sitio de cada zona del catálogo, semilla 20261118', () => {

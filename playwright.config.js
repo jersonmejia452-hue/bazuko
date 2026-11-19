@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { argsNavegador } from './tools/navegador-args.mjs';
 
 // Adaptado de juanagogo/bazuko, commit 2df40da (Jonme-Mopri).
 export default defineConfig({
@@ -15,7 +16,7 @@ export default defineConfig({
     trace: 'on-first-retry', screenshot: 'only-on-failure', video: 'retain-on-failure',
     viewport: { width: 1280, height: 800 },
     // Usar la GPU local cuando el renderizado por software no completa la carga.
-    launchOptions: { args: process.env.PLAYWRIGHT_GPU === '1' ? [] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] }
+    launchOptions: { args: argsNavegador() }
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
