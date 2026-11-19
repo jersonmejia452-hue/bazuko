@@ -1,0 +1,135 @@
+{
+  "solicitudes": [
+    [
+      "/audio/voces/vecina_parque_auxilio_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/vecina_parque_ambiente_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/vecina_parque_hallazgo_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/protagonista_herido_1.mp3",
+      200
+    ],
+    [
+      "/audio/conversaciones/conv_carton_02.mp3",
+      200
+    ],
+    [
+      "/audio/conversaciones/conv_carton_01.mp3",
+      200
+    ],
+    [
+      "/audio/conversaciones/conv_carton_03.mp3",
+      200
+    ],
+    [
+      "/audio/conversaciones/conv_carton_04.mp3",
+      200
+    ],
+    [
+      "/audio/voces/busetero_pito_3.mp3",
+      200
+    ],
+    [
+      "/audio/voces/busetero_pito_4.mp3",
+      200
+    ],
+    [
+      "/audio/voces/busetero_pito_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/busetero_pito_2.mp3",
+      200
+    ]
+  ],
+  "tomas": [
+    {
+      "clase": "directora",
+      "ms": 112.5,
+      "id": "vecina_parque_ambiente_1",
+      "voz": "vecina_parque",
+      "texto": "Buenas, ¿cómo está?",
+      "burbuja": "Buenas, ¿cómo está?",
+      "fuente": "bogota:1128jho:fijo:102.6,94.2:0",
+      "archivo": "/audio/voces/vecina_parque_ambiente_1.mp3",
+      "sonando": true,
+      "pan": null
+    },
+    {
+      "clase": "conversacion",
+      "ms": 1865.5,
+      "voz": "vecina_parque",
+      "texto": "Veci, ¿ese cartón está seco?",
+      "burbuja": "Veci, ¿ese cartón está seco?",
+      "fuente": "bogota:1128jho:fijo:102.6,94.2:0",
+      "archivo": "/audio/conversaciones/conv_carton_01.mp3",
+      "sonando": true,
+      "pan": null
+    },
+    {
+      "clase": "conversacion",
+      "ms": 4211.79999999702,
+      "voz": "vecino_parque",
+      "texto": "Sí, lo guardé debajo del toldo.",
+      "burbuja": "Sí, lo guardé debajo del toldo.",
+      "fuente": "bogota:1128jho:fijo:103.5,95:0",
+      "archivo": "/audio/conversaciones/conv_carton_02.mp3",
+      "sonando": true,
+      "pan": null
+    },
+    {
+      "clase": "conversacion",
+      "ms": 7345.70000000298,
+      "voz": "vecina_parque",
+      "texto": "Déjeme la caja aquí, yo le pongo una pita.",
+      "burbuja": "Déjeme la caja aquí, yo le pongo una pita.",
+      "fuente": "bogota:1128jho:fijo:102.6,94.2:0",
+      "archivo": "/audio/conversaciones/conv_carton_03.mp3",
+      "sonando": true,
+      "pan": null
+    },
+    {
+      "clase": "conversacion",
+      "ms": 10475.29999999702,
+      "voz": "vecino_parque",
+      "texto": "Listo, veci. Ahora le traigo otra.",
+      "burbuja": "Listo, veci. Ahora le traigo otra.",
+      "fuente": "bogota:1128jho:fijo:103.5,95:0",
+      "archivo": "/audio/conversaciones/conv_carton_04.mp3",
+      "sonando": true,
+      "pan": null
+    },
+    {
+      "clase": "directora",
+      "ms": 13760.79999999702,
+      "id": "vecina_parque_auxilio_1",
+      "voz": "vecina_parque",
+      "texto": "¡Ayuda, por favor! Manden una ambulancia.",
+      "burbuja": "¡Ayuda, por favor! Manden una ambulancia.",
+      "fuente": "bogota:1128jho:fijo:102.6,94.2:0",
+      "archivo": "/audio/voces/vecina_parque_auxilio_1.mp3",
+      "sonando": true,
+      "pan": null
+    }
+  ],
+  "identidad": {
+    "voz": "vecina_parque",
+    "id": "bogota:1128jho:fijo:102.6,94.2:0",
+    "pareja": "bogota:1128jho:fijo:103.5,95:0",
+    "encuentro": [
+      103.05,
+      94.6
+    ],
+    "estadoAudio": "running",
+    "saludos": [
+      "vecina_parque_ambiente_1"
+    ]
+  }
+}

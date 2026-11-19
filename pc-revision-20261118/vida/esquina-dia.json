@@ -1,0 +1,1416 @@
+{
+  "hora": 13,
+  "etapa": "final",
+  "navegador": "156.0.8078.4",
+  "errores": [],
+  "respuestasVoz": [
+    [
+      "/audio/voces/abuelo_testigo_pelea_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/protagonista_herido_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/reciclador_pelea_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/vendedora_ambiente_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/vendedora_ambiente_2.mp3",
+      200
+    ],
+    [
+      "/audio/voces/vendedora_ambiente_3.mp3",
+      200
+    ],
+    [
+      "/audio/voces/vendedora_ambiente_4.mp3",
+      200
+    ],
+    [
+      "/audio/voces/conductora_pito_3.mp3",
+      200
+    ],
+    [
+      "/audio/voces/conductora_pito_4.mp3",
+      200
+    ],
+    [
+      "/audio/voces/conductora_pito_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/conductora_pito_2.mp3",
+      200
+    ],
+    [
+      "/audio/voces/conductora_robo_espejo_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/conductora_robo_espejo_2.mp3",
+      200
+    ],
+    [
+      "/audio/voces/conductora_robo_espejo_3.mp3",
+      200
+    ],
+    [
+      "/audio/voces/vecina_parque_auxilio_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/vecina_parque_ambiente_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/vecina_parque_hallazgo_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/protagonista_herido_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/busetero_pito_3.mp3",
+      200
+    ],
+    [
+      "/audio/voces/busetero_pito_4.mp3",
+      200
+    ],
+    [
+      "/audio/voces/busetero_pito_1.mp3",
+      200
+    ],
+    [
+      "/audio/voces/busetero_pito_2.mp3",
+      200
+    ]
+  ],
+  "pasos": [
+    "Juego activo",
+    "Barra rápida y tres objetos",
+    "Contacto con la entrada G",
+    "Caída, testigos y grabación",
+    "Guardado y recarga",
+    "Voz de la vecina del parque"
+  ],
+  "sangreInicial": "Discreta",
+  "objetos": [
+    {
+      "id": "cuchillo",
+      "visible": true,
+      "anclaje": "mixamorigRightHand"
+    },
+    {
+      "id": "botella_picada",
+      "visible": true,
+      "anclaje": "mixamorigRightHand"
+    },
+    {
+      "id": "arma",
+      "visible": true,
+      "anclaje": "mixamorigRightHand"
+    }
+  ],
+  "montaje": {
+    "saludInicial": 12,
+    "pos": [
+      112.98,
+      0.06,
+      97.84
+    ],
+    "victima": 8,
+    "idVictima": "bogota:1128jho:centro:13.5,20:0",
+    "testigos": [
+      20,
+      19,
+      9
+    ],
+    "reparto": [
+      {
+        "indice": 8,
+        "temperamento": "indiferente",
+        "pos": [
+          112.98,
+          0.06,
+          97.02000000000001
+        ],
+        "acera": true
+      },
+      {
+        "indice": 20,
+        "temperamento": "avisador",
+        "pos": [
+          115.48,
+          0.06,
+          94.34
+        ],
+        "acera": true
+      },
+      {
+        "indice": 19,
+        "temperamento": "miedoso",
+        "pos": [
+          106.08,
+          0.12,
+          93.64
+        ],
+        "acera": true
+      },
+      {
+        "indice": 9,
+        "temperamento": "curioso",
+        "pos": [
+          110.28,
+          0.06,
+          100.64
+        ],
+        "acera": true
+      }
+    ],
+    "tractosAudio": 1,
+    "codec": "video/webm;codecs=vp9,opus",
+    "nivel": "visible",
+    "hora": 13.090573333332944,
+    "malla": [
+      1920,
+      1080
+    ]
+  },
+  "alejamiento": [
+    {
+      "tecla": "d",
+      "distancia": 16.649456732305737
+    }
+  ],
+  "resultado": {
+    "frameContacto": {
+      "ms": 715.1000000089407,
+      "paso": 0,
+      "fase": "active",
+      "vida": 0,
+      "posicionJugador": [
+        112.98,
+        0.06,
+        97.84
+      ],
+      "posicionObjetivo": [
+        112.98,
+        0.06,
+        96.91463582904564
+      ]
+    },
+    "estado": "down",
+    "muerta": true,
+    "asentada": true,
+    "visible": false,
+    "vida": 0,
+    "eventos": [
+      {
+        "nombre": "npc-death",
+        "ms": 661.2000000029802,
+        "objetivo": true,
+        "vida": 0,
+        "energia": 95.9879740740742,
+        "atacante": true,
+        "resultado": null,
+        "acusa": null,
+        "motivo": null,
+        "radio": null
+      },
+      {
+        "nombre": "street-fight",
+        "ms": 662.5,
+        "objetivo": true,
+        "vida": 0,
+        "energia": 95.9879740740742,
+        "atacante": true,
+        "resultado": null,
+        "acusa": null,
+        "motivo": null,
+        "radio": null
+      },
+      {
+        "nombre": "npc-emergency-call",
+        "ms": 9758.800000011921,
+        "objetivo": true,
+        "vida": 0,
+        "energia": 95.8191388888888,
+        "atacante": true,
+        "resultado": null,
+        "acusa": true,
+        "motivo": null,
+        "radio": null
+      }
+    ],
+    "voces": [],
+    "muestras": [
+      {
+        "t": 11727.3,
+        "vida": 12,
+        "estado": null,
+        "muerta": false,
+        "asentada": false,
+        "suelo": 0,
+        "contacto": 0,
+        "energia": 99.99967592592593,
+        "buscado": 0,
+        "distanciaAlCuerpo": 0.8199999999999932,
+        "huyen": 0,
+        "persecucion": false,
+        "escenas": []
+      },
+      {
+        "t": 11960.6,
+        "vida": 12,
+        "estado": null,
+        "muerta": false,
+        "asentada": false,
+        "suelo": 0,
+        "contacto": 0,
+        "energia": 99.99535925925933,
+        "buscado": 0,
+        "distanciaAlCuerpo": 0.8199999999999932,
+        "huyen": 0,
+        "persecucion": false,
+        "escenas": []
+      },
+      {
+        "t": 12194,
+        "vida": 12,
+        "estado": null,
+        "muerta": false,
+        "asentada": false,
+        "suelo": 0,
+        "contacto": 0,
+        "energia": 99.99105000000002,
+        "buscado": 0,
+        "distanciaAlCuerpo": 0.8199999999999932,
+        "huyen": 0,
+        "persecucion": false,
+        "escenas": []
+      },
+      {
+        "t": 12427.3,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": false,
+        "suelo": 0,
+        "contacto": 1,
+        "energia": 95.9864851851852,
+        "buscado": 1,
+        "distanciaAlCuerpo": 0.9253641709543672,
+        "huyen": 3,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 6,
+            "oido": 4,
+            "llamada": false,
+            "rol": "esperar",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 12660.7,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": false,
+        "suelo": 0,
+        "contacto": 0,
+        "energia": 95.98240740740735,
+        "buscado": 1,
+        "distanciaAlCuerpo": 1.6988728443965613,
+        "huyen": 3,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "esperar",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 12894,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": false,
+        "suelo": 0,
+        "contacto": 0,
+        "energia": 95.97808518518531,
+        "buscado": 1,
+        "distanciaAlCuerpo": 1.7199999999999989,
+        "huyen": 3,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "esperar",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 13127.3,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 0,
+        "contacto": 0,
+        "energia": 95.97376666666673,
+        "buscado": 1,
+        "distanciaAlCuerpo": 1.7199999999999989,
+        "huyen": 3,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "esperar",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 13360.6,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.9694444444444,
+        "buscado": 1,
+        "distanciaAlCuerpo": 1.7199999999999989,
+        "huyen": 3,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "esperar",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 13593.9,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.9651351851851,
+        "buscado": 1,
+        "distanciaAlCuerpo": 1.7199999999999989,
+        "huyen": 3,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "esperar",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 13827.3,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.96080925925929,
+        "buscado": 1,
+        "distanciaAlCuerpo": 1.7199999999999989,
+        "huyen": 3,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "esperar",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 14060.5,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.95647592592597,
+        "buscado": 1,
+        "distanciaAlCuerpo": 1.7199999999999989,
+        "huyen": 3,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "esperar",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 14293.9,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.95214074074089,
+        "buscado": 1,
+        "distanciaAlCuerpo": 2.701079338879621,
+        "huyen": 3,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "esperar",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 14527.2,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.9478148148148,
+        "buscado": 1,
+        "distanciaAlCuerpo": 4.096819599211894,
+        "huyen": 3,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "esperar",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 14760.5,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.94344629629647,
+        "buscado": 1,
+        "distanciaAlCuerpo": 5.510952098970954,
+        "huyen": 2,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "esperar",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 14993.9,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.9391444444444,
+        "buscado": 1,
+        "distanciaAlCuerpo": 6.903763920447084,
+        "huyen": 2,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "esperar",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 15227.2,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.93475185185203,
+        "buscado": 1,
+        "distanciaAlCuerpo": 8.326080035215234,
+        "huyen": 2,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "esperar",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 15460.5,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.93046666666673,
+        "buscado": 1,
+        "distanciaAlCuerpo": 9.714048036043739,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 15693.9,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.92615925925942,
+        "buscado": 1,
+        "distanciaAlCuerpo": 11.109322600693934,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 15927.1,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.92190000000016,
+        "buscado": 1,
+        "distanciaAlCuerpo": 12.489072311993441,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 16160.5,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.91757777777781,
+        "buscado": 1,
+        "distanciaAlCuerpo": 13.889269163176124,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 16393.8,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.91328518518527,
+        "buscado": 1,
+        "distanciaAlCuerpo": 15.279904259372424,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 16627.1,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.90890370370364,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.649456732305737,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 16860.5,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.90460740740735,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.828497847385066,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 17093.7,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.9003148148148,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 17327.1,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.89599259259275,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 17560.4,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.89166666666664,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 17793.7,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.88734629629631,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 18027.1,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.88302407407399,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 18260.4,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.87871851851844,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 18493.7,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.87438333333337,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 18727,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.87006296296306,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 18960.4,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.86575925925924,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 19193.7,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.86143888888891,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 19427,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.85711666666658,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 19660.3,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.85277962962977,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 19893.7,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.84845925925917,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 20127,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.8441537037036,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 1,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 20360.3,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.83981851851853,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 0,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 20593.7,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.83549629629618,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 0,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 20827,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.83117592592586,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 0,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 21060.3,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.8268574074073,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 0,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 21293.6,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.82253518518523,
+        "buscado": 1,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 0,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": false,
+            "rol": "llamando",
+            "auxiliar": "esperar",
+            "avisador": "bogota:1128jho:centro:28,19:0",
+            "acera": true
+          }
+        ]
+      },
+      {
+        "t": 21526.9,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.81821296296287,
+        "buscado": 2,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 0,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": true,
+            "rol": null,
+            "auxiliar": "esperar"
+          }
+        ]
+      },
+      {
+        "t": 21760.3,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.81390185185182,
+        "buscado": 2,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 0,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": true,
+            "rol": null,
+            "auxiliar": "esperar"
+          }
+        ]
+      },
+      {
+        "t": 21993.6,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.80957037037025,
+        "buscado": 2,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 0,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": true,
+            "rol": null,
+            "auxiliar": "esperar"
+          }
+        ]
+      },
+      {
+        "t": 22226.9,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.80524999999994,
+        "buscado": 2,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 0,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": true,
+            "rol": null,
+            "auxiliar": "esperar"
+          }
+        ]
+      },
+      {
+        "t": 22460.2,
+        "vida": 0,
+        "estado": "down",
+        "muerta": true,
+        "asentada": true,
+        "suelo": 1,
+        "contacto": 0,
+        "energia": 95.80092777777789,
+        "buscado": 2,
+        "distanciaAlCuerpo": 16.830118733692057,
+        "huyen": 0,
+        "persecucion": false,
+        "escenas": [
+          {
+            "vista": 10,
+            "oido": 0,
+            "llamada": true,
+            "rol": null,
+            "auxiliar": "esperar"
+          }
+        ]
+      }
+    ],
+    "maxSangre": 1,
+    "maxMarca": 1,
+    "respuestaSolicitada": false,
+    "asistenciaEnSitio": false,
+    "duracionMs": 10810.60000000894
+  },
+  "apagado": {
+    "valor": "desactivada",
+    "guardado": "desactivada",
+    "contactos": 0,
+    "marcas": 0
+  },
+  "persistenciaAntes": {
+    "id": "bogota:1128jho:centro:13.5,20:0",
+    "muertesGuardadas": 1
+  },
+  "accionRecarga": "Navegación Reload de Chromium",
+  "persistenciaDespues": {
+    "id": "bogota:1128jho:centro:13.5,20:0",
+    "existe": true,
+    "fallecido": true,
+    "salud": 0,
+    "visible": true,
+    "nivelSangre": "desactivada"
+  }
+}
