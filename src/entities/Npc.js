@@ -168,6 +168,7 @@ const PAIR_REPLY = .8;
 const RAIN_REACTION = { heavy: .5, drizzleHunch: .3, heavyCover: .6 };
 // Quien está así no mira a nadie: duerme o tiene la vista en lo suyo.
 const NO_GLANCE = new Set(['dormido', 'acurrucado', 'celular', 'telefono']);
+const WITNESS_STANCE = { llamar: 'telefono', grabar: 'celular', auxiliar: 'agachado' };
 // De pie, mientras se le pasa el susto: nadie se queda tieso esperando a que el jugador se vaya.
 const WAIT_STANCES = ['mirar-izquierda', 'mirar-derecha', 'brazos-cruzados', 'cambiar-peso'];
 
@@ -198,7 +199,7 @@ export class Npc {
    */
   constructor(scene, position, opts = {}) {
     this.scene = scene;
-    this.routeRandom = opts.routeRandom ?? Math.random;
+    this.routeRandom = opts.routeRandom;
     this.home = position.clone();
     this.position = position.clone();
     this.wander = opts.wander ?? 0;
@@ -1208,7 +1209,7 @@ export class Npc {
     if (!this.isDead) this._updateSpeech(dt, ctx);
     // Huir manda sobre la postura que tuviera, menos sobre el paraguas: sale corriendo con él en la mano. El testigo
     // tiene el celular en la oreja (llamando) o al frente (grabando).
-    const witness = this._witness && (this._witness.mode === 'llamar' ? 'telefono' : 'celular');
+    const witness = this._witness && WITNESS_STANCE[this._witness.mode];
     const posture = this.poseParams?.stance ?? (witness || this._stanceNow());
     const stance = this.fleeTimer > 0 && this.moving && posture !== 'paraguas' ? 'huir' : posture;
     this._updateHeld(stance);
@@ -1677,9 +1678,11 @@ export class Npc {
    * Testigo de un robo o una pelea: se queda quieto mirando al jugador con el celular, grabando o llamando a la
    * Policía, durante `seconds`. Un golpe, un susto o quedar noqueado lo interrumpen (ver WitnessSystem).
    */
-  witness(mode, seconds) {
-    if (this._disposed || this.koState || this.isVendor || this.fijo || this.fleeTimer > 0 || this._hitReactionRemaining > 0) return false;
-    this._witness = { mode, time: seconds };
+  witness(mode, seconds, focus = null) {
+    if (this._disposed || this.isDead || this.koState || this.isVendor || this.fijo || this.fleeTimer > 0 || this._hitReactionRemaining > 0) return false;
+    if (this.deathResponse ? !focus : this.mind?.busy()) return false;
+    this.mind?.leaveTalk();
+    this._witness = { mode, time: seconds, focus };
     this._witnessFinished = false;
     this.target = null;
     this.route = [];
@@ -1697,8 +1700,9 @@ export class Npc {
     if (this.koState || this.fleeTimer > 0) { this._witness = null; return false; }
     if ((w.time -= dt) <= 0) { this._witness = null; this._witnessFinished = true; return false; }
     this.moving = false;
-    if (this._player) {
-      const yaw = Math.atan2(this._player.x - this.position.x, this._player.z - this.position.z);
+    const focus = w.focus ?? this._player;
+    if (focus) {
+      const yaw = Math.atan2(focus.x - this.position.x, focus.z - this.position.z);
       this.root.rotation.y += wrapAngle(yaw - this.root.rotation.y) * Math.min(1, dt * 6);
     }
     return true;
